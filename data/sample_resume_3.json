@@ -1,0 +1,49 @@
+{
+  "candidate_id": "cand_003",
+  "candidate_name": "Carol Rodriguez",
+  "email": "carol.r@email.com",
+  "phone": "+1-555-0103",
+  "summary": "Full-stack developer transitioning to backend focus. Python experience limited, but strong fundamentals and quick learner.",
+  "work_experience": [
+    {
+      "position": "Full Stack Developer",
+      "company": "AppDevelop",
+      "duration_years": 3,
+      "duration_months": 0,
+      "description": "Developed full-stack applications using various technologies. Primary focus on frontend (React), but backend experience with Node.js and some Python.",
+      "achievements": [
+        "Launched 5 production applications",
+        "Improved application performance by 30%",
+        "Led frontend team on React best practices"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bootcamp Certificate",
+      "field": "Full Stack Web Development",
+      "institution": "CodingBootcamp",
+      "graduation_year": 2021
+    },
+    {
+      "degree": "Associate Degree",
+      "field": "General Studies",
+      "institution": "Community College",
+      "graduation_year": 2019
+    }
+  ],
+  "skills": [
+    "Python",
+    "Node.js",
+    "JavaScript",
+    "React",
+    "SQL",
+    "MongoDB",
+    "HTML",
+    "CSS",
+    "Git",
+    "REST APIs"
+  ],
+  "projects": [],
+  "total_experience_years": 3
+}

@@ -4,6 +4,10 @@ An AI-powered interview platform for employer-side, high-volume candidate screen
 
 OpenHire runs structured, voice-based interviews at scale, evaluates candidates against configurable rubrics using a specialized multi-agent pipeline, and gives recruiters an explainable, evidence-backed shortlist instead of a black-box score.
 
+## Documentation
+
+- [Multi-Agent System implementation](docs/multi-agent-system.md) — the Stage 3-level agent pipeline (orchestrator, evaluators, scoring, reporting) built ahead of schedule as a working foundation.
+
 ## Team
 
 5-person team split across: **Frontend · Backend · Database · Multi-Agent System · Fullstack**

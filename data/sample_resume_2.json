@@ -1,0 +1,60 @@
+{
+  "candidate_id": "cand_002",
+  "candidate_name": "Bob Chen",
+  "email": "bob.chen@email.com",
+  "phone": "+1-555-0102",
+  "summary": "Backend developer with 4 years of experience in web services and databases. Some async Python experience. Seeking role to deepen cloud skills.",
+  "work_experience": [
+    {
+      "position": "Backend Developer",
+      "company": "WebServices Ltd",
+      "duration_years": 2,
+      "duration_months": 3,
+      "description": "Developed backend services using Django. Worked with MySQL and MongoDB. Collaborated with frontend team on API specifications.",
+      "achievements": [
+        "Built user authentication system used by 100K+ users",
+        "Implemented API versioning system",
+        "Improved test coverage from 30% to 70%"
+      ]
+    },
+    {
+      "position": "Junior Developer",
+      "company": "StartupXYZ",
+      "duration_years": 1,
+      "duration_months": 9,
+      "description": "Developed features for e-commerce platform. Fixed bugs and improved performance.",
+      "achievements": [
+        "Implemented product search feature",
+        "Optimized checkout process reducing page load time"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bachelor of Science",
+      "field": "Information Technology",
+      "institution": "Tech College",
+      "graduation_year": 2020
+    }
+  ],
+  "skills": [
+    "Python",
+    "Django",
+    "REST APIs",
+    "MySQL",
+    "MongoDB",
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Git",
+    "Docker"
+  ],
+  "projects": [
+    {
+      "name": "Blog Platform",
+      "description": "Personal project: Built a multi-user blog platform using Django",
+      "outcome": "Successfully handles multiple concurrent users with good performance"
+    }
+  ],
+  "total_experience_years": 4
+}
