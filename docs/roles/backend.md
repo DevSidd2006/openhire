@@ -28,7 +28,7 @@ time, synchronous, no auth.
   — written after the scoring call.
 - **Multi-Agent:** `buildDeliveryPrompt(question: string): string` — called
   when preparing to present a question to the candidate.
-- **Multi-Agent:** `scoreTranscript(job, transcript): {overall_score, report_text}`
+- **Multi-Agent:** `scoreTranscript(job: {title: string, questions: string[]}, transcript: {question: string, answer_text: string}[]): {overall_score: number, report_text: string}`
   — called from `POST /interviews/:interview_id/complete`; its return value
   is written directly into the `scores` table.
 
