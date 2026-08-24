@@ -17,7 +17,8 @@ and no rubric/competency breakdown — those arrive in Stage 2.
 
 Database is a leaf role in Stage 1 — no other role file should have a
 "Depends On" entry naming Database, other than for its own tables listed
-under Provides.
+under Provides or for Fullstack's cross-cutting integration dependency (a
+working migration command), listed in fullstack.md.
 
 ## Provides
 

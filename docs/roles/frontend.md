@@ -38,8 +38,7 @@ the backend.
 
 ## Provides
 
-Frontend is a leaf role in Stage 1 — no other role file should have a
-"Depends On" entry naming Frontend.
+Frontend is a leaf role in Stage 1 for typed interfaces — no other role file's "Depends On" section should name a Frontend endpoint or component contract. (Fullstack's cross-cutting integration dependencies, listed in fullstack.md, are the one exception — they're narrative, not a typed interface.)
 
 ## Stage 1 Tech Stack
 
