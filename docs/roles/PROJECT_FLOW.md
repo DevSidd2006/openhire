@@ -8,8 +8,11 @@ its owning role(s) — see that role's file for the exact interface shape.
    See [frontend.md](frontend.md#depends-on), [backend.md](backend.md#provides).
 
 2. **Candidate opens the interview link.**
-   Frontend's interview page calls `GET /interviews/:link_token`.
-   See [frontend.md](frontend.md#depends-on), [backend.md](backend.md#provides).
+   Frontend's interview page calls `GET /interviews/:link_token`; Backend
+   builds each question's delivery text via Multi-Agent's
+   `buildDeliveryPrompt`.
+   See [frontend.md](frontend.md#depends-on), [backend.md](backend.md#provides),
+   [multi-agent.md](multi-agent.md#provides).
 
 3. **Candidate answers via voice; audio is sent to the backend.**
    Frontend captures audio and calls
@@ -21,9 +24,10 @@ its owning role(s) — see that role's file for the exact interface shape.
    See [backend.md](backend.md#owns), [database.md](database.md#provides).
 
 5. **Backend calls the scoring LLM against the transcript and job.**
-   Backend calls `POST /interviews/:interview_id/complete`, which invokes
-   Multi-Agent's `scoreTranscript` contract.
-   See [backend.md](backend.md#depends-on), [multi-agent.md](multi-agent.md#provides).
+   Frontend calls `POST /interviews/:interview_id/complete`; Backend
+   handles it by invoking Multi-Agent's `scoreTranscript` contract.
+   See [frontend.md](frontend.md#depends-on), [backend.md](backend.md#provides),
+   [multi-agent.md](multi-agent.md#provides).
 
 6. **Score and report are persisted.**
    The `scoreTranscript` result is written to the `scores` table.

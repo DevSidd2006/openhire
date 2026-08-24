@@ -13,6 +13,9 @@ time, synchronous, no auth.
 - Interview session lifecycle (link tokens, status transitions)
 - STT orchestration (calling the cloud STT provider on submitted audio)
 - Triggering the Stage 1 scoring call and persisting its result
+- Storage of submitted answer audio files (local disk in Stage 1;
+  `audio_url` in `transcripts` points here — no separate storage
+  credential needed at this stage)
 
 ## Depends On
 
@@ -27,7 +30,9 @@ time, synchronous, no auth.
 - **Database:** `scores(id, interview_id, overall_score, report_text, created_at)`
   — written after the scoring call.
 - **Multi-Agent:** `buildDeliveryPrompt(question: string): string` — called
-  when preparing to present a question to the candidate.
+  once per question when building the `questions` array returned by
+  `GET /interviews/:link_token`; the result is what the candidate reads
+  before answering (Stage 1 has no voice/TTS delivery, only text).
 - **Multi-Agent:** `scoreTranscript(job: {title: string, questions: string[]}, transcript: {question: string, answer_text: string}[]): {overall_score: number, report_text: string}`
   — called from `POST /interviews/:interview_id/complete`; its return value
   is written directly into the `scores` table.

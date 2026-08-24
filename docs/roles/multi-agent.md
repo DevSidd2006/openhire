@@ -19,16 +19,20 @@ that gets rewritten from scratch.
 
 ## Depends On
 
-Multi-Agent is a leaf role in Stage 1 — no other role file should have a
-"Depends On" entry naming Multi-Agent, other than for the two contracts
-listed under Provides.
+Multi-Agent is a leaf role in Stage 1 for typed interfaces — no other
+role file's "Depends On" section should name a Multi-Agent contract other
+than the two listed under Provides. (Fullstack's cross-cutting
+dependency — the LLM provider and model choice, listed in fullstack.md —
+is the one exception; it's an operational/provisioning need, not a typed
+interface.)
 
 ## Provides
 
-- `buildDeliveryPrompt(question: string): string` — returns the prompt or
-  script text used to deliver one question to the candidate (feeds
-  whatever TTS/conversation layer Backend or Frontend uses). Stage 1 keeps
-  this to straight question delivery — no adaptive follow-ups.
+- `buildDeliveryPrompt(question: string): string` — returns the delivery
+  text for one question. Backend calls this once per question when
+  building `GET /interviews/:link_token`'s `questions` array; Frontend
+  displays it as-is. Stage 1 has no voice/TTS delivery — this is straight
+  text delivery, no adaptive follow-ups.
 - `scoreTranscript(job: {title: string, questions: string[]}, transcript: {question: string, answer_text: string}[]): {overall_score: number, report_text: string}`
   — the single Stage 1 scoring LLM call. Takes the full job context and the
   full transcript, returns one overall score (0–100) and a free-text report.
