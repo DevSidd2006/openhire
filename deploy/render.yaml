@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: openhire-landing
+    env: static
+    buildCommand: ""
+    staticPublishPath: pages
