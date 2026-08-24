@@ -1,0 +1,113 @@
+{
+  "interview_id": "int_cand_001",
+  "candidate_id": "cand_001",
+  "job_id": "job_001",
+  "interviewer": "Senior Engineering Manager",
+  "created_at": "2024-01-15T10:30:00Z",
+  "exchanges": [
+    {
+      "question": {
+        "question_id": "q001",
+        "question_text": "Tell us about your experience with asynchronous Python. Can you walk through a real project where you used asyncio?",
+        "category": "technical",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "I've been working with async Python for about 3 years now. In my current role at TechCorp, I redesigned our order processing service using FastAPI and asyncio. The original service was synchronous and could only handle about 1000 requests per second. By switching to async, we achieved 10,000 requests per second. I used asyncio.gather to manage concurrent database operations and implemented proper error handling with retry logic. The key was understanding when to use asyncio vs threading, and properly managing database connection pools to avoid bottlenecks.",
+        "duration_seconds": 45,
+        "timestamp": "2024-01-15T10:30:30Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q002",
+        "question_text": "Describe your approach to database optimization. What techniques have you used?",
+        "category": "technical",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "I've used several database optimization techniques. First, I analyze slow queries using EXPLAIN ANALYZE in PostgreSQL. I've created strategic indexes on frequently queried columns - though I'm careful about over-indexing. I've implemented query denormalization for read-heavy operations and used materialized views for complex aggregations. In one project, I reduced query time from 5 seconds to 200ms by rewriting a complex join and adding the right indexes. I also implemented Redis caching for frequently accessed data to reduce database load. Connection pooling is critical - I use pgBouncer for PostgreSQL connections to prevent exhaustion under load.",
+        "duration_seconds": 50,
+        "timestamp": "2024-01-15T10:31:25Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q003",
+        "question_text": "How do you approach system design? Walk us through how you would design a scalable API for handling millions of daily requests.",
+        "category": "technical",
+        "difficulty": "hard"
+      },
+      "answer": {
+        "answer_text": "I'd start with requirements and constraints. For millions of daily requests, I need to think about: concurrency, data consistency, and failure modes. First, I'd use load balancing with multiple API instances. For the backend, I'd choose async frameworks like FastAPI with async drivers for databases. Data layer would use read replicas and sharding for horizontal scaling. I'd implement caching at multiple levels - HTTP caching, Redis for hot data, and database query result caching. For writes, I might use event sourcing and message queues like RabbitMQ to handle bursts. I'd monitor everything with detailed metrics and logs. For deployment, I'd containerize with Docker and use Kubernetes for orchestration. The key is designing for failure - assuming components will fail and planning accordingly with circuit breakers and fallbacks.",
+        "duration_seconds": 60,
+        "timestamp": "2024-01-15T10:32:30Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q004",
+        "question_text": "Tell us about a time you had to debug a complex production issue. How did you approach it?",
+        "category": "behavioral",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "About six months ago, we had a production issue where requests to one microservice were timing out intermittently during peak hours. It was difficult to reproduce locally. I started by examining the application logs and metrics - looking at CPU, memory, and query times. I found that database queries were occasionally taking 30+ seconds. But here's the interesting part - the same queries ran fast in other contexts. I realized we had a connection pool leak. Over time, connections were accumulating in a 'sleeping' state, exhausting the pool. I implemented connection timeout policies and improved monitoring. I also added circuit breakers to fail fast rather than waiting for timeouts. This taught me the importance of comprehensive monitoring and logging. Now I always design systems with observability in mind from the start.",
+        "duration_seconds": 55,
+        "timestamp": "2024-01-15T10:33:35Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q005",
+        "question_text": "How do you handle communication and collaboration in a distributed team? Give an example.",
+        "category": "behavioral",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "Clear communication is essential in remote teams. In my current role, I mentor junior developers on async Python. I schedule regular one-on-ones and pair programming sessions. For async communication, I document decisions in Confluence and share them in Slack so people across time zones stay informed. When there's disagreement on technical approach, I advocate for my position but remain open. For example, one junior developer initially resisted using async patterns thinking they were too complex. Rather than dismiss concerns, I worked with them on a small feature, showing step-by-step how asyncio works. They're now one of our best async Python developers. I believe good communication means meeting people where they are and helping them understand the 'why' behind decisions.",
+        "duration_seconds": 50,
+        "timestamp": "2024-01-15T10:34:35Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q006",
+        "question_text": "Describe your experience with cloud platforms. Which have you used and how?",
+        "category": "technical",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "I have deep experience with AWS. At TechCorp, we run our entire stack on AWS. I use EC2 for application servers, RDS for PostgreSQL with read replicas, ElastiCache for Redis, and S3 for object storage. I've designed auto-scaling groups to handle traffic spikes automatically. I implement CI/CD using CodePipeline and CodeDeploy. For monitoring, I use CloudWatch with custom metrics. I also have some experience with Azure from a previous project, but AWS is my main platform. What I really understand is not just the tools, but the principles - how to design for failure, how to minimize blast radius of issues, and how to optimize costs.",
+        "duration_seconds": 45,
+        "timestamp": "2024-01-15T10:35:30Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q007",
+        "question_text": "What's something you've learned recently that surprised you or changed your perspective on development?",
+        "category": "behavioral",
+        "difficulty": "medium"
+      },
+      "answer": {
+        "answer_text": "Recently, I've been learning about distributed tracing and observability. I used to think 'logs and metrics are enough.' But working on complex microservices, I realized that understanding request flows across services is critical. I started using tools like Jaeger for distributed tracing. It completely changed how I debug issues - instead of searching through logs, I can see the entire request path and identify bottlenecks visually. It's made me realize that in complex systems, observability is as important as the code itself. I'm now ensuring every service I build has proper tracing instrumentation from day one.",
+        "duration_seconds": 40,
+        "timestamp": "2024-01-15T10:36:20Z"
+      }
+    },
+    {
+      "question": {
+        "question_id": "q008",
+        "question_text": "How would you approach learning about a technology or tool you're unfamiliar with?",
+        "category": "behavioral",
+        "difficulty": "easy"
+      },
+      "answer": {
+        "answer_text": "I usually start with the official documentation to understand the fundamentals. Then I'll find a small, practical problem to solve with that tool - something real but low-stakes. I like reading others' code and best practices. I participate in relevant communities like Python forums or GitHub discussions. I also write blog posts about what I've learned, which forces me to organize my thoughts clearly. Learning by doing is most effective for me. And I'm not afraid to ask questions - I've found the tech community is generally very helpful if you ask thoughtfully.",
+        "duration_seconds": 35,
+        "timestamp": "2024-01-15T10:37:00Z"
+      }
+    }
+  ]
+}

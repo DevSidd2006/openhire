@@ -1,0 +1,63 @@
+{
+  "candidate_id": "cand_001",
+  "candidate_name": "Alice Johnson",
+  "email": "alice.johnson@email.com",
+  "phone": "+1-555-0101",
+  "summary": "Experienced Python backend developer with 6 years in microservices and scalable systems. Strong async Python skills and cloud platform expertise.",
+  "work_experience": [
+    {
+      "position": "Senior Backend Engineer",
+      "company": "TechCorp",
+      "duration_years": 2,
+      "duration_months": 6,
+      "description": "Led development of core microservices using FastAPI and async Python. Optimized database queries reducing latency by 40%. Managed AWS infrastructure and CI/CD pipelines.",
+      "achievements": [
+        "Redesigned order processing service achieving 10x throughput improvement",
+        "Mentored junior developers on async Python best practices",
+        "Implemented automated testing framework increasing coverage to 85%"
+      ]
+    },
+    {
+      "position": "Backend Developer",
+      "company": "DataSystems Inc",
+      "duration_years": 3,
+      "duration_months": 6,
+      "description": "Developed REST APIs using Django and Flask. Worked with PostgreSQL and Redis. Implemented caching strategies and database optimization.",
+      "achievements": [
+        "Built real-time analytics API handling 1M+ requests daily",
+        "Optimized query performance reducing response time by 60%",
+        "Implemented database sharding for scalability"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bachelor of Science",
+      "field": "Computer Science",
+      "institution": "State University",
+      "graduation_year": 2018
+    }
+  ],
+  "skills": [
+    "Python",
+    "FastAPI",
+    "asyncio",
+    "REST APIs",
+    "PostgreSQL",
+    "Redis",
+    "AWS",
+    "Docker",
+    "Kubernetes",
+    "Git",
+    "GraphQL",
+    "RabbitMQ"
+  ],
+  "projects": [
+    {
+      "name": "Distributed Task Queue",
+      "description": "Built a distributed task processing system using Celery and RabbitMQ",
+      "outcome": "Reduced job processing time by 50% and improved reliability to 99.9%"
+    }
+  ],
+  "total_experience_years": 6
+}

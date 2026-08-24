@@ -1,0 +1,50 @@
+{
+  "job_id": "job_001",
+  "title": "Senior Python Backend Developer",
+  "department": "Engineering",
+  "level": "Senior",
+  "description": "We are looking for a Senior Python Backend Developer to join our platform team. You will be responsible for designing and implementing scalable microservices, optimizing database queries, and collaborating with frontend and data science teams. You should have strong experience with async Python, REST APIs, and cloud infrastructure.",
+  "requirements": [
+    "5+ years of Python development experience",
+    "3+ years of experience with asynchronous Python (asyncio, FastAPI)",
+    "Strong understanding of microservices architecture",
+    "Experience with relational and NoSQL databases",
+    "Proficiency with REST API design and implementation",
+    "Experience with cloud platforms (AWS, Azure, or GCP)",
+    "Strong problem-solving skills"
+  ],
+  "preferred_skills": [
+    "GraphQL experience",
+    "Kubernetes and Docker containerization",
+    "CI/CD pipeline experience",
+    "Experience with message queues (RabbitMQ, Kafka)",
+    "Open source contributions"
+  ],
+  "experience_years": 5,
+  "competencies": [
+    {
+      "name": "Python Development",
+      "weight": 0.25
+    },
+    {
+      "name": "Async Programming",
+      "weight": 0.20
+    },
+    {
+      "name": "System Design",
+      "weight": 0.20
+    },
+    {
+      "name": "Database Optimization",
+      "weight": 0.15
+    },
+    {
+      "name": "Cloud Infrastructure",
+      "weight": 0.10
+    },
+    {
+      "name": "Communication",
+      "weight": 0.10
+    }
+  ]
+}
