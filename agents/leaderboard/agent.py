@@ -19,19 +19,28 @@ class LeaderboardAgent(BaseAgent):
         self,
         reports: List[CandidateReport],
         job_id: str,
+        incomplete_candidates: List[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Create leaderboard from candidate reports.
-        
+
         Args:
             reports: List of candidate reports
             job_id: Job identifier
-            
+            incomplete_candidates: Candidate IDs that were shortlisted but
+                never produced a scored report (missing evaluation, failed
+                generation, etc.) - recorded on the leaderboard rather than
+                silently omitted (P0-4).
+
         Returns:
             CandidateLeaderboard with ranked entries
         """
-        self.logger.info(f"Creating leaderboard for {len(reports)} candidates for job {job_id}")
+        incomplete_candidates = incomplete_candidates or []
+        self.logger.info(
+            f"Creating leaderboard for {len(reports)} candidates for job {job_id} "
+            f"({len(incomplete_candidates)} incomplete)"
+        )
 
         try:
             # Sort by weighted score
@@ -74,7 +83,8 @@ class LeaderboardAgent(BaseAgent):
                 requires_review=len([e for e in entries if e.requires_human_review]),
                 entries=entries,
                 top_candidates=[e for e in entries[:3]],
-                explanation=self._generate_summary(entries),
+                incomplete_candidates=incomplete_candidates,
+                explanation=self._generate_summary(entries, incomplete_candidates),
             )
 
             return {"leaderboard": leaderboard}
@@ -83,8 +93,21 @@ class LeaderboardAgent(BaseAgent):
             self.logger.error(f"Leaderboard generation failed: {str(e)}")
             return {"leaderboard": None, "error": str(e)}
 
-    def _generate_summary(self, entries: List[LeaderboardEntry]) -> str:
+    def _generate_summary(self, entries: List[LeaderboardEntry], incomplete_candidates: List[str] = None) -> str:
         """Generate leaderboard summary."""
+        incomplete_candidates = incomplete_candidates or []
+
+        if not entries:
+            # No fabricated ranking when nobody could be scored - state the
+            # incomplete/human-review status explicitly instead.
+            if incomplete_candidates:
+                return (
+                    f"No candidates could be ranked - all {len(incomplete_candidates)} shortlisted "
+                    f"candidate(s) are incomplete (missing evaluation) and require human review: "
+                    f"{', '.join(incomplete_candidates)}."
+                )
+            return "No candidates were shortlisted for this job."
+
         lines = [
             f"Total candidates ranked: {len(entries)}",
             f"Top candidate: {entries[0].candidate_name} (Score: {entries[0].weighted_score:.1f}/10)",
@@ -94,5 +117,10 @@ class LeaderboardAgent(BaseAgent):
             lines.append(f"Second: {entries[1].candidate_name} (Score: {entries[1].weighted_score:.1f}/10)")
         if len(entries) > 2:
             lines.append(f"Third: {entries[2].candidate_name} (Score: {entries[2].weighted_score:.1f}/10)")
+
+        if incomplete_candidates:
+            lines.append(
+                f"Excluded (incomplete evaluation, not ranked): {', '.join(incomplete_candidates)}"
+            )
 
         return "\n".join(lines)

@@ -105,6 +105,38 @@ Swap LLM, embedding, or vector store implementations:
 - Production deployments with OpenAI, Azure, or self-hosted
 - Change providers via environment variables at runtime
 
+Every `LLMProvider` implements two methods:
+```
+LLMProvider
+├── generate(prompt) -> str                          # free-text completion
+└── generate_structured(prompt, schema) -> dict       # schema-conformant JSON
+```
+Agents that need structured data (JD analysis, technical/behavioral
+evaluation, resume audit, integrity/bias checks, interview question
+generation) call `generate_structured()` with a JSON Schema derived directly
+from a Pydantic model in `schemas/llm_outputs.py`
+(`SomeModel.model_json_schema()`), then validate the response against that
+same model (`SomeModel.model_validate(result)`) before converting it into the
+agent's real output schema. Agents never hand-write JSON Schemas or call
+`json.loads()`/catch `JSONDecodeError` themselves - that's the provider's
+job. `BaseAgent.call_llm_structured(..., validate=SomeModel.model_validate)`
+wires validation into the same bounded retry/timeout budget as provider
+failures (see `agents/base.py`), so a malformed or schema-invalid response is
+retried a bounded number of times and then fails explicitly - it is never
+silently replaced with fabricated data.
+
+- **Mock mode** (`LLM_PROVIDER=mock`, the default) requires no API key -
+  `MockLLMProvider` returns deterministic, schema-valid responses for every
+  known agent prompt, so the full pipeline and test suite run offline.
+- **Real providers** (e.g. `LLM_PROVIDER=openai`) require credentials
+  (`OPENAI_API_KEY`) and fail clearly - never silently falling back to mock -
+  if they can't produce a valid response.
+- Agents are provider-agnostic: they only ever call `generate()` /
+  `generate_structured()` on `self.llm_provider` - never anything
+  OpenAI/Claude/Gemini-specific. All vendor-specific logic (auth, request
+  shape, transient-vs-permanent error classification) lives in
+  `providers/llm/*.py`.
+
 ### 6. Comprehensive Auditing
 - Audit log for every agent with duration and status
 - Pipeline run tracking with error capture
@@ -543,13 +575,21 @@ class NewEvaluationDimension(BaseModel):
     explanation: str
 ```
 
-2. **Create Agent** in `agents/new_evaluator/agent.py`:
+2. **Create Agent** in `agents/new_evaluator/agent.py` - define the LLM's
+   expected output shape as a Pydantic model in `schemas/llm_outputs.py`
+   (e.g. `NewEvaluationResult`), narrower than the full downstream schema,
+   then call `generate_structured()` with `validate=` so the response is
+   parsed and validated in one step:
 ```python
 class NewEvaluatorAgent(BaseAgent):
     async def execute(self, interview_transcript: InterviewTranscript, **kwargs) -> Dict:
         prompt = self.load_prompt("new_evaluator.md")
-        response = await self.call_llm_generate(prompt)
-        # Parse and return NewEvaluationDimension
+        result: NewEvaluationResult = await self.call_llm_structured(
+            prompt,
+            schema=NewEvaluationResult.model_json_schema(),
+            validate=NewEvaluationResult.model_validate,
+        )
+        evaluation_obj = NewEvaluationDimension(score=result.score, ...)
         return {"new_evaluation": evaluation_obj}
 ```
 
@@ -574,8 +614,13 @@ class CustomLLMProvider(LLMProvider):
         # Your implementation
         pass
 
-    async def structured_output(self, prompt: str, schema: type) -> dict:
-        # Your implementation
+    async def generate_structured(self, prompt: str, schema: dict) -> dict:
+        # Your implementation - schema is a JSON Schema dict (usually
+        # SomeModel.model_json_schema() from schemas/llm_outputs.py).
+        # Raise LLMTransientError for retryable failures (malformed/empty
+        # response, rate limits, timeouts) and LLMPermanentError for
+        # non-retryable ones (bad credentials, invalid request) - see
+        # providers/llm/openai.py for a worked example.
         pass
 ```
 

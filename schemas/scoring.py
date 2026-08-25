@@ -4,7 +4,7 @@ Scoring and reporting related schemas.
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from schemas.evaluation import IntegrityFlag, BiasFlag
+from schemas.evaluation import IntegrityFlag, BiasFlag, CompetencyScore, ClaimVerification
 
 
 class CandidateScores(BaseModel):
@@ -20,6 +20,16 @@ class CandidateScores(BaseModel):
 
     # Weighted final score (0-10 scale)
     weighted_final_score: float = Field(ge=0.0, le=10.0)
+
+    # Per-competency breakdown of the job's own rubric (name, weight, matched
+    # score) actually used to compute weighted_final_score - see
+    # ScoringAgent._compute_rubric_score for the formula. Empty if no
+    # competency in the job's rubric could be matched to an evaluator score.
+    competency_scores: List[CompetencyScore] = Field(default_factory=list)
+
+    # Fraction (0-1) of the job's total competency weight that was actually
+    # matched to an evaluator score and contributed to competency_scores.
+    rubric_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
 
     # Filled in by the LeaderboardAgent once all candidates are ranked
     percentile_rank: float = Field(default=0.0, ge=0.0, le=100.0)
@@ -46,6 +56,13 @@ class CandidateReport(BaseModel):
 
     integrity_flags: List[IntegrityFlag] = Field(default_factory=list)
     bias_flags: List[BiasFlag] = Field(default_factory=list)
+
+    # Resume-claim verification results (P2 Phase 10 fix): previously the
+    # Resume Auditor's ClaimVerification objects - and the evidence attached
+    # to them - never reached the final report at all, even though the
+    # ScoringAgent and every other evaluator's evidence did. Reusing the
+    # existing ClaimVerification schema rather than inventing a parallel one.
+    claim_verifications: List[ClaimVerification] = Field(default_factory=list)
 
     requires_human_review: bool = False
 
@@ -85,5 +102,12 @@ class CandidateLeaderboard(BaseModel):
 
     entries: List[LeaderboardEntry] = Field(default_factory=list)
     top_candidates: List[LeaderboardEntry] = Field(default_factory=list)
+
+    # Candidate IDs that were shortlisted but never produced a scored report
+    # (e.g. a technical/behavioral evaluation failed or was never returned).
+    # They are deliberately excluded from `entries` rather than silently
+    # scored as if evaluation had succeeded - see ScoringAgent and
+    # orchestration/graph.py node_score_candidates.
+    incomplete_candidates: List[str] = Field(default_factory=list)
 
     explanation: str

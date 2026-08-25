@@ -15,7 +15,9 @@ For each significant claim in the resume (achievements, projects, skills, respon
 
 For each assessment:
 - **Confidence** (0-1) - How certain are you?
-- **Evidence** - Specific quotes from both resume and interview
+- **Evidence question number** - The number (e.g. 1 for Q1, 2 for Q2, ...) of
+  the transcript exchange that supports or contradicts this claim. Omit if
+  the interview never addressed this claim (use "insufficient_evidence").
 - **Explanation** - What matches, what doesn't, why?
 
 Important Guidelines:
@@ -33,3 +35,13 @@ Important Guidelines:
 {transcript}
 
 ## Output JSON:
+Respond with a JSON object shaped like:
+```json
+{{
+  "verification_status": "supported",
+  "confidence": 0.85,
+  "evidence_question_number": 1,
+  "explanation": "...",
+  "requires_human_review": false
+}}
+```

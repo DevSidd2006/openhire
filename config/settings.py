@@ -37,6 +37,22 @@ VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH", str(PROJECT_ROOT / "faiss_ind
 DEFAULT_INTERVIEW_DURATION_SECONDS = 900  # 15 minutes
 QUESTION_TYPES = ["technical", "behavioral", "role_specific", "follow_up"]
 
+# Adaptive Interview Configuration (P3). No equivalent constants existed
+# before P3 - the pre-P3 interviewer generated a fixed batch of questions
+# (question_count passed explicitly by the caller) and never needed a
+# question budget or a per-competency follow-up limit of its own.
+MAX_QUESTIONS_PER_INTERVIEW = 12  # deterministic upper bound so an adaptive
+# interview always terminates even if every competency stays under-evidenced.
+MAX_FOLLOW_UPS_PER_COMPETENCY = 2  # caps how many follow-up/probe/clarify
+# questions the engine will spend on one competency before moving on or
+# accepting the evidence gap - prevents endlessly drilling one topic (P3
+# Phase 8).
+MIN_CONFIDENCE_FOR_COVERAGE = 0.65  # a competency is only treated as
+# "sufficiently covered" for termination purposes once its running
+# confidence reaches this threshold AND its evidence_status is "supported" -
+# matches CONFIDENCE_THRESHOLD's spirit (0.7) but scoped to per-competency
+# interview coverage rather than final scoring confidence.
+
 # Evaluation Configuration
 MAX_RETRIES = 3
 TIMEOUT_SECONDS = 30

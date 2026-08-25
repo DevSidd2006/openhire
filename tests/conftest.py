@@ -5,6 +5,7 @@ from pathlib import Path
 
 from schemas.job import JobDescription, Competency
 from schemas.resume import ParsedResume, WorkExperience, Education
+from schemas.interview import InterviewTranscript, InterviewQuestion, InterviewAnswer
 
 
 @pytest.fixture
@@ -117,4 +118,47 @@ def sample_parsed_resume(sample_resume_dict):
         skills=sample_resume_dict["skills"],
         raw_text=json.dumps(sample_resume_dict),
         total_experience_years=sample_resume_dict["total_experience_years"],
+    )
+
+
+@pytest.fixture
+def sample_interview_transcript():
+    """A sealed InterviewTranscript with two real, distinct question/answer
+    exchanges - used to test that evidence/job_id threading resolves to real
+    transcript content rather than placeholders."""
+    exchanges = [
+        (
+            InterviewQuestion(
+                question_id="eq_tech_001",
+                question_text="Tell us about a Python project you're proud of.",
+                category="technical",
+                difficulty="medium",
+            ),
+            InterviewAnswer(
+                question_id="eq_tech_001",
+                answer_text="I built an async FastAPI service that processes orders using asyncio.gather.",
+                duration_seconds=40,
+            ),
+        ),
+        (
+            InterviewQuestion(
+                question_id="eq_sql_002",
+                question_text="How do you optimize a slow SQL query?",
+                category="technical",
+                difficulty="medium",
+            ),
+            InterviewAnswer(
+                question_id="eq_sql_002",
+                answer_text="I use EXPLAIN ANALYZE to find the bottleneck, then add targeted indexes.",
+                duration_seconds=35,
+            ),
+        ),
+    ]
+    return InterviewTranscript(
+        interview_id="int_test_001",
+        candidate_id="cand_test_001",
+        job_id="job_test_001",
+        exchanges=exchanges,
+        start_time="2024-01-15T10:00:00Z",
+        is_sealed=True,
     )

@@ -61,6 +61,52 @@ def _unwrap(agent_result: Dict[str, Any]) -> Dict[str, Any]:
     return agent_result.get("result") or {}
 
 
+def _build_evaluation_sections(
+    technical_evaluation: Any,
+    behavioral_evaluation: Any,
+    resume_audit: Any,
+    integrity_evaluation: Any,
+) -> Dict[str, str]:
+    """Build the evaluator-rationale text the BiasCheckerAgent audits (P0-5).
+
+    The bias checker's job is to audit the SYSTEM'S evaluation, not the raw
+    candidate transcript, so this pulls together each evaluator's actual
+    explanation/strengths/weaknesses/verdicts - never the candidate's own
+    words - into named sections BiasCheckerAgent can both show the LLM and
+    cite back as evidence_source on a flag.
+    """
+    sections: Dict[str, str] = {}
+
+    if technical_evaluation:
+        parts = [technical_evaluation.explanation]
+        if technical_evaluation.strengths:
+            parts.append("Strengths: " + "; ".join(technical_evaluation.strengths))
+        if technical_evaluation.weaknesses:
+            parts.append("Weaknesses: " + "; ".join(technical_evaluation.weaknesses))
+        sections["technical_evaluation"] = "\n".join(parts)
+
+    if behavioral_evaluation:
+        parts = [behavioral_evaluation.explanation]
+        if behavioral_evaluation.strengths:
+            parts.append("Strengths: " + "; ".join(behavioral_evaluation.strengths))
+        if behavioral_evaluation.weaknesses:
+            parts.append("Weaknesses: " + "; ".join(behavioral_evaluation.weaknesses))
+        sections["behavioral_evaluation"] = "\n".join(parts)
+
+    if resume_audit:
+        sections["resume_audit"] = "\n".join(
+            f"- Claim \"{v.claim.resume_claim}\" -> {v.verification_status}: {v.explanation}"
+            for v in resume_audit
+        )
+
+    if integrity_evaluation:
+        parts = [f"Overall integrity: {integrity_evaluation.overall_integrity}. {integrity_evaluation.explanation}"]
+        parts.extend(f"- Flag ({flag.severity}): {flag.description}" for flag in integrity_evaluation.flags)
+        sections["integrity"] = "\n".join(parts)
+
+    return sections
+
+
 def _audit_logs(agent_results) -> List[Any]:
     """Collect the AuditLog objects BaseAgent.run() attaches to every call, so
     the audit trail survives into the final pipeline state/output rather than
@@ -95,7 +141,20 @@ def create_pipeline_graph():
     # channel-merge semantics apply correctly.
 
     async def node_analyze_job(state: PipelineState) -> Dict[str, Any]:
-        """Analyze job description."""
+        """Analyze job description.
+
+        A failed/invalid JD analysis (bad structured LLM output, or
+        JobDescription construction/validation failure) must never look like
+        a successful one - JDAnalyzerAgent.execute() returns
+        job_description=None on failure rather than fabricating a plausible
+        placeholder, so this check is a real "did it actually succeed?" test,
+        not just a null-check formality. Leaving state["job_description"]
+        unset here means every downstream node (matching, question
+        generation, evaluation, scoring, leaderboard) already treats it as
+        "nothing to do" with an explicit error, degrading the whole run to
+        zero processed candidates rather than silently evaluating everyone
+        against an invented job description.
+        """
         agent_result = await jd_analyzer.run(
             run_id=state.get("run_id"),
             job_description=state["job_description_text"],
@@ -105,8 +164,13 @@ def create_pipeline_graph():
         audit_logs = state["audit_logs"] + _audit_logs(agent_result)
         if result.get("job_description"):
             return {"job_description": result["job_description"], "audit_logs": audit_logs}
+        # The failure reason is normally inside the unwrapped result (see
+        # JDAnalyzerAgent.execute's except branch); agent_result.get("error")
+        # is only populated in the rarer case where execute() itself raised
+        # past its own try/except and BaseAgent.run() caught it.
+        error_reason = result.get("error") or agent_result.get("error")
         return {
-            "errors": state["errors"] + [f"JD Analysis failed: {agent_result.get('error')}"],
+            "errors": state["errors"] + [f"JD Analysis failed: {error_reason}"],
             "audit_logs": audit_logs,
         }
 
@@ -177,7 +241,13 @@ def create_pipeline_graph():
         }
 
     async def node_generate_interview_questions(state: PipelineState) -> Dict[str, Any]:
-        """Generate interview questions for shortlisted candidates."""
+        """Pre-interview question PLANNING for shortlisted candidates - not a
+        live adaptive interview. See agents/interviewer/agent.py's module
+        docstring: this batch-generates a candidate-specific question set
+        before any interview happens, and its output is informational only -
+        technical/behavioral evaluation and resume/integrity checks run
+        against the separately-supplied `interview_transcript`, not this
+        node's `interview_questions` output."""
         if not state["job_description"]:
             return {"errors": state["errors"] + ["No job description; skipping interview questions"]}
 
@@ -295,16 +365,21 @@ def create_pipeline_graph():
             transcript = state["interview_transcripts"][candidate_id]
             tech_eval = state["technical_evaluations"].get(candidate_id)
             behav_eval = state["behavioral_evaluations"].get(candidate_id)
-            tech_score_val = tech_eval.technical_score if tech_eval else 7.0
-            behav_score_val = behav_eval.behavioral_score if behav_eval else 7.0
+            resume_audit = state["resume_audits"].get(candidate_id)
+            integrity_eval = state["integrity_evaluations"].get(candidate_id)
 
             bias_tasks.append(bias_checker.run(
                 run_id=state.get("run_id"),
                 candidate_id=candidate_id,
                 job_id=job_id,
                 interview_transcript=transcript,
-                technical_score=tech_score_val,
-                behavioral_score=behav_score_val,
+                # A missing evaluation is passed through as None rather than
+                # disguised as an average 7.0 score (P0-4).
+                technical_score=tech_eval.technical_score if tech_eval else None,
+                behavioral_score=behav_eval.behavioral_score if behav_eval else None,
+                evaluation_sections=_build_evaluation_sections(
+                    tech_eval, behav_eval, resume_audit, integrity_eval
+                ),
             ))
 
         agent_results = await asyncio.gather(*bias_tasks)
@@ -325,13 +400,32 @@ def create_pipeline_graph():
         }
 
     async def node_score_candidates(state: PipelineState) -> Dict[str, Any]:
-        """Calculate final scores for all candidates."""
-        candidate_ids = [
-            c for c in state["shortlisted_candidates"]
-            if c in state["technical_evaluations"]
-            and c in state["behavioral_evaluations"]
-            and c in state["matching_scores"]
-        ]
+        """Calculate final scores for all candidates.
+
+        A shortlisted candidate missing a technical, behavioral, or matching
+        evaluation is excluded from scoring entirely with an explicit reason
+        recorded in `errors` (P0-4) - never scored as if evaluation had
+        succeeded. node_create_leaderboard surfaces these same exclusions via
+        CandidateLeaderboard.incomplete_candidates.
+        """
+        candidate_ids = []
+        exclusion_errors = []
+        for c in state["shortlisted_candidates"]:
+            missing = [
+                name
+                for name, bucket in (
+                    ("technical_evaluation", state["technical_evaluations"]),
+                    ("behavioral_evaluation", state["behavioral_evaluations"]),
+                    ("matching_score", state["matching_scores"]),
+                )
+                if c not in bucket
+            ]
+            if missing:
+                exclusion_errors.append(
+                    f"Candidate {c} excluded from scoring: missing {', '.join(missing)}"
+                )
+            else:
+                candidate_ids.append(c)
 
         scoring_tasks = [
             scoring_agent.run(
@@ -358,7 +452,7 @@ def create_pipeline_graph():
 
         return {
             "candidate_scores": {**state["candidate_scores"], **candidate_scores},
-            "errors": state["errors"] + errors,
+            "errors": state["errors"] + exclusion_errors + errors,
             "audit_logs": state["audit_logs"] + _audit_logs(agent_results),
         }
 
@@ -375,6 +469,9 @@ def create_pipeline_graph():
                 behavioral_evaluation=state["behavioral_evaluations"].get(candidate_id),
                 bias_audit=state["bias_audits"].get(candidate_id),
                 integrity_evaluation=state["integrity_evaluations"].get(candidate_id),
+                # P2 Phase 10: resume-audit evidence previously never reached
+                # the report at all - now threaded through explicitly.
+                resume_audits=state["resume_audits"].get(candidate_id),
             )
             for candidate_id in candidate_ids
         ]
@@ -397,23 +494,48 @@ def create_pipeline_graph():
         }
 
     async def node_create_leaderboard(state: PipelineState) -> Dict[str, Any]:
-        """Create final leaderboard."""
+        """Create final leaderboard.
+
+        Always produces a real CandidateLeaderboard when at least one
+        candidate was shortlisted - even if EVERY shortlisted candidate ended
+        up incomplete (e.g. every technical evaluation failed). That case is
+        represented explicitly (entries=[], everyone in
+        incomplete_candidates, explanation states human review is required)
+        rather than short-circuited into a bare error with no leaderboard
+        object at all. Only a genuinely empty shortlist (nothing to rank or
+        report on, in any state) skips leaderboard creation.
+        """
         reports = list(state["candidate_reports"].values())
 
-        if not reports:
-            return {"errors": state["errors"] + ["No candidate reports for leaderboard"]}
+        if not state["shortlisted_candidates"]:
+            return {"errors": state["errors"] + ["No shortlisted candidates; nothing to rank"]}
+
+        # Candidates that were shortlisted but never made it to a report
+        # (missing evaluation, failed report generation, etc.) are surfaced
+        # explicitly on the leaderboard rather than silently disappearing (P0-4).
+        incomplete_candidates = [
+            c for c in state["shortlisted_candidates"] if c not in state["candidate_reports"]
+        ]
 
         agent_result = await leaderboard_agent.run(
             run_id=state.get("run_id"),
             reports=reports,
             job_id=state["job_description"].job_id if state["job_description"] else "unknown",
+            incomplete_candidates=incomplete_candidates,
         )
         result = _unwrap(agent_result)
         audit_logs = state["audit_logs"] + _audit_logs(agent_result)
 
+        errors = state["errors"]
+        if not reports:
+            errors = errors + [
+                f"No candidate could be scored for this run - all {len(incomplete_candidates)} "
+                "shortlisted candidate(s) are incomplete and require human review."
+            ]
+
         if result.get("leaderboard"):
-            return {"leaderboard": result["leaderboard"], "audit_logs": audit_logs}
-        return {"errors": state["errors"] + ["Leaderboard creation failed"], "audit_logs": audit_logs}
+            return {"leaderboard": result["leaderboard"], "audit_logs": audit_logs, "errors": errors}
+        return {"errors": errors + ["Leaderboard creation failed"], "audit_logs": audit_logs}
 
     # ==== Add nodes to graph ====
     graph.add_node("analyze_job", node_analyze_job)

@@ -2,15 +2,15 @@
 Integrity Agent.
 Analyzes consistency and potential integrity concerns.
 """
-from typing import Any, Dict, List
-import json
+from typing import Any, Dict
 import uuid
 
 from agents.base import BaseAgent
 from schemas.evaluation import IntegrityEvaluation, IntegrityFlag
 from schemas.interview import InterviewTranscript
+from schemas.llm_outputs import IntegrityCheckResult
 from schemas.resume import ParsedResume
-from utils.evidence import create_evidence
+from utils.evidence import resolve_transcript_evidence
 
 
 class IntegrityAgent(BaseAgent):
@@ -46,25 +46,48 @@ class IntegrityAgent(BaseAgent):
                 transcript=transcript_text,
             )
 
-            response_text = await self.call_llm_generate(prompt)
+            result: IntegrityCheckResult = await self.call_llm_structured(
+                prompt,
+                schema=IntegrityCheckResult.model_json_schema(),
+                validate=IntegrityCheckResult.model_validate,
+            )
 
-            try:
-                data = json.loads(response_text)
-            except json.JSONDecodeError:
-                data = self._create_default_evaluation()
-
-            # Build flags
+            # Build flags. A flag is only kept if at least one of its cited
+            # question numbers actually resolves to a real transcript
+            # exchange - an integrity accusation with no grounded evidence is
+            # dropped rather than kept with an empty evidence list, per the
+            # "do not create a flag merely to satisfy the evidence
+            # requirement" rule.
             flags = []
-            for flag_data in data.get("flags", []):
+            for flag_result in result.flags:
+                evidence_items = [
+                    item
+                    for qn in flag_result.evidence_question_numbers
+                    if (item := resolve_transcript_evidence(
+                        transcript=interview_transcript,
+                        question_number=qn,
+                        agent="integrity",
+                        explanation=flag_result.description,
+                        candidate_id=parsed_resume.candidate_id,
+                        evidence_type="contradicting",
+                    )) is not None
+                ]
+                if not evidence_items:
+                    self.logger.warning(
+                        "Dropping integrity flag with no resolvable transcript evidence: "
+                        f"{flag_result.flag_type}"
+                    )
+                    continue
+
                 flags.append(
                     IntegrityFlag(
                         flag_id=f"flag_{uuid.uuid4().hex[:8]}",
-                        flag_type=flag_data.get("flag_type", "other"),
-                        severity=flag_data.get("severity", "medium"),
-                        confidence=float(flag_data.get("confidence", 0.70)),
-                        evidence=[],
-                        description=flag_data.get("description", ""),
-                        requires_human_review=flag_data.get("requires_human_review", True),
+                        flag_type=flag_result.flag_type,
+                        severity=flag_result.severity,
+                        confidence=flag_result.confidence,
+                        evidence=evidence_items,
+                        description=flag_result.description,
+                        requires_human_review=flag_result.requires_human_review,
                     )
                 )
 
@@ -72,12 +95,12 @@ class IntegrityAgent(BaseAgent):
             evaluation = IntegrityEvaluation(
                 evaluation_id=f"integ_eval_{uuid.uuid4().hex[:8]}",
                 candidate_id=parsed_resume.candidate_id,
-                job_id="unknown",
+                job_id=interview_transcript.job_id,
                 interview_id=interview_transcript.interview_id,
                 flags=flags,
-                overall_integrity=data.get("overall_integrity", "clear"),
-                explanation=data.get("explanation", "Integrity analysis complete"),
-                confidence=float(data.get("confidence", 0.80)),
+                overall_integrity=result.overall_integrity,
+                explanation=result.explanation,
+                confidence=result.confidence,
                 requires_human_review=len(flags) > 0,
             )
 
@@ -92,7 +115,7 @@ class IntegrityAgent(BaseAgent):
         lines = [f"Candidate: {resume.candidate_name}"]
         if resume.work_experience:
             lines.append(f"Most recent role: {resume.work_experience[0].position}")
-        lines.extend(f"Skills: {', '.join(resume.skills[:5])}")
+        lines.append(f"Skills: {', '.join(resume.skills[:5])}")
         return "\n".join(lines)
 
     def _format_transcript(self, transcript: InterviewTranscript) -> str:
@@ -102,12 +125,3 @@ class IntegrityAgent(BaseAgent):
             lines.append(f"Q{i}: {question.question_text}")
             lines.append(f"A{i}: {answer.answer_text}\n")
         return "\n".join(lines)
-
-    def _create_default_evaluation(self) -> Dict[str, Any]:
-        """Create default evaluation on failure."""
-        return {
-            "flags": [],
-            "overall_integrity": "clear",
-            "explanation": "No inconsistencies detected",
-            "confidence": 0.75,
-        }
