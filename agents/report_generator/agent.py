@@ -1,9 +1,18 @@
 """
 Report Generator Agent.
 Creates comprehensive candidate evaluation reports.
+
+Evidence policy (P2 Phase 12): this agent derives its report purely from the
+already-validated upstream evaluation state (CandidateScores,
+TechnicalEvaluation, BehavioralEvaluation, ClaimVerification list,
+IntegrityEvaluation, BiasAudit) - it never calls an LLM to "summarize
+evidence." Every piece of evidence the report exposes (via
+scores.competency_scores[i].evidence, integrity_flags[i].evidence,
+bias_flags[i].evidence, claim_verifications[i].evidence) already existed
+upstream before this agent ran; this agent only assembles references to it,
+never invents new evidence.
 """
-from typing import Any, Dict
-import json
+from typing import Any, Dict, List, Optional
 import uuid
 
 from agents.base import BaseAgent
@@ -13,6 +22,7 @@ from schemas.evaluation import (
     BehavioralEvaluation,
     BiasAudit,
     IntegrityEvaluation,
+    ClaimVerification,
 )
 from schemas.resume import ParsedResume
 
@@ -31,11 +41,12 @@ class ReportGeneratorAgent(BaseAgent):
         behavioral_evaluation: BehavioralEvaluation = None,
         bias_audit: BiasAudit = None,
         integrity_evaluation: IntegrityEvaluation = None,
+        resume_audits: Optional[List[ClaimVerification]] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Generate comprehensive report.
-        
+
         Args:
             candidate_scores: Synthesized scores
             parsed_resume: Candidate resume
@@ -43,18 +54,24 @@ class ReportGeneratorAgent(BaseAgent):
             behavioral_evaluation: Behavioral eval (optional)
             bias_audit: Bias check (optional)
             integrity_evaluation: Integrity check (optional)
-            
+            resume_audits: Resume Auditor's per-claim verification results
+                (optional) - previously never reached the report at all (P2
+                Phase 10); now surfaced via CandidateReport.claim_verifications
+                so their evidence is visible in the final output.
+
         Returns:
             CandidateReport with all details
         """
         self.logger.info(f"Generating report for candidate {parsed_resume.candidate_id}")
 
         try:
-            # Determine recommendation
+            claim_verifications = resume_audits or []
+
             recommendation = self._determine_recommendation(
                 candidate_scores,
                 bias_audit,
                 integrity_evaluation,
+                claim_verifications,
             )
 
             # Build report
@@ -72,9 +89,12 @@ class ReportGeneratorAgent(BaseAgent):
                 weaknesses=self._compile_weaknesses(technical_evaluation, behavioral_evaluation),
                 integrity_flags=integrity_evaluation.flags if integrity_evaluation else [],
                 bias_flags=bias_audit.flags if bias_audit else [],
+                claim_verifications=claim_verifications,
                 requires_human_review=(
                     (integrity_evaluation and integrity_evaluation.requires_human_review) or
                     (bias_audit and bias_audit.requires_human_review) or
+                    any(v.requires_human_review for v in claim_verifications) or
+                    self._has_insufficient_evidence_score(candidate_scores) or
                     recommendation == "human_review"
                 ),
                 explanation=self._generate_summary(candidate_scores, recommendation),
@@ -86,11 +106,19 @@ class ReportGeneratorAgent(BaseAgent):
             self.logger.error(f"Report generation failed: {str(e)}")
             return {"candidate_report": None, "error": str(e)}
 
+    def _has_insufficient_evidence_score(self, scores: CandidateScores) -> bool:
+        """True if any competency the scoring rubric drew on was reported
+        with evidence_status="insufficient" (P2) - an evaluator claimed a
+        score for it but no transcript evidence could be resolved, so a
+        human should see that before trusting the number."""
+        return any(cs.evidence_status == "insufficient" for cs in scores.competency_scores)
+
     def _determine_recommendation(
         self,
         scores: CandidateScores,
         bias_audit: BiasAudit = None,
         integrity_eval: IntegrityEvaluation = None,
+        claim_verifications: Optional[List[ClaimVerification]] = None,
     ) -> str:
         """Determine hiring recommendation."""
         final_score = scores.weighted_final_score
@@ -100,6 +128,9 @@ class ReportGeneratorAgent(BaseAgent):
             return "human_review"
 
         if bias_audit and bias_audit.requires_human_review:
+            return "human_review"
+
+        if claim_verifications and any(v.requires_human_review for v in claim_verifications):
             return "human_review"
 
         # Score-based recommendation

@@ -3,15 +3,15 @@ Behavioral Evaluator Agent.
 Evaluates soft skills and behavioral competencies.
 """
 from typing import Any, Dict
-import json
 import uuid
 
 from agents.base import BaseAgent
 from schemas.evaluation import BehavioralEvaluation, CompetencyScore
 from schemas.interview import InterviewTranscript
 from schemas.job import JobDescription
+from schemas.llm_outputs import BehavioralEvaluationResult
 from schemas.resume import ParsedResume
-from utils.evidence import create_transcript_evidence
+from utils.evidence import resolve_transcript_evidence
 
 
 class BehavioralEvaluatorAgent(BaseAgent):
@@ -29,12 +29,12 @@ class BehavioralEvaluatorAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Evaluate behavioral competencies.
-        
+
         Args:
             job_description: Job requirements
             parsed_resume: Candidate resume
             interview_transcript: Sealed interview transcript
-            
+
         Returns:
             BehavioralEvaluation with competency scores
         """
@@ -51,29 +51,42 @@ class BehavioralEvaluatorAgent(BaseAgent):
                 transcript=transcript_text,
             )
 
-            response_text = await self.call_llm_generate(prompt)
+            result: BehavioralEvaluationResult = await self.call_llm_structured(
+                prompt,
+                schema=BehavioralEvaluationResult.model_json_schema(),
+                validate=BehavioralEvaluationResult.model_validate,
+            )
 
-            try:
-                data = json.loads(response_text)
-            except json.JSONDecodeError:
-                data = self._create_default_evaluation_data()
-
-            # Build competency scores
+            # Build competency scores. Only competencies the LLM actually
+            # returned a judgment for are scored (see P0-4). A competency the
+            # LLM DID score but whose evidence never resolves is still kept
+            # (for transparency) but marked evidence_status="insufficient"
+            # (P2 Phase 6) so scoring excludes it from the rubric computation
+            # rather than treating it as a normal grounded result.
             competency_scores = []
             for comp in job_description.competencies:
-                # Try to find behavioral data for this competency
-                score_data = data.get("competency_scores", {}).get(comp.name, {})
+                judgment = result.competency_scores.get(comp.name)
+                if judgment is None:
+                    continue
 
-                if score_data:
-                    competency_scores.append(
-                        CompetencyScore(
-                            competency_name=comp.name,
-                            score=float(score_data.get("score", 7.0)),
-                            confidence=float(score_data.get("confidence", 0.75)),
-                            evidence=[],
-                            explanation=score_data.get("explanation", ""),
-                        )
+                evidence_item = resolve_transcript_evidence(
+                    transcript=interview_transcript,
+                    question_number=judgment.evidence_question_number,
+                    agent="behavioral_evaluator",
+                    explanation=judgment.explanation,
+                    candidate_id=parsed_resume.candidate_id,
+                    competency=comp.name,
+                )
+                competency_scores.append(
+                    CompetencyScore(
+                        competency_name=comp.name,
+                        score=judgment.score,
+                        confidence=judgment.confidence,
+                        evidence=[evidence_item] if evidence_item else [],
+                        explanation=judgment.explanation,
+                        evidence_status="supported" if evidence_item else "insufficient",
                     )
+                )
 
             # Create evaluation
             evaluation = BehavioralEvaluation(
@@ -82,16 +95,16 @@ class BehavioralEvaluatorAgent(BaseAgent):
                 job_id=job_description.job_id,
                 interview_id=interview_transcript.interview_id,
                 competency_scores=competency_scores,
-                behavioral_score=float(data.get("behavioral_score", 7.5)),
-                communication=float(data.get("communication", 7.5)),
-                problem_solving=float(data.get("problem_solving", 7.5)),
-                teamwork=float(data.get("teamwork", 7.0)),
-                adaptability=float(data.get("adaptability", 7.0)),
-                strengths=data.get("strengths", []),
-                weaknesses=data.get("weaknesses", []),
-                evidence=[],
-                explanation=data.get("explanation", "Behavioral evaluation complete"),
-                confidence=float(data.get("confidence", 0.80)),
+                behavioral_score=result.behavioral_score,
+                communication=result.communication,
+                problem_solving=result.problem_solving,
+                teamwork=result.teamwork,
+                adaptability=result.adaptability,
+                strengths=result.strengths,
+                weaknesses=result.weaknesses,
+                evidence=[e for cs in competency_scores for e in cs.evidence],
+                explanation=result.explanation,
+                confidence=result.confidence,
             )
 
             return {"behavioral_evaluation": evaluation}
@@ -107,18 +120,3 @@ class BehavioralEvaluatorAgent(BaseAgent):
             lines.append(f"Q{i}: {question.question_text}")
             lines.append(f"A{i}: {answer.answer_text}\n")
         return "\n".join(lines)
-
-    def _create_default_evaluation_data(self) -> Dict[str, Any]:
-        """Create default evaluation data on failure."""
-        return {
-            "behavioral_score": 7.0,
-            "communication": 7.5,
-            "problem_solving": 7.5,
-            "teamwork": 7.0,
-            "adaptability": 7.0,
-            "competency_scores": {},
-            "strengths": ["Good communication", "Collaborative"],
-            "weaknesses": ["Could improve on conflict resolution"],
-            "explanation": "Behavioral evaluation based on interview responses",
-            "confidence": 0.70,
-        }

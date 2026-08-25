@@ -131,11 +131,13 @@ class MockLLMProvider(LLMProvider):
                     "Python": {
                         "score": 8.5,
                         "confidence": 0.85,
+                        "evidence_question_number": 1,
                         "explanation": "Strong Python fundamentals demonstrated",
                     },
                     "SQL": {
                         "score": 7.5,
                         "confidence": 0.80,
+                        "evidence_question_number": 2,
                         "explanation": "Good SQL query writing",
                     },
                 },
@@ -158,6 +160,7 @@ class MockLLMProvider(LLMProvider):
                     "Communication": {
                         "score": 8.0,
                         "confidence": 0.80,
+                        "evidence_question_number": 5,
                         "explanation": "Clear and structured communication",
                     },
                 },
@@ -186,6 +189,7 @@ class MockLLMProvider(LLMProvider):
             {
                 "verification_status": "supported",
                 "confidence": 0.87,
+                "evidence_question_number": 1,
                 "explanation": "Interview response aligns with resume claim",
                 "requires_human_review": False,
             }

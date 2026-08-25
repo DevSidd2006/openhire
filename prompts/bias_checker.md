@@ -14,7 +14,10 @@ Audit the evaluation for:
 For concerns found:
 - **Flag Type** - What type of bias
 - **Severity** - low, medium, or high
-- **Evidence** - Where in the evaluation this appears
+- **Evidence source** - Which section of the Evaluation Notes below this
+  concern appears in: one of "technical_evaluation", "behavioral_evaluation",
+  "resume_audit", "integrity", "technical_score", "behavioral_score".
+- **Description** - Where in the evaluation this appears and why it's a concern
 - **Recommendation** - How to address it
 
 Flag only REAL concerns based on evaluation text, not hypotheticals.
@@ -40,3 +43,21 @@ Important Guidelines:
 {evaluation_text}
 
 ## Output JSON:
+Respond with a JSON object shaped like:
+```json
+{{
+  "flags": [
+    {{
+      "bias_type": "personality_assumption",
+      "severity": "low",
+      "confidence": 0.6,
+      "evidence_source": "behavioral_evaluation",
+      "description": "...",
+      "recommendation": "..."
+    }}
+  ],
+  "fairness_status": "pass",
+  "explanation": "...",
+  "confidence": 0.8
+}}
+```

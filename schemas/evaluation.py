@@ -1,22 +1,48 @@
 """
 Evidence tracking and evaluation related schemas.
 """
-from typing import List, Optional, Any
+from datetime import datetime, timezone
+from typing import List, Literal, Optional, Any
 from pydantic import BaseModel, Field
+
+# The full evidence-type vocabulary (P2). "supporting"/"contradicting" mirror
+# the judgment an evidence item backs; "insufficient" marks a genuine
+# absence-of-evidence finding (e.g. "no transcript exchange addressed this
+# competency") - a factual coverage statement, never a fabricated claim about
+# the candidate. Kept as a plain Literal (not a separate enum type) to match
+# how the rest of this module already represents small closed vocabularies
+# (severity, verification_status, etc.).
+EvidenceType = Literal["supporting", "contradicting", "insufficient"]
 
 
 class EvidenceItem(BaseModel):
-    """Traceable evidence for any evaluation claim."""
+    """Traceable evidence for any evaluation claim.
+
+    candidate_id is a redundant-by-design safety net: every EvidenceItem is
+    normally reached by navigating from a specific candidate's evaluation
+    (CompetencyScore.evidence, IntegrityFlag.evidence, ...), but stamping the
+    candidate directly onto the evidence item lets validation catch a
+    cross-candidate mixup (utils/evidence.py:validate_evidence_belongs_to_candidate)
+    even if it somehow ended up in the wrong place.
+    """
     evidence_id: str
+    candidate_id: Optional[str] = None  # who this evidence is about
     source_type: str  # "transcript", "resume", "derived"
     source_id: Optional[str] = None  # question_id, resume_section, etc.
     question_id: Optional[str] = None
+    answer_id: Optional[str] = None  # same value as question_id in this
+    # codebase today (InterviewAnswer.question_id is the pairing key - there
+    # is no separate answer identifier), kept as its own field so evidence is
+    # self-describing without callers needing to know that detail.
+    evidence_type: EvidenceType = "supporting"
+    competency: Optional[str] = None  # criterion/competency this evidence relates to, when applicable
     timestamp_start: Optional[float] = None  # In seconds
     timestamp_end: Optional[float] = None
-    text: str  # The actual evidence text
+    text: str = Field(min_length=1)  # The actual evidence text - never empty, never fabricated
     relevance: float = Field(ge=0.0, le=1.0, description="Relevance score")
     agent: str  # Which agent generated this
     explanation: str  # Why this is evidence
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class CompetencyScore(BaseModel):
@@ -28,6 +54,15 @@ class CompetencyScore(BaseModel):
     evidence: List[EvidenceItem] = Field(default_factory=list)
     explanation: str
     feedback: Optional[str] = None
+
+    # "supported": at least one real, grounded EvidenceItem backs this score.
+    # "insufficient": an evaluator reported a score/confidence for this
+    # competency but no transcript evidence could be resolved for it - the
+    # score is kept (for transparency about what the LLM claimed) but is
+    # explicitly marked as NOT evidence-backed, so scoring/reporting can
+    # treat it differently rather than silently counting it as a normal
+    # supported result (see ScoringAgent._compute_rubric_score, P2 Phase 5/11).
+    evidence_status: Literal["supported", "insufficient"] = "supported"
 
 
 class TechnicalEvaluation(BaseModel):

@@ -12,8 +12,13 @@ Evaluate behavioral competencies:
 For each competency:
 - **Score** (0-10) - Demonstrated level
 - **Confidence** (0-1) - Certainty of assessment
-- **Evidence** - Specific responses showing this behavior
+- **Evidence question number** - The number (e.g. 1 for Q1, 2 for Q2, ...) of
+  the transcript exchange this score is based on. Omit if the judgment isn't
+  grounded in one specific answer.
 - **Explanation** - Rationale for score
+
+Only include a competency if the transcript actually shows something relevant
+to it. Do not invent a score for a competency that was never discussed.
 
 Important Guidelines:
 - Evaluate based ONLY on what was discussed in the interview
@@ -30,3 +35,25 @@ Important Guidelines:
 {transcript}
 
 ## Output JSON:
+Respond with a JSON object shaped like:
+```json
+{{
+  "behavioral_score": 7.5,
+  "communication": 7.5,
+  "problem_solving": 7.5,
+  "teamwork": 7.0,
+  "adaptability": 7.0,
+  "competency_scores": {{
+    "<competency name>": {{
+      "score": 7.5,
+      "confidence": 0.8,
+      "evidence_question_number": 5,
+      "explanation": "..."
+    }}
+  }},
+  "strengths": ["..."],
+  "weaknesses": ["..."],
+  "explanation": "...",
+  "confidence": 0.8
+}}
+```

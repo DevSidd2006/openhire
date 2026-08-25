@@ -5,6 +5,20 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 
+class LLMTransientError(Exception):
+    """An LLM call failed in a way that is safe/reasonable to retry - rate
+    limits, timeouts, connection errors, transient 5xx responses. Providers
+    should raise this (not a bare Exception) for failures BaseAgent's retry
+    wrapper should retry."""
+
+
+class LLMPermanentError(Exception):
+    """An LLM call failed in a way that will not be fixed by retrying -
+    invalid API key, malformed request, unsupported model, etc. Providers
+    should raise this so BaseAgent's retry wrapper fails fast instead of
+    burning retries on a call that can never succeed."""
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 

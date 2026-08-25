@@ -1,6 +1,26 @@
 """
 Orchestrator Agent.
-Coordinates the entire hiring evaluation pipeline.
+
+STATUS (P0-7 audit finding, resolved by documenting rather than deleting):
+This agent is NOT part of the current batch evaluation pipeline. The actual
+pipeline (JD analysis -> resume matching -> parallel evaluation -> scoring ->
+leaderboard) is orchestrated by LangGraph in orchestration/graph.py, which
+does not call this class - `agents/__init__.py`'s exports and pytest wiring
+are the only current references besides docs.
+
+It is kept rather than deleted because docs/roles/multi-agent.md and
+README.md's Stage 3 description explicitly list an "orchestrator (runs the
+live conversation)" as one of the agents in this system's intended design -
+i.e. this class's real, still-unfulfilled responsibility is coordinating a
+LIVE interview session (turn-taking, adaptive follow-ups, sealing the
+transcript when the conversation ends), not the batch post-interview
+pipeline LangGraph already handles. Building that live session layer is
+explicitly out of scope for this P0 pass (see InterviewerAgent's docstring
+for the same boundary) - Pipecat/streaming/live-voice work is a later phase.
+
+Until that phase, this class is a documented placeholder: safe to keep, not
+wired into anything, and should not be forced into orchestration/graph.py
+just to look "used" - that would misrepresent what it actually does.
 """
 from typing import Any, Dict, List, Optional
 import uuid
@@ -12,7 +32,9 @@ from schemas.interview import InterviewTranscript
 
 
 class OrchestratorAgent(BaseAgent):
-    """Orchestrates the entire evaluation pipeline."""
+    """Reserved for live-interview-session orchestration (turn-taking,
+    sealing the transcript). Not used by the batch LangGraph pipeline in
+    orchestration/graph.py - see module docstring."""
 
     def __init__(self, **kwargs):
         super().__init__(name="orchestrator", **kwargs)

@@ -3,14 +3,14 @@ Resume Auditor Agent.
 Verifies resume claims against interview responses.
 """
 from typing import Any, Dict, List
-import json
 import uuid
 
 from agents.base import BaseAgent
 from schemas.evaluation import ClaimVerification, ResumeClaim
 from schemas.interview import InterviewTranscript
+from schemas.llm_outputs import ClaimVerificationResult
 from schemas.resume import ParsedResume
-from utils.evidence import create_evidence
+from utils.evidence import resolve_transcript_evidence
 
 
 class ResumeAuditorAgent(BaseAgent):
@@ -74,24 +74,44 @@ class ResumeAuditorAgent(BaseAgent):
             transcript=transcript_text,
         )
 
-        response_text = await self.call_llm_generate(prompt)
+        result: ClaimVerificationResult = await self.call_llm_structured(
+            prompt,
+            schema=ClaimVerificationResult.model_json_schema(),
+            validate=ClaimVerificationResult.model_validate,
+        )
 
-        try:
-            data = json.loads(response_text)
-        except json.JSONDecodeError:
-            data = self._create_default_verification()
+        status = result.verification_status
+        # "inconsistent" means the transcript CONTRADICTS the resume claim;
+        # "supported"/"partially_supported" mean it backs the claim up.
+        evidence_type = "contradicting" if status == "inconsistent" else "supporting"
+        evidence_item = resolve_transcript_evidence(
+            transcript=interview_transcript,
+            question_number=result.evidence_question_number,
+            agent="resume_auditor",
+            explanation=result.explanation,
+            candidate_id=parsed_resume.candidate_id,
+            evidence_type=evidence_type,
+        )
+
+        # A verified/contradicted/partial verdict without a real transcript
+        # exchange to point to isn't actually grounded - route it to human
+        # review rather than asserting a status we can't back up. Only
+        # "insufficient_evidence" is a legitimate verdict without evidence,
+        # since it means the interview never addressed the claim at all.
+        if status in ("supported", "partially_supported", "inconsistent") and not evidence_item:
+            status = "requires_human_review"
 
         verification = ClaimVerification(
             verification_id=f"claim_ver_{uuid.uuid4().hex[:8]}",
             candidate_id=parsed_resume.candidate_id,
-            job_id="unknown",
+            job_id=interview_transcript.job_id,
             interview_id=interview_transcript.interview_id,
             claim=claim,
-            verification_status=data.get("verification_status", "insufficient_evidence"),
-            confidence=float(data.get("confidence", 0.60)),
-            evidence=[],
-            explanation=data.get("explanation", "Claim could not be verified"),
-            requires_human_review=data.get("verification_status") in [
+            verification_status=status,
+            confidence=result.confidence,
+            evidence=[evidence_item] if evidence_item else [],
+            explanation=result.explanation,
+            requires_human_review=status in [
                 "inconsistent",
                 "requires_human_review",
             ],
@@ -135,12 +155,3 @@ class ResumeAuditorAgent(BaseAgent):
             lines.append(f"Q{i}: {question.question_text}")
             lines.append(f"A{i}: {answer.answer_text}\n")
         return "\n".join(lines)
-
-    def _create_default_verification(self) -> Dict[str, Any]:
-        """Create default verification on failure."""
-        return {
-            "verification_status": "insufficient_evidence",
-            "confidence": 0.50,
-            "explanation": "Could not determine verification status",
-            "requires_human_review": True,
-        }
