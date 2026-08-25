@@ -1,0 +1,163 @@
+{
+  "generated_at": "20260825T144153Z",
+  "results": [
+    {
+      "case_id": "matcher_strong_match",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.match_score = 1.0, expected [0.85, 1.0]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.shortlist_recommendation: expected True, got True"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.missing_required_skills) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_missing_required_skill",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.missing_required_skills = ['Kubernetes'], expected to contain 'Kubernetes'"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.match_score = 0.6499999999999999, expected [0.0, 0.85]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_weak_match",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.match_score = 0.06, expected [0.0, 0.5]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.shortlist_recommendation: expected False, got False"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_preferred_only",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.missing_required_skills = ['Java'], expected to contain 'Java'"
+        },
+        {
+          "metric": "list_not_contains",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_overqualified",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.experience_match = 1.0, expected [0.9, 1.0]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_monotonic_required_skill",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "fact:required_skill_match_non_decreasing",
+          "passed": true,
+          "detail": "required_skill_match_non_decreasing = True"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "matcher_no_experience_data",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.experience_match: expected 0.5, got 0.5"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

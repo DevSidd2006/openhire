@@ -60,7 +60,7 @@ graph LR
 | Agent | Input | Output | Purpose |
 |-------|-------|--------|---------|
 | **JD Analyzer** | Raw job description text | `JobDescription` with extracted competencies, skills, requirements | Parse job description into structured format with skill requirements and competency weights |
-| **Resume Parser** | Raw resume text | `ParsedResume` with education, experience, skills | Normalize resume data into structured schema |
+| **Resume Parser** | Raw resume text | `ParsedResume` with education, experience, skills | Extract structured resume data via `ResumeParseResult` (P7); falls back to a deterministic, text-grounded extractor only if structured extraction fails |
 | **Resume Matcher** | Job description + Resume | `MatchingScore` with skill gaps and match % | Evaluate resume-job fit and shortlist candidates |
 | **Interviewer** | Job description + Resume | List of `InterviewQuestion` objects | Generate adaptive, structured interview questions |
 | **Technical Evaluator** | Job description + Resume + Transcript | `TechnicalEvaluation` with competency scores | Evaluate technical skills and depth against job requirements |
@@ -99,7 +99,124 @@ Post-interview evaluations run concurrently:
 - Bias checker runs after parallel evaluations complete
 - Scoring synthesizes all results
 
-### 5. Provider Abstraction
+### 5. Adaptive Interview Engine (P3) + Session Runner (P4)
+The batch `Interviewer` agent in the table above pre-generates a fixed
+question set before any interview happens. Separately, a live, turn-based
+adaptive interview is available with a strict separation of responsibilities:
+
+```
+InterviewSessionRunner (utils/interview_session.py)
+    lifecycle + sequencing only: CREATED -> ACTIVE -> FINISHING -> SEALED/FAILED
+        |
+        v
+Adaptive Interview Engine (utils/adaptive_interview.py)
+    pure, deterministic decision logic - no LLM calls:
+    decide_next_action() / competency prioritization / termination / dedup
+        |
+        v
+InterviewerAgent (agents/interviewer/agent.py)
+    the only LLM-calling surface: evaluate_answer() judges one answer
+    against one competency; generate_next_question() phrases the text of
+    one already-decided question. Neither method chooses WHAT happens next.
+        |
+        v
+Evidence system (utils/evidence.py)
+    canonical, deterministic EvidenceItem construction (P2) - the interview
+    engine's per-turn evidence and the evaluators' post-interview evidence
+    both use this same construction path, never a second format.
+        |
+        v
+Sealed InterviewTranscript (schemas/interview.py)
+    the SAME model the batch pipeline already consumes -> flows into the
+    existing, unmodified TechnicalEvaluator / BehavioralEvaluator /
+    ResumeAuditor / Integrity / BiasChecker / Scoring / Report / Leaderboard
+    pipeline (orchestration/graph.py) exactly like any other transcript.
+```
+
+A caller drives one interview with a plain loop - no web framework, HTTP, or
+WebSocket dependency:
+```python
+runner = InterviewSessionRunner(job_description, parsed_resume)
+question = await runner.start()
+while question is not None:
+    result = await runner.submit_answer(candidate_answer_text)
+    question = result.next_question
+transcript = runner.get_transcript()  # sealed, ready for the pipeline above
+```
+
+**Evidence: interview-time vs. evaluator-time.** The session runner builds
+one `EvidenceItem` per answered turn, straight from the verbatim answer text
+(`utils.adaptive_interview.build_answer_evidence`) - this is *source*
+evidence: proof an exchange happened and what was actually said, used only
+to drive the adaptive engine's own next-question decisions. It is not
+written back into the sealed transcript or exposed to the batch evaluators.
+Technical/Behavioral/ResumeAuditor/Integrity independently derive their own
+*judgment* evidence from the sealed transcript via
+`utils.evidence.resolve_transcript_evidence`, exactly as they do for any
+other transcript (adaptive-interview-produced or not) - unchanged by P3/P4.
+Both paths share the same canonical `EvidenceItem` model and the same
+deterministic ID scheme (`utils.evidence.build_evidence_id`), so there is
+one evidence *format*, not two, and no reconciliation step is needed: the
+two evidence sets serve different purposes (steering the interview vs.
+justifying the final score) and are never merged or compared against each
+other.
+
+### 6. Live Interview API (P5)
+A thin FastAPI service (`api/`) exposes the P4 `InterviewSessionRunner` over
+HTTP for a real client to drive turn by turn. It contains **no interview
+intelligence of its own** - every route handler does at most one call into
+the existing application layer and reshapes the result:
+
+```
+Client
+   |  HTTP (JSON)
+   v
+FastAPI routes (api/routes/interview.py)
+   |  translate request -> exactly one call -> translate response
+   v
+InterviewSessionRunner (utils/interview_session.py)          <- P4, unchanged
+   |
+   v
+Adaptive Interview Engine (utils/adaptive_interview.py)      <- P3, unchanged
+   +  InterviewerAgent (agents/interviewer/agent.py)         <- P3, unchanged
+   +  Evidence system (utils/evidence.py)                    <- P2, unchanged
+   |
+   v
+Sealed InterviewTranscript
+   |
+   v
+Existing Evaluation Pipeline (orchestration/graph.py)        <- P0-P2, unchanged
+```
+
+Endpoints: `POST /sessions` (create + first question), `GET /sessions/{id}`
+(status/progress), `POST /sessions/{id}/answers` (submit an answer, get
+evidence + next question), `POST /sessions/{id}/finish` (explicit
+termination, routed through the same termination validation as any other
+finish), `GET /health` (liveness only - no LLM call, no API key).
+
+**Session storage** is an in-memory `SessionRegistry` (`api/registry.py`)
+keyed by a random `session_id` - no database. **Responses are deliberately
+narrow views** (`api/models.py`): a candidate never sees the adaptive
+engine's internal `reason` for a question, the full transcript is never
+dumped back after an answer, and the raw `InterviewState`/`EvidenceItem`
+objects never leave the process. **Errors** map to `400` (bad
+business-rule input), `404` (unknown session), `409` (operation invalid for
+the session's current lifecycle state), `422` (schema validation, handled
+by FastAPI/pydantic automatically), or `500` (genuine session failure /
+unexpected error) - never a raw stack trace or exception message.
+
+Run locally (mock mode, no `OPENAI_API_KEY` needed):
+```bash
+python -m uvicorn api.app:app --reload
+```
+
+**Authentication is intentionally not implemented** in P5 - see
+`tests/test_api.py` for the isolation/concurrency/prompt-injection
+guarantees that stand in for it today (session_id as the sole, unguessable
+access boundary), and treat adding real auth as a prerequisite before this
+API is reachable from anywhere other than local development.
+
+### 7. Provider Abstraction
 Swap LLM, embedding, or vector store implementations:
 - Local testing with mock providers (no API keys)
 - Production deployments with OpenAI, Azure, or self-hosted
@@ -111,10 +228,10 @@ LLMProvider
 ├── generate(prompt) -> str                          # free-text completion
 └── generate_structured(prompt, schema) -> dict       # schema-conformant JSON
 ```
-Agents that need structured data (JD analysis, technical/behavioral
-evaluation, resume audit, integrity/bias checks, interview question
-generation) call `generate_structured()` with a JSON Schema derived directly
-from a Pydantic model in `schemas/llm_outputs.py`
+Agents that need structured data (JD analysis, resume parsing,
+technical/behavioral evaluation, resume audit, integrity/bias checks,
+interview question generation) call `generate_structured()` with a JSON
+Schema derived directly from a Pydantic model in `schemas/llm_outputs.py`
 (`SomeModel.model_json_schema()`), then validate the response against that
 same model (`SomeModel.model_validate(result)`) before converting it into the
 agent's real output schema. Agents never hand-write JSON Schemas or call
@@ -123,7 +240,10 @@ job. `BaseAgent.call_llm_structured(..., validate=SomeModel.model_validate)`
 wires validation into the same bounded retry/timeout budget as provider
 failures (see `agents/base.py`), so a malformed or schema-invalid response is
 retried a bounded number of times and then fails explicitly - it is never
-silently replaced with fabricated data.
+silently replaced with fabricated data. As of P7, every LLM-calling agent
+follows this pattern - Resume Parser (previously the one holdout, using
+`generate()` + manual `json.loads()`) was migrated last; see "Resume Parser
+Hardening" below for its specific fallback policy.
 
 - **Mock mode** (`LLM_PROVIDER=mock`, the default) requires no API key -
   `MockLLMProvider` returns deterministic, schema-valid responses for every
@@ -137,10 +257,160 @@ silently replaced with fabricated data.
   shape, transient-vs-permanent error classification) lives in
   `providers/llm/*.py`.
 
-### 6. Comprehensive Auditing
+**Three provider implementations, three different jobs (finalized P8A):**
+- `MockLLMProvider` (`providers/llm/mock.py`) - the default LLM_PROVIDER.
+  Dispatches on each prompt template's fixed title header and always
+  returns a fixed, schema-valid response - it never simulates a failure. If
+  a prompt matches no known template, it falls back to a best-effort shape
+  (`_create_mock_structure`) that is NOT guaranteed schema-valid; agent-level
+  Pydantic validation (not the provider) is what actually enforces
+  correctness here - see `tests/test_structured_output_provider.py`. Its
+  purpose is "always succeed with something" for local development and the
+  default `python main.py` run, not failure-mode testing.
+- `ScriptedLLMProvider` (`tests/fakes.py`) - the fake used throughout
+  `tests/` and `evaluation/adapters.py` to simulate a SPECIFIC LLM response
+  (or failure) per call. Its `generate_structured()` classifies malformed
+  JSON text as `LLMTransientError` (retryable) - matching
+  `OpenAIProvider`'s real classification of malformed JSON exactly (P8A: a
+  P7 fix - previously it raised a raw, unclassified `json.JSONDecodeError`
+  that bypassed `BaseAgent`'s retry entirely, understating how many
+  attempts a real malformed-output scenario actually takes). A script entry
+  that IS an `Exception` instance (e.g. `LLMPermanentError("bad key")`) is
+  raised as-is, letting a case simulate a permanent provider failure too.
+- `OpenAIProvider` (`providers/llm/openai.py`) - the real provider.
+  Classifies empty choices/empty content/truncated responses/malformed
+  JSON as `LLMTransientError`; auth/bad-request/unknown errors as
+  `LLMPermanentError`; network/rate-limit/5xx as `LLMTransientError`. This
+  is the reference behavior every fake above is checked against.
+
+The test-provider failure behavior is intentionally designed to mirror this
+production classification, not to diverge from it for convenience - a case
+that scripts malformed JSON is exercising the SAME retry path a real
+malformed OpenAI response would take, not a shortcut around it.
+
+### 8. Comprehensive Auditing
 - Audit log for every agent with duration and status
 - Pipeline run tracking with error capture
 - Compliance-ready execution traces
+
+### 9. Agent Evaluation Framework (P6)
+Everything above establishes CODE correctness (schemas, state, integration,
+failure safety). The evaluation framework (`evaluation/`) is a separate,
+reusable harness that measures BEHAVIORAL correctness instead - given a
+controlled, simulated LLM judgment, does an agent produce grounded,
+non-fabricated, schema-valid output that respects this project's
+invariants?
+
+```
+EvaluationCase (evaluation/cases/<agent>.json)
+    |  input (real job/resume/transcript fragments + a scripted simulated
+    |  LLM response) + declared checks
+    v
+Adapter (evaluation/adapters.py)
+    |  builds real domain objects, calls the REAL agent
+    |  (agents/*/agent.py - never reimplemented), never decides anything itself
+    v
+EvaluationResult: PASS / FAIL / ERROR
+    |  PASS = every check passed. FAIL = the agent ran but violated an
+    |  expected property. ERROR = the agent/adapter itself crashed - a
+    |  different finding than a wrong answer.
+    v
+Metrics (evaluation/metrics.py + evaluation/grounding.py)
+    |  deterministic, no LLM judge - schema validity, field/range checks,
+    |  fabrication guards, and the project-wide evidence-grounding sweep
+    |  (question exists, candidate/job ID matches, evidence text is
+    |  traceable to the real transcript answer)
+    v
+Quality report (python -m evaluation.runner)
+    per-agent PASS/FAIL/ERROR table + most common failure categories,
+    generated from actual execution - never hand-written numbers.
+```
+
+Why a ScriptedLLMProvider and not the shared MockLLMProvider: MockLLMProvider
+returns the same fixed response regardless of prompt content, so there is
+nothing to distinguish "a strong answer" from "a weak answer." Each case
+instead scripts exactly what a correctly (or adversarially) behaving LLM
+would return, so what's actually under test is whether the AGENT CODE
+grounds, refuses to fabricate beyond, and doesn't let candidate text
+override that judgment - not whether a real LLM's judgment is good. That
+question is explicitly out of scope for P6: the same case files are
+designed to be re-run against a real provider later by swapping only the
+provider construction in `evaluation/adapters.py`, once one is benchmarked.
+P6 does not claim real-world LLM quality - only that, for a given simulated
+judgment, the surrounding code behaves correctly.
+
+Run it: `python -m evaluation.runner [agent_name ...]` (no API key, no
+network - every case runs in mock/deterministic mode).
+
+**P8A audit**: because the framework's validity depends entirely on
+`ScriptedLLMProvider` correctly modeling real provider failure semantics,
+P8A specifically audited and proved this - see "Provider Abstraction"
+above for the finalized three-provider comparison, and
+`tests/test_p8a_evaluation_infrastructure.py` for the explicit retry-
+contract (malformed JSON / invalid schema / permanent error / timeout /
+clean success) and PASS-vs-FAIL-vs-ERROR proofs this rests on.
+
+### 10. Resume Parser Hardening (P7)
+Resume Parser was the last LLM-calling agent still using the pre-P1 pattern
+(`call_llm_generate()` + manual `json.loads()`). It now follows the same
+structured-output architecture as every other agent:
+
+```
+Resume text
+    |
+    v
+call_llm_structured(prompt, schema=ResumeParseResult.model_json_schema(),
+                     validate=ResumeParseResult.model_validate)
+    |
+    v
+ResumeParseResult                    <- ONLY what the LLM is responsible
+    |                                   for (no candidate_id, no system-
+    |                                   generated fields); nested entries
+    |                                   are all-optional (an extractor can
+    |                                   be uncertain about one field of one
+    |                                   work-experience entry without that
+    |                                   invalidating the whole response)
+    v
+deterministic/business validation     <- ResumeParserAgent._build_parsed_resume:
+    |                                   an entry (education/work experience/
+    |                                   project/certification) is kept only
+    |                                   if it clears the DOMAIN model's
+    |                                   required fields; a partial entry is
+    |                                   DROPPED, never completed with a
+    |                                   fabricated value
+    v
+ParsedResume
+```
+
+**Fallback policy - explicit and three-tiered**, distinguishing a *safe*
+deterministic fallback from a *fabricated* one:
+
+1. **Structured output valid** -> `ParsedResume` built from it (normal path).
+2. **Structured output fails** after `BaseAgent`'s bounded retry (malformed
+   JSON / schema-invalid on every attempt), or a permanent provider error
+   (bad credentials, etc.) -> falls back to `_fallback_parse()`: a
+   deterministic, regex/keyword-only extractor that reads ONLY the actual
+   resume text (never the failed LLM response) - email/phone via regex,
+   skills only from a fixed known-skill list that is a literal substring
+   match, `summary` a literal text truncation. It never invents education,
+   work history, projects, or certifications (always empty). The response
+   dict sets `used_fallback: true` and `error` so a caller can always tell
+   this happened - a fallback result is never silently indistinguishable
+   from a full structured parse.
+3. **Any other unexpected exception** (a genuine bug) -> explicit failure:
+   `parsed_resume: None`, `error` set - matching every other agent's
+   "never let a failure look like success" contract.
+
+This is a deliberate exception to "explicit failure only" for the other
+agents: Resume Parser has a genuinely safe, text-grounded fallback
+available (most agents don't - there's no safe deterministic substitute for
+a technical evaluation judgment), so degrading to it is preferable to
+failing outright, as long as the degradation is always visible to the
+caller.
+
+See `tests/test_resume_parser.py` for the full test matrix (normal/sparse/
+empty/malformed/permanent-error/prompt-injection/anti-hallucination cases)
+and `evaluation/cases/resume_parser.json` for the golden-dataset coverage.
 
 ## 📊 Data Schemas
 
@@ -352,13 +622,24 @@ The OpenAI provider is structurally implemented but has not yet been live-tested
    - Generate shortlist (score ≥0.6 AND ≤2 missing required skills)
 
 ### Phase 2: Interview
-4. **Generate Questions**
-   - Create adaptive questions based on job rubric and resume
-   - Questions target all competencies in job description
+The batch pipeline (`orchestration/graph.py`) pre-generates a fixed question
+set per candidate (`generate_questions` node) and expects a transcript
+supplied separately. A real, turn-based adaptive interview is available as
+its own component, `InterviewSessionRunner` (see "Adaptive Interview Engine"
+under Key Features above), and produces the exact same sealed
+`InterviewTranscript` model consumed below:
 
-5. **Conduct Interview**
-   - Collect Q&A pairs with timestamps
-   - Seal transcript when complete (immutable)
+4. **Adaptive interview session** (`InterviewSessionRunner`)
+   - `start()` initializes `InterviewState` and asks the first question,
+     chosen by the deterministic prioritization engine
+   - `submit_answer()` evaluates each answer, records evidence, updates
+     per-competency coverage/confidence, and decides the next question or
+     termination - looping until the interview ends
+   - Transcript is sealed (immutable) once terminated
+
+5. **(Alternative) Batch question planning + externally-supplied transcript**
+   - `Interviewer` agent generates a question set in advance
+   - A transcript (from any source) is sealed and supplied to the pipeline
 
 ### Phase 3: Post-Interview (Parallel)
 6. **Parallel Evaluations** (run concurrently)
@@ -666,6 +947,25 @@ Post-interview evaluations run in parallel, reducing elapsed time significantly.
 - Interview simulation is text-based (no video/audio analysis)
 - Bias detection focuses on text patterns, not demographic data (intentional)
 - No user authentication or role-based access control
+- `InterviewSessionRunner` (P4) is a pure application-layer component; a
+  duplicate question that survives bounded regeneration fails the session
+  rather than retrying indefinitely or falling back to a fabricated question
+- The P5 HTTP API (`api/`) has no authentication - session_id is the only
+  access boundary today; not suitable for anything beyond local development
+  until real auth is added
+- The API's in-memory `SessionRegistry` does not persist across process
+  restarts and is not shared across multiple server processes/workers
+- The evaluation framework (`evaluation/`) measures agent CODE behavior
+  against simulated LLM judgments, not real LLM judgment quality - see
+  "Agent Evaluation Framework" above. Its golden dataset (84 cases as of
+  P7) covers the scenarios each phase specifically called out, not
+  exhaustive coverage of every agent's behavior space.
+- Resume Parser's deterministic fallback (see "Resume Parser Hardening"
+  above) only ever recognizes skills from its fixed known-skill list and
+  never extracts dated work history/education/projects/certifications at
+  all - a resume that triggers the fallback path gets a materially thinner
+  profile than a successful structured parse, by design (never fabricated,
+  but genuinely limited).
 
 ### Planned Enhancements
 - [ ] Real-time interview transcription (speech-to-text)
