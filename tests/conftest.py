@@ -1,4 +1,40 @@
-"""Pytest configuration and fixtures."""
+"""Pytest configuration and fixtures.
+
+Provider isolation (read this before changing the block below)
+--------------------------------------------------------------
+The test suite is a MOCK-mode suite: every test either uses the
+deterministic MockLLMProvider/MockAudioProcessor defaults or injects its own
+fake through an explicit seam (tests/fakes.py, `app.state.interviewer_factory`,
+`app.state.voice_service_factory`). No test is intended to reach a real
+provider, and one of them - test_api.py::test_default_config_has_no_api_key_required
+- asserts exactly that by checking `LLM_PROVIDER == "mock"`.
+
+`config/settings.py` reads those provider choices from the process
+environment at import time, and `load_dotenv()` means a developer's local
+`.env` is part of that environment. So running the suite on a machine
+configured for real Groq or real Azure Speech silently redirected ten tests
+at live, rate-limited, paid APIs - which is how they were observed failing
+with HTTP 429 rather than with a code defect.
+
+Pinning them here, before any project module is imported, makes the suite
+hermetic: its result now depends only on the code under test. `setdefault`
+is used, not assignment, so an explicitly exported environment variable
+still wins - a deliberate real-provider run (`LLM_PROVIDER=groq pytest ...`)
+is unaffected.
+"""
+import os
+
+# Must run before any import that pulls in config.settings.
+for _var, _value in (
+    ("LLM_PROVIDER", "mock"),
+    ("AUDIO_PROVIDER", "mock"),
+    ("AUDIO_PROCESSOR", "mock"),
+    ("TTS_PROVIDER", "mock"),
+    ("VECTOR_STORE_TYPE", "mock"),
+    ("ENVIRONMENT", "test"),
+):
+    os.environ.setdefault(_var, _value)
+
 import pytest
 import json
 from pathlib import Path

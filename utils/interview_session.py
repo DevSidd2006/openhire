@@ -164,6 +164,26 @@ class InterviewSessionRunner:
     # Read-only accessors
     # ---------------------------------------------------------------
 
+    @property
+    def candidate_id(self) -> str:
+        """The candidate this session belongs to.
+
+        Read-only accessor over the existing `_candidate_id` (which already
+        resolves the constructor override against
+        `parsed_resume.candidate_id` - that resolution is unchanged). Added
+        so the persistence boundary can project a session onto a
+        `SessionRecord` (repositories/interfaces.py) without reaching into a
+        private attribute. No behaviour change: nothing may assign to it.
+        """
+        return self._candidate_id
+
+    @property
+    def interview_id(self) -> str:
+        """The interview id this session's transcript will carry. Read-only
+        accessor over the existing `_interview_id`, for the same reason as
+        `candidate_id` above."""
+        return self._interview_id
+
     def get_state(self) -> InterviewState:
         if self._state is None:
             raise InterviewSessionError("Session has not been started")
@@ -370,6 +390,85 @@ class InterviewSessionRunner:
             f"Question generation kept producing duplicates after "
             f"{MAX_QUESTION_REGENERATION_ATTEMPTS} attempts: {last_error}"
         )
+
+    # ---------------------------------------------------------------
+    # Restoration (Chunk 3)
+    # ---------------------------------------------------------------
+
+    @classmethod
+    def rehydrate(
+        cls,
+        *,
+        job_description: JobDescription,
+        parsed_resume: ParsedResume,
+        state: InterviewState,
+        status: SessionStatus,
+        candidate_id: str,
+        interview_id: str,
+        interviewer: Optional[InterviewerAgent] = None,
+    ) -> "InterviewSessionRunner":
+        """Reconstruct a runner from PERSISTED state, WITHOUT calling
+        `start()` again.
+
+        This exists for exactly one reason: `start()` always asks the P3
+        decision engine for a brand-new first question, so it cannot be
+        reused to bring an ALREADY-IN-PROGRESS session back to life after a
+        restart - that would silently discard everything the candidate had
+        already answered and ask a spurious "first" question again. This is
+        the ONE place outside `__init__`/`start()` that sets `_state`/
+        `status` directly, and it is additive: no existing method's
+        behavior changes because of it.
+
+        `job_description`/`parsed_resume` must be the runner's OWN original
+        copies from whenever this session was first created (see
+        `repositories/interfaces.py:SessionRecord`'s module docstring) -
+        never freshly re-fetched from a job/candidate repository, since this
+        runner has never re-read either after construction and restoring it
+        must not start now.
+
+        For a SEALED session, the transcript is rebuilt by calling the
+        EXISTING `_seal()` - the exact method that built it the first time -
+        rather than reconstructing an `InterviewTranscript` by hand here.
+        This guarantees the rehydrated transcript is bit-for-bit what
+        `_seal()` would always produce from this `state`, with no second
+        sealing implementation, and it re-validates the same structural
+        invariants `_seal()` always has (no duplicate question/answer ids,
+        every exchange's answer referencing its own question) - so
+        rehydrating from corrupted persisted state fails loudly (raising
+        `InterviewSessionError`, and leaving `status=FAILED`) rather than
+        silently producing a broken transcript.
+
+        Raises `InterviewSessionError` if `status` is not one that has a
+        meaningful persisted state to restore (CREATED/FINISHING are
+        momentary in-lock states that a saved record should never actually
+        be found in), or if `state` does not belong to the given
+        `candidate_id`/`interview_id`.
+        """
+        if status not in (SessionStatus.ACTIVE, SessionStatus.SEALED, SessionStatus.FAILED):
+            raise InterviewSessionError(
+                f"Cannot rehydrate a session in status {status.value!r} - only "
+                f"active, sealed or failed sessions have a persisted state worth restoring"
+            )
+        if state.candidate_id != candidate_id or state.interview_id != interview_id:
+            raise InterviewSessionError(
+                "Persisted InterviewState does not match the session's own identifiers"
+            )
+
+        runner = cls(
+            job_description,
+            parsed_resume,
+            candidate_id=candidate_id,
+            interview_id=interview_id,
+            interviewer=interviewer,
+        )
+        runner._state = state
+
+        if status == SessionStatus.SEALED:
+            runner._seal()
+        else:
+            runner.status = status
+
+        return runner
 
     def _seal(self) -> None:
         """FINISHING -> SEALED (P4 Phase 13). Validates the transcript's
