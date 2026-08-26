@@ -15,6 +15,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from repositories.interfaces import EvaluationStatus
 from schemas.interview import InterviewQuestion, InterviewState
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
@@ -111,12 +112,26 @@ class CreateSessionRequest(BaseModel):
     job_description: JobDescription
     parsed_resume: ParsedResume
     max_questions: Optional[int] = Field(default=None, ge=1, le=50)
+    # Chunk 2 bridge (Application -> Interview): optional and additive.
+    # Omitted (the default), this endpoint behaves exactly as it always
+    # has. Supplied, api/routes/interview.py verifies the named
+    # application's job_id/candidate_id match this request and that it is
+    # SHORTLISTED, then links the resulting session_id onto it - see
+    # services/application_service.py:link_interview_session. The
+    # application's own job_description/parsed_resume are still NOT looked
+    # up automatically; the caller supplies them here exactly as before
+    # (they can be fetched via GET /jobs/{id} and GET /candidates/{id}).
+    application_id: Optional[str] = Field(default=None, min_length=1)
 
 
 class CreateSessionResponse(BaseModel):
     session_id: str
     status: SessionStatus
     current_question: Optional[QuestionView] = None
+    # Echoes CreateSessionRequest.application_id when one was supplied and
+    # successfully linked; None otherwise (including when no application_id
+    # was given at all) - additive, never populated for a pre-Chunk-2 caller.
+    application_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +144,20 @@ class SessionStateResponse(BaseModel):
     current_question: Optional[QuestionView] = None
     progress: ProgressView
     termination_reason: Optional[str] = None
+    # None while the session is not yet sealed (nothing to persist yet).
+    # Once sealed: True means the transcript is confirmed present in
+    # TranscriptRepository; False means a prior write failed and is being
+    # retried on this read (api/routes/interview.py) - never omitted or
+    # defaulted to True on a failure, per the Chunk-1 persistence
+    # correction (services/interview_service.py's module docstring).
+    transcript_persisted: Optional[bool] = None
+    # Chunk 4: populated once evaluation has been triggered for this
+    # session (only possible once transcript_persisted is True) - None
+    # until then, including for a session with no application_id at all
+    # (evaluation cannot run without one - see
+    # services/evaluation_service.py's module docstring).
+    evaluation_id: Optional[str] = None
+    evaluation_status: Optional[EvaluationStatus] = None
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +174,14 @@ class SubmitAnswerResponse(BaseModel):
     next_question: Optional[QuestionView] = None
     status: SessionStatus
     termination_reason: Optional[str] = None
+    # See SessionStateResponse.transcript_persisted. Populated by the route
+    # handler (not by from_domain below) because the persistence outcome is
+    # an application-layer fact, not something AnswerSubmissionResult (the
+    # interview engine's own return value) carries or should carry.
+    transcript_persisted: Optional[bool] = None
+    # See SessionStateResponse.evaluation_id/evaluation_status.
+    evaluation_id: Optional[str] = None
+    evaluation_status: Optional[EvaluationStatus] = None
 
     @classmethod
     def from_domain(cls, result: AnswerSubmissionResult) -> "SubmitAnswerResponse":
@@ -165,6 +202,11 @@ class FinishSessionResponse(BaseModel):
     session_id: str
     status: SessionStatus
     termination_reason: Optional[str] = None
+    # See SessionStateResponse.transcript_persisted.
+    transcript_persisted: Optional[bool] = None
+    # See SessionStateResponse.evaluation_id/evaluation_status.
+    evaluation_id: Optional[str] = None
+    evaluation_status: Optional[EvaluationStatus] = None
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +214,15 @@ class FinishSessionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class HealthResponse(BaseModel):
+    """Liveness only.
+
+    Kept to exactly one field on purpose. This endpoint is polled
+    continuously by load balancers and container orchestrators, so it must
+    stay the cheapest response in the service, and it must not describe the
+    service's configuration to anyone who can reach it. The operational
+    summary (environment, provider names, whether persistence is durable)
+    lives on `GET /` instead - see api/app.py.
+    """
     status: str = "ok"
 
 
