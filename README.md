@@ -6,13 +6,17 @@ OpenHire runs structured, voice-based interviews at scale, evaluates candidates 
 
 ## Documentation
 
+- [Interactive Roadmap & Progress Tracker](pages/roadmap.html) — live dashboard tracking milestone deliverables, role ownership, and completion percentages.
 - [Multi-Agent System implementation](docs/multi-agent-system.md) — the Stage 3-level agent pipeline (orchestrator, evaluators, scoring, reporting) built ahead of schedule as a working foundation.
+- [Stage 1 Project Flow](docs/roles/PROJECT_FLOW.md) — the step-by-step interview path and role interface shapes.
 
 ## Team
 
 5-person team split across: **Frontend · Backend · Database · Multi-Agent System · Fullstack**
 
-## Roadmap
+## Roadmap & Status
+
+> 📊 **Live Tracker:** Open [`pages/roadmap.html`](pages/roadmap.html) in your browser (or visit `/app/roadmap.html` when running the server) for interactive, real-time checklist tracking across all roles and stages.
 
 Development is staged so every milestone is a working, demoable system — not a partial build. Stage 1 ships before Stage 2 begins, and so on.
 
