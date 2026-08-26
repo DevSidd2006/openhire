@@ -4,7 +4,21 @@ pytest>=7.0
 pytest-asyncio>=0.21.0
 langgraph>=0.2.0
 
+# P5: live interview HTTP service layer (api/)
+fastapi>=0.110
+uvicorn>=0.27
+httpx>=0.27  # also used by FastAPI's TestClient, and by the P9 Azure Speech provider
+
+# P9: voice layer. The WebSocket transport (api/routes/voice.py) needs
+# FastAPI's websocket extra; no speech SDK is required, because
+# providers/audio/azure.py talks to Azure Speech over plain REST via httpx
+# (already present above) rather than the large native
+# azure-cognitiveservices-speech wheel - see that module's docstring.
+websockets>=12.0
+
 # Optional dependencies
 openai>=1.0.0
+groq>=1.0.0  # P8B.3: PRIMARY real provider (required if LLM_PROVIDER=groq)
+google-genai>=0.3.0  # P8B: Gemini provider (only required if LLM_PROVIDER=gemini)
 sentence-transformers>=2.2.0
 faiss-cpu>=1.7.0

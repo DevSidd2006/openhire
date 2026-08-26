@@ -22,7 +22,11 @@ import pytest
 from pydantic import ValidationError
 
 from agents.interviewer.agent import InterviewerAgent
-from config.settings import MAX_FOLLOW_UPS_PER_COMPETENCY, MAX_QUESTIONS_PER_INTERVIEW
+from config.settings import (
+    MAX_FOLLOW_UPS_PER_COMPETENCY,
+    MAX_QUESTIONS_PER_INTERVIEW,
+    MIN_CONFIDENCE_FOR_COVERAGE,
+)
 from schemas.evaluation import EvidenceItem
 from schemas.interview import (
     CompetencySignal,
@@ -203,6 +207,61 @@ class TestAdaptiveSelection:
         decision = decide_next_action(state, job)
         assert decision.action == "finish"
         assert decision.termination_reason == "no_further_progress_possible"
+
+    def test_untouched_equal_weight_competency_outranks_a_just_asked_weak_one(self):
+        """P8B.5 root-cause finding: the engine is BREADTH-before-DEPTH by
+        design (P3 Phase 6 'question diversity') - a never-asked competency
+        always has uncertainty 1.0 (undamped), while an asked-but-
+        insufficient competency's uncertainty is at most 1.0 MINUS a
+        diversity penalty that only grows. With two EQUAL-weight
+        competencies, this means the engine opens the untouched one next
+        REGARDLESS of how weak (even confidence=0.0) the just-answered one
+        was - "immediately follow up on a weak answer while another
+        competency remains completely unexplored" is NOT a behavior this
+        engine's documented contract guarantees. This was traced
+        deterministically (zero LLM/mock variance) after a real Groq golden
+        case (interviewer_adaptive_sequence_differs_by_answer_quality)
+        assumed the opposite; see evaluation/cases/interviewer.json for the
+        corrected fixture/checks that no longer depend on this assumption."""
+        job = _job({"Python": 0.5, "SQL": 0.5})
+        # Python has already been asked once (so its diversity penalty
+        # applies); SQL has never been asked (uncertainty 1.0, no penalty).
+        state = _state(
+            evidence_coverage={"Python": "insufficient"},
+            competency_confidence={"Python": 0.0},  # weakest possible answer
+            exchanges=[(_question("q1", "Python"), InterviewAnswer(question_id="q1", answer_text="I don't know."))],
+        )
+        assert select_target_competency(state, job) == "SQL"
+
+    def test_coverage_threshold_is_not_cleared_by_sub_threshold_confidence(self):
+        """P8B.5 finding (classification C - real-model limitation): a
+        competency whose evidence is 'supported' but whose confidence sits
+        JUST BELOW MIN_CONFIDENCE_FOR_COVERAGE must NOT count as covered,
+        so the interview must not terminate via
+        'sufficient_evidence_collected'. This is correct, intended behavior
+        and is pinned down here because real Groq (openai/gpt-oss-20b)
+        calibrates its self-reported `confidence` conservatively and
+        stochastically - it frequently returns ~0.6 even for genuinely
+        strong, concrete answers, which repeatedly left live benchmark runs
+        of the adaptive-sequence golden cases non-deterministic. The
+        threshold was deliberately NOT lowered to make those runs pass:
+        tuning a production threshold to accommodate one model's
+        calibration would weaken real product behavior. This test exists so
+        that decision stays explicit and is never silently reversed."""
+        job = _job({"Python": 1.0})
+        just_below = MIN_CONFIDENCE_FOR_COVERAGE - 0.05
+        state = _state(
+            evidence_coverage={"Python": "supported"},
+            competency_confidence={"Python": just_below},
+        )
+        assert check_termination(state, job) != "sufficient_evidence_collected"
+
+        # ...and the identical state DOES terminate once confidence reaches
+        # the threshold - proving the threshold itself is what gates it.
+        covered = state.model_copy(update={
+            "competency_confidence": {"Python": MIN_CONFIDENCE_FOR_COVERAGE},
+        })
+        assert check_termination(covered, job) == "sufficient_evidence_collected"
 
     def test_lowest_score_alone_does_not_determine_next_question(self):
         """A competency with a LOWER raw score but grounded/supported

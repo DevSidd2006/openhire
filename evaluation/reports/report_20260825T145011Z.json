@@ -1,0 +1,155 @@
+{
+  "generated_at": "20260825T145011Z",
+  "results": [
+    {
+      "case_id": "leaderboard_correct_ordering",
+      "agent": "leaderboard",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[0].candidate_id: expected 'cand_b', got 'cand_b'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[0].rank: expected 1, got 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[1].candidate_id: expected 'cand_c', got 'cand_c'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[2].candidate_id: expected 'cand_a', got 'cand_a'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "leaderboard_ties",
+      "agent": "leaderboard",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.entries) = 2, expected 2"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[0].weighted_score: expected 7.0, got 7.0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.entries[1].weighted_score: expected 7.0, got 7.0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "leaderboard_incomplete_never_ranked_normally",
+      "agent": "leaderboard",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.entries) = 1, expected 1"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.incomplete_candidates = ['cand_b', 'cand_c'], expected to contain 'cand_b'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.incomplete_candidates = ['cand_b', 'cand_c'], expected to contain 'cand_c'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.total_candidates: expected 1, got 1"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "leaderboard_zero_candidates",
+      "agent": "leaderboard",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.entries) = 0, expected 0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.total_candidates: expected 0, got 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "leaderboard_all_incomplete_no_fabricated_ranking",
+      "agent": "leaderboard",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.entries) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.incomplete_candidates) = 2, expected 2"
+        },
+        {
+          "metric": "contains_text",
+          "passed": true,
+          "detail": "output.explanation does not contain 'human review'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

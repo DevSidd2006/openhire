@@ -1,0 +1,142 @@
+[
+  {
+    "case_id": "jd_normal_rich",
+    "agent": "jd_analyzer",
+    "description": "A detailed, well-formed JD - normal case.",
+    "input": {
+      "job_id": "job_jd_01",
+      "job_description": "Senior Python Backend Developer. 5+ years experience with Python and FastAPI required. PostgreSQL experience required. Docker preferred.",
+      "script": ["{\"title\": \"Senior Python Backend Developer\", \"experience_years\": 5, \"required_skills\": [\"Python\", \"FastAPI\", \"PostgreSQL\"], \"preferred_skills\": [\"Docker\"], \"competencies\": [{\"name\": \"Python\", \"weight\": 0.5}, {\"name\": \"System Design\", \"weight\": 0.5}], \"interview_topics\": [\"Python internals\", \"API design\"]}"]
+    },
+    "expected_behavior": "Extracts title, required/preferred skills, and competencies faithfully from the JD text.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "schema_validity"},
+      {"metric": "field_equals", "field": "output.title", "value": "Senior Python Backend Developer"},
+      {"metric": "list_contains", "field": "output.required_skills", "value": "FastAPI"},
+      {"metric": "list_contains", "field": "output.preferred_skills", "value": "Docker"},
+      {"metric": "list_not_contains", "field": "output.required_skills", "value": "Docker"},
+      {"metric": "field_in_range", "field": "output.experience_years", "min": 5, "max": 5}
+    ],
+    "metadata": {"category": "normal"}
+  },
+  {
+    "case_id": "jd_sparse_no_fabrication",
+    "agent": "jd_analyzer",
+    "description": "A sparse JD with almost no detail - the agent must not invent skills/experience that were never in the (simulated) analysis.",
+    "input": {
+      "job_id": "job_jd_02",
+      "job_description": "We need a developer.",
+      "script": ["{\"title\": \"Developer\", \"required_skills\": [], \"preferred_skills\": [], \"competencies\": [], \"experience_years\": null}"]
+    },
+    "expected_behavior": "No fabricated skills or experience when the source JD gives none.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "schema_validity"},
+      {"metric": "length_equals", "field": "output.required_skills", "value": 0},
+      {"metric": "field_equals", "field": "output.experience_years", "value": null}
+    ],
+    "metadata": {"category": "sparse"}
+  },
+  {
+    "case_id": "jd_weight_normalization",
+    "agent": "jd_analyzer",
+    "description": "Competency weights that do not sum to 1.0 must be normalized, not rejected.",
+    "input": {
+      "job_id": "job_jd_03",
+      "job_description": "Backend engineer - Python and SQL heavy role.",
+      "script": ["{\"title\": \"Backend Engineer\", \"competencies\": [{\"name\": \"Python\", \"weight\": 3}, {\"name\": \"SQL\", \"weight\": 7}]}"]
+    },
+    "expected_behavior": "Weights [3, 7] normalize to [0.3, 0.7] and the JobDescription still validates. Bucket B (P8B audit): this exercises JDAnalyzerAgent._normalize_competencies deterministically - a real, well-behaved model has no reason to deliberately emit competency weights that don't sum to 1.0, so this is a business-logic contract test, not a real-model behavioral measurement.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "schema_validity"},
+      {"metric": "length_equals", "field": "output.competencies", "value": 2},
+      {"metric": "field_in_range", "field": "output.competencies[1].weight", "min": 0.69, "max": 0.71}
+    ],
+    "metadata": {"category": "weight_normalization", "provider_contract": "mock_only_business_logic_contract"}
+  },
+  {
+    "case_id": "jd_missing_experience",
+    "agent": "jd_analyzer",
+    "description": "JD never states years of experience.",
+    "input": {
+      "job_id": "job_jd_04",
+      "job_description": "Looking for a talented engineer to join our platform team. No specific experience level stated.",
+      "script": ["{\"title\": \"Platform Engineer\", \"experience_years\": null, \"required_skills\": [\"Go\"]}"]
+    },
+    "expected_behavior": "experience_years stays null rather than being guessed.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.experience_years", "value": null}
+    ],
+    "metadata": {"category": "missing_experience"}
+  },
+  {
+    "case_id": "jd_unusual_formatting",
+    "agent": "jd_analyzer",
+    "description": "JD text with unusual formatting (bullets, caps, emoji) still parses.",
+    "input": {
+      "job_id": "job_jd_05",
+      "job_description": "!!! HIRING NOW !!! \n* Python\n* AWS\n🚀 fast-paced team",
+      "script": ["{\"title\": \"Software Engineer\", \"required_skills\": [\"Python\", \"AWS\"], \"competencies\": [{\"name\": \"Python\", \"weight\": 1.0}]}"]
+    },
+    "expected_behavior": "Unusual formatting does not break extraction.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "schema_validity"},
+      {"metric": "list_contains", "field": "output.required_skills", "value": "AWS"}
+    ],
+    "metadata": {"category": "unusual_formatting"}
+  },
+  {
+    "case_id": "jd_empty_text",
+    "agent": "jd_analyzer",
+    "description": "Completely empty JD text.",
+    "input": {
+      "job_id": "job_jd_06",
+      "job_description": "",
+      "script": ["{\"title\": \"Unstructured Job\", \"required_skills\": [], \"competencies\": []}"]
+    },
+    "expected_behavior": "Handles empty input without crashing and without inventing content.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "schema_validity"},
+      {"metric": "length_equals", "field": "output.required_skills", "value": 0}
+    ],
+    "metadata": {"category": "empty"}
+  },
+  {
+    "case_id": "jd_malformed_structured_output",
+    "agent": "jd_analyzer",
+    "description": "LLM keeps returning invalid JSON across every retry - the agent must fail explicitly, never fabricate a JobDescription.",
+    "input": {
+      "job_id": "job_jd_07",
+      "job_description": "Any JD text.",
+      "script": ["this is not json at all"]
+    },
+    "expected_behavior": "job_description is None and error is populated - never a fabricated JobDescription.",
+    "checks": [
+      {"metric": "field_equals", "field": "output", "value": null},
+      {"metric": "field_nonempty", "field": "result.error"}
+    ],
+    "metadata": {"category": "malformed_output", "provider_contract": "mock_only_provider_failure_contract"}
+  },
+  {
+    "case_id": "jd_conflicting_requirements",
+    "agent": "jd_analyzer",
+    "description": "JD text sends conflicting signals (entry-level language + senior experience requirement) - the agent reports what the (simulated) analysis says rather than resolving the conflict itself.",
+    "input": {
+      "job_id": "job_jd_08",
+      "job_description": "Entry level position, but 8+ years of experience required.",
+      "script": ["{\"title\": \"Engineer\", \"level\": \"entry\", \"experience_years\": 8, \"competencies\": [{\"name\": \"Python\", \"weight\": 1.0}]}"]
+    },
+    "expected_behavior": "Both conflicting fields are preserved as reported, not silently dropped or reconciled by fabrication.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.level", "value": "entry"},
+      {"metric": "field_in_range", "field": "output.experience_years", "min": 8, "max": 8}
+    ],
+    "metadata": {"category": "conflicting"}
+  }
+]

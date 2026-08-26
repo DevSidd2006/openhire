@@ -1,0 +1,65 @@
+{
+  "generated_at": "20260826T071326Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "interviewer_adaptive_sequence_differs_by_answer_quality",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "fact:sequence_differs_by_answer_quality",
+          "passed": false,
+          "detail": "sequence_differs_by_answer_quality = False"
+        },
+        {
+          "metric": "fact:no_duplicate_questions_in_scenario_a",
+          "passed": true,
+          "detail": "no_duplicate_questions_in_scenario_a = True"
+        }
+      ],
+      "failures": [
+        "fact:sequence_differs_by_answer_quality"
+      ],
+      "explanation": "fact:sequence_differs_by_answer_quality: sequence_differs_by_answer_quality = False",
+      "skip_reason": null
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_max_questions",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "fact:scenario_a_sealed",
+          "passed": true,
+          "detail": "scenario_a_sealed = True"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.termination_reason: expected 'max_questions_reached', got 'max_questions_reached'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_sufficient_evidence",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.termination_reason: expected 'sufficient_evidence_collected', got None"
+        }
+      ],
+      "failures": [
+        "field_equals"
+      ],
+      "explanation": "field_equals: output.termination_reason: expected 'sufficient_evidence_collected', got None",
+      "skip_reason": null
+    }
+  ]
+}

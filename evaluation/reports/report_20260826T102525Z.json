@@ -1,0 +1,44 @@
+{
+  "generated_at": "20260826T102525Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "interviewer_adaptive_sequence_differs_by_answer_quality",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "skipped",
+      "metrics": [],
+      "failures": [],
+      "explanation": "This case triggers a deterministic AGENT/business-logic code path (adaptive_behavior) that a real, well-behaved model is unlikely to trigger on its own initiative - never sent to the real API.",
+      "skip_reason": "MOCK_ONLY_BUSINESS_LOGIC_CONTRACT"
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_max_questions",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "fact:scenario_a_sealed",
+          "passed": true,
+          "detail": "scenario_a_sealed = True"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.termination_reason: expected 'max_questions_reached', got 'max_questions_reached'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_sufficient_evidence",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "skipped",
+      "metrics": [],
+      "failures": [],
+      "explanation": "This case triggers a deterministic AGENT/business-logic code path (termination) that a real, well-behaved model is unlikely to trigger on its own initiative - never sent to the real API.",
+      "skip_reason": "MOCK_ONLY_BUSINESS_LOGIC_CONTRACT"
+    }
+  ]
+}

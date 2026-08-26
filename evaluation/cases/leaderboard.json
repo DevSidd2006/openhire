@@ -1,0 +1,92 @@
+[
+  {
+    "case_id": "leaderboard_correct_ordering",
+    "agent": "leaderboard",
+    "description": "Three candidates with distinct scores must be ranked highest-first.",
+    "input": {
+      "job_id": "job_lb_01",
+      "reports": [
+        {"report_id": "r1", "candidate_id": "cand_a", "job_id": "job_lb_01", "candidate_name": "A", "scores": {"score_id": "s1", "candidate_id": "cand_a", "job_id": "job_lb_01", "technical_score": 5.0, "behavioral_score": 5.0, "job_fit_score": 5.0, "weighted_final_score": 5.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "candidate", "explanation": "x"},
+        {"report_id": "r2", "candidate_id": "cand_b", "job_id": "job_lb_01", "candidate_name": "B", "scores": {"score_id": "s2", "candidate_id": "cand_b", "job_id": "job_lb_01", "technical_score": 9.0, "behavioral_score": 9.0, "job_fit_score": 9.0, "weighted_final_score": 9.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "strong_candidate", "explanation": "x"},
+        {"report_id": "r3", "candidate_id": "cand_c", "job_id": "job_lb_01", "candidate_name": "C", "scores": {"score_id": "s3", "candidate_id": "cand_c", "job_id": "job_lb_01", "technical_score": 7.0, "behavioral_score": 7.0, "job_fit_score": 7.0, "weighted_final_score": 7.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "candidate", "explanation": "x"}
+      ]
+    },
+    "expected_behavior": "Rank 1 = cand_b (9.0), rank 2 = cand_c (7.0), rank 3 = cand_a (5.0).",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.entries[0].candidate_id", "value": "cand_b"},
+      {"metric": "field_equals", "field": "output.entries[0].rank", "value": 1},
+      {"metric": "field_equals", "field": "output.entries[1].candidate_id", "value": "cand_c"},
+      {"metric": "field_equals", "field": "output.entries[2].candidate_id", "value": "cand_a"}
+    ],
+    "metadata": {"category": "ordering"}
+  },
+  {
+    "case_id": "leaderboard_ties",
+    "agent": "leaderboard",
+    "description": "Two candidates with identical scores - both must appear, ranked adjacently.",
+    "input": {
+      "job_id": "job_lb_02",
+      "reports": [
+        {"report_id": "r1", "candidate_id": "cand_a", "job_id": "job_lb_02", "candidate_name": "A", "scores": {"score_id": "s1", "candidate_id": "cand_a", "job_id": "job_lb_02", "technical_score": 7.0, "behavioral_score": 7.0, "job_fit_score": 7.0, "weighted_final_score": 7.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "candidate", "explanation": "x"},
+        {"report_id": "r2", "candidate_id": "cand_b", "job_id": "job_lb_02", "candidate_name": "B", "scores": {"score_id": "s2", "candidate_id": "cand_b", "job_id": "job_lb_02", "technical_score": 7.0, "behavioral_score": 7.0, "job_fit_score": 7.0, "weighted_final_score": 7.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "candidate", "explanation": "x"}
+      ]
+    },
+    "expected_behavior": "Both tied candidates appear with distinct ranks 1 and 2 (stable ordering), neither silently dropped.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "length_equals", "field": "output.entries", "value": 2},
+      {"metric": "field_equals", "field": "output.entries[0].weighted_score", "value": 7.0},
+      {"metric": "field_equals", "field": "output.entries[1].weighted_score", "value": 7.0}
+    ],
+    "metadata": {"category": "ties"}
+  },
+  {
+    "case_id": "leaderboard_incomplete_never_ranked_normally",
+    "agent": "leaderboard",
+    "description": "CRITICAL (P6 Phase 17): incomplete candidates must never be silently ranked as normal candidates.",
+    "input": {
+      "job_id": "job_lb_03",
+      "reports": [
+        {"report_id": "r1", "candidate_id": "cand_a", "job_id": "job_lb_03", "candidate_name": "A", "scores": {"score_id": "s1", "candidate_id": "cand_a", "job_id": "job_lb_03", "technical_score": 7.0, "behavioral_score": 7.0, "job_fit_score": 7.0, "weighted_final_score": 7.0, "explanation": "x", "confidence": 0.8}, "technical_summary": "x", "behavioral_summary": "x", "job_fit_summary": "x", "recommendation": "candidate", "explanation": "x"}
+      ],
+      "incomplete_candidates": ["cand_b", "cand_c"]
+    },
+    "expected_behavior": "cand_b/cand_c appear ONLY in incomplete_candidates, never in entries with a fabricated score.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "length_equals", "field": "output.entries", "value": 1},
+      {"metric": "list_contains", "field": "output.incomplete_candidates", "value": "cand_b"},
+      {"metric": "list_contains", "field": "output.incomplete_candidates", "value": "cand_c"},
+      {"metric": "field_equals", "field": "output.total_candidates", "value": 1}
+    ],
+    "metadata": {"category": "incomplete_candidates"}
+  },
+  {
+    "case_id": "leaderboard_zero_candidates",
+    "agent": "leaderboard",
+    "description": "No candidates at all - no fabricated ranking.",
+    "input": {"job_id": "job_lb_04", "reports": []},
+    "expected_behavior": "Empty entries, explanation states no candidates were shortlisted.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "length_equals", "field": "output.entries", "value": 0},
+      {"metric": "field_equals", "field": "output.total_candidates", "value": 0}
+    ],
+    "metadata": {"category": "zero_candidates"}
+  },
+  {
+    "case_id": "leaderboard_all_incomplete_no_fabricated_ranking",
+    "agent": "leaderboard",
+    "description": "Every shortlisted candidate is incomplete - the leaderboard must say so explicitly, not silently show an empty ranking.",
+    "input": {"job_id": "job_lb_05", "reports": [], "incomplete_candidates": ["cand_x", "cand_y"]},
+    "expected_behavior": "entries empty, incomplete_candidates lists both, explanation mentions human review.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "length_equals", "field": "output.entries", "value": 0},
+      {"metric": "length_equals", "field": "output.incomplete_candidates", "value": 2},
+      {"metric": "contains_text", "field": "output.explanation", "value": "human review"}
+    ],
+    "metadata": {"category": "all_incomplete"}
+  }
+]

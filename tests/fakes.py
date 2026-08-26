@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
-from providers.base import LLMProvider
+from providers.base import LLMProvider, LLMTransientError
 
 
 class ScriptedLLMProvider(LLMProvider):
@@ -42,7 +42,17 @@ class ScriptedLLMProvider(LLMProvider):
 
     async def generate_structured(self, prompt: str, schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         text = await self.generate(prompt, **kwargs)
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            # Matches providers/llm/openai.py's real classification of
+            # malformed JSON text as a retryable transient error (not an
+            # immediate hard failure) - without this, a script entry that
+            # is deliberately invalid JSON would bypass BaseAgent's bounded
+            # retry entirely instead of exercising it, giving a false
+            # picture of retry/fallback behavior in tests that use this
+            # fake to simulate malformed structured output.
+            raise LLMTransientError(f"Malformed JSON from scripted response: {e}") from e
 
 
 class SpyLLMProvider(LLMProvider):

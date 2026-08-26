@@ -83,15 +83,84 @@ class VectorStore(ABC):
         pass
 
 
+class SpeechError(Exception):
+    """Base class for speech (STT/TTS) provider failures (P9).
+
+    Deliberately mirrors the LLMTransientError/LLMPermanentError split
+    above rather than inventing a different failure vocabulary: the voice
+    layer must fail EXPLICITLY (P9), never silently turn a failed
+    transcription into an empty answer or a failed synthesis into silence.
+    """
+
+
+class SpeechTransientError(SpeechError):
+    """A speech call failed in a way that may succeed on retry (network,
+    rate limit, 5xx, timeout)."""
+
+
+class SpeechPermanentError(SpeechError):
+    """A speech call failed in a way retrying cannot fix (bad credentials,
+    unsupported audio format, malformed request)."""
+
+
 class AudioProcessor(ABC):
-    """Abstract base class for audio processing."""
+    """Abstract base class for audio processing.
+
+    P9 note: this is OpenHire's SPEECH-TO-TEXT interface and the voice
+    layer reuses it as-is rather than introducing a parallel STT
+    abstraction - `transcribe()` is exactly the operation the voice turn
+    needs. Text-to-speech has no counterpart here (this class predates the
+    voice layer and is input-only), so it is added as a separate
+    `SpeechSynthesizer` ABC below rather than bolted onto this one: a
+    transcriber and a synthesizer are independently swappable, and an
+    implementation of one should never be forced to stub the other.
+    """
 
     @abstractmethod
     async def transcribe(self, audio_data: bytes, format: str = "wav") -> str:
-        """Transcribe audio to text."""
+        """Transcribe audio to text.
+
+        Implementations MUST raise SpeechTransientError/SpeechPermanentError
+        on failure rather than returning "" - an empty string is a valid
+        RESULT meaning "no speech detected", which the voice layer treats
+        very differently from a failed call (see utils/voice_turn.py).
+        """
         pass
 
     @abstractmethod
     async def extract_features(self, audio_data: bytes) -> Dict[str, Any]:
         """Extract audio features."""
         pass
+
+
+class SpeechSynthesizer(ABC):
+    """Abstract base class for text-to-speech (P9).
+
+    Separate from AudioProcessor by design - see that class's P9 note.
+    Kept deliberately minimal: the voice layer only ever needs "turn this
+    exact question text into playable audio", and any prosody/voice/rate
+    configuration belongs in the concrete implementation's constructor
+    (driven by .env), never in this interface.
+    """
+
+    @abstractmethod
+    async def synthesize(self, text: str, voice: Optional[str] = None) -> bytes:
+        """Synthesize `text` into audio bytes.
+
+        `text` is the interviewer's question EXACTLY as the adaptive engine
+        produced it - an implementation must never paraphrase, truncate, or
+        embellish it (the spoken question and the transcript question must
+        be the same question).
+
+        Implementations MUST raise SpeechTransientError/SpeechPermanentError
+        on failure rather than returning b"" - silent audio would look to a
+        candidate like the interviewer simply said nothing.
+        """
+        pass
+
+    @property
+    def audio_format(self) -> str:
+        """Container/encoding of the bytes `synthesize` returns (e.g.
+        "wav", "mp3"). Used by the transport to tell the browser how to
+        play it; defaults to wav."""
+        return "wav"

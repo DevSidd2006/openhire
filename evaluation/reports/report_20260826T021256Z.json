@@ -1,0 +1,26 @@
+{
+  "generated_at": "20260826T021256Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "bias_appearance_comment_flagged",
+      "agent": "bias_checker",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.flags[0].bias_type: expected 'appearance', got 'appearance'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    }
+  ]
+}

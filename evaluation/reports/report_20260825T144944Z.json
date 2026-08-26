@@ -1,0 +1,169 @@
+{
+  "generated_at": "20260825T144944Z",
+  "results": [
+    {
+      "case_id": "report_full_complete_candidate",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.candidate_id: expected 'cand_rg_01', got 'cand_rg_01'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.candidate_name: expected 'Jordan Lee', got 'Jordan Lee'"
+        },
+        {
+          "metric": "field_nonempty",
+          "passed": true,
+          "detail": "output.recommendation = 'strong_candidate'"
+        },
+        {
+          "metric": "list_subset_of",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_subset_of",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.recommendation: expected 'strong_candidate', got 'strong_candidate'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "report_strong_score_recommendation",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.recommendation: expected 'strong_candidate', got 'strong_candidate'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.requires_human_review: expected False, got False"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "report_low_score_insufficient_evidence",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.recommendation: expected 'insufficient_evidence', got 'insufficient_evidence'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "report_integrity_flag_forces_human_review",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.recommendation: expected 'human_review', got 'human_review'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.requires_human_review: expected True, got True"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.integrity_flags) = 1, expected 1"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "report_incomplete_candidate_missing_evaluations",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "contains_text",
+          "passed": true,
+          "detail": "output.technical_summary does not contain 'no technical evaluation'"
+        },
+        {
+          "metric": "contains_text",
+          "passed": true,
+          "detail": "output.behavioral_summary does not contain 'no behavioral evaluation'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.strengths) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "report_insufficient_evidence_score_triggers_review",
+      "agent": "report_generator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.requires_human_review: expected True, got True"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

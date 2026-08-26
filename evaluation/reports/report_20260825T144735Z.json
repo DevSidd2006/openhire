@@ -1,0 +1,112 @@
+{
+  "generated_at": "20260825T144735Z",
+  "results": [
+    {
+      "case_id": "integrity_consistent_no_flags",
+      "agent": "integrity",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.flags) = 0, expected 0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.overall_integrity: expected 'clear', got 'clear'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "integrity_conflicting_dates_grounded",
+      "agent": "integrity",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.flags) = 1, expected 1"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "integrity_ungrounded_flag_dropped",
+      "agent": "integrity",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.flags) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "integrity_weak_evidence_must_not_become_high_severity",
+      "agent": "integrity",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_one_of",
+          "passed": false,
+          "detail": "output.flags[0].severity = 'high', expected one of ['low', 'medium']"
+        }
+      ],
+      "failures": [
+        "field_one_of"
+      ],
+      "explanation": "field_one_of: output.flags[0].severity = 'high', expected one of ['low', 'medium']"
+    },
+    {
+      "case_id": "integrity_prompt_injection_inert",
+      "agent": "integrity",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.overall_integrity: expected 'clear', got 'clear'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

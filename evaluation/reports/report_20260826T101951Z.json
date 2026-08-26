@@ -1,0 +1,31 @@
+{
+  "generated_at": "20260826T101951Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "interviewer_adaptive_sequence_differs_by_answer_quality",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "fact:scenario_a_terminated_via_sufficient_evidence",
+          "passed": true,
+          "detail": "scenario_a_terminated_via_sufficient_evidence = True"
+        },
+        {
+          "metric": "fact:scenario_b_terminated_via_sufficient_evidence",
+          "passed": true,
+          "detail": "scenario_b_terminated_via_sufficient_evidence = False"
+        },
+        {
+          "metric": "fact:no_duplicate_questions_in_scenario_a",
+          "passed": true,
+          "detail": "no_duplicate_questions_in_scenario_a = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    }
+  ]
+}

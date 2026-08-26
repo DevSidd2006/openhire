@@ -28,8 +28,7 @@ class MockLLMProvider(LLMProvider):
         self.call_count += 1
         prompt_lower = prompt.lower()
 
-        if "structured information from this resume" in prompt_lower:
-            # Built inline in ResumeParserAgent, not loaded from a prompts/*.md file.
+        if "# resume parser agent prompt" in prompt_lower:
             return self._mock_resume_parse_response(prompt)
         elif "# jd analyzer agent prompt" in prompt_lower:
             return self._mock_jd_response(prompt)
@@ -39,6 +38,10 @@ class MockLLMProvider(LLMProvider):
             return self._mock_behavioral_evaluation(prompt)
         elif "# interview question generation prompt" in prompt_lower:
             return self._mock_interview_question(prompt)
+        elif "# answer evaluation agent prompt" in prompt_lower:
+            return self._mock_answer_evaluation(prompt)
+        elif "# adaptive interview question prompt" in prompt_lower:
+            return self._mock_adaptive_question(prompt)
         elif "# resume auditor agent prompt" in prompt_lower:
             return self._mock_claim_verification(prompt)
         elif "# integrity agent prompt" in prompt_lower:
@@ -180,6 +183,44 @@ class MockLLMProvider(LLMProvider):
                 "competency": "Python",
                 "difficulty": "medium",
                 "reason": "To assess practical Python experience",
+            }
+        )
+
+    def _mock_answer_evaluation(self, prompt: str) -> str:
+        """Mock answer evaluation for prompts/answer_evaluator.md (P3/P5).
+        Confidently positive by design, matching this provider's existing
+        philosophy for every other mock evaluation response (e.g.
+        _mock_technical_evaluation) - confidence 0.75 clears
+        MIN_CONFIDENCE_FOR_COVERAGE (0.65), so a mock adaptive interview
+        run through MockLLMProvider actually progresses and terminates via
+        sufficient_evidence_collected rather than stalling."""
+        return json.dumps(
+            {
+                "score": 8.0,
+                "confidence": 0.75,
+                "evidence_status": "supported",
+                "is_vague": False,
+                "missing_detail": None,
+                "explanation": "Mock evaluation: answer addresses the target competency.",
+            }
+        )
+
+    def _mock_adaptive_question(self, prompt: str) -> str:
+        """Mock question phrasing for prompts/adaptive_interviewer.md
+        (P3/P5). Unlike every other mock response in this provider, the
+        text MUST vary across calls: the adaptive engine calls this same
+        prompt template once per turn within ONE interview, and
+        utils.adaptive_interview.is_duplicate_question() would reject a
+        second identical question - `call_count` (already tracked for every
+        provider call) makes each call's text unique without needing to
+        actually parse the prompt's decision context."""
+        return json.dumps(
+            {
+                "question_text": f"Mock adaptive interview question #{self.call_count}.",
+                "question_type": "initial",
+                "difficulty": "medium",
+                "reason": "Mock adaptive question generation.",
+                "expected_duration_seconds": 60,
             }
         )
 
