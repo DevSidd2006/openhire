@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Voice Interview</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --fg:#e8eaed; --muted:#9aa0a6; --accent:#4f8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --card:#171a21; --line:#262b36; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--fg);
+         font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:1.4rem; margin:0 0 .25rem; }
+  .sub { color:var(--muted); margin:0 0 1.5rem; font-size:.9rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem 1.15rem; margin-bottom:1rem; }
+  .label { font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:.4rem; }
+  #question { font-size:1.1rem; }
+  button { font:inherit; padding:.6rem 1.1rem; border-radius:8px; border:1px solid var(--line);
+           background:#222735; color:var(--fg); cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.rec { background:var(--err); border-color:var(--err); color:#fff; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  #status { font-size:.85rem; color:var(--muted); margin-left:.3rem; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--muted); margin-right:.4rem; }
+  .dot.on { background:var(--ok); } .dot.rec { background:var(--err); } .dot.err { background:var(--err); }
+  #log { font-size:.85rem; max-height:260px; overflow:auto; }
+  #log div { padding:.35rem 0; border-bottom:1px solid var(--line); }
+  #log div:last-child { border-bottom:0; }
+  .you { color:var(--accent); } .sys { color:var(--muted); } .bad { color:var(--err); }
+  code { background:#0b0d11; padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>OpenHire — Voice Interview</h1>
+  <p class="sub">Push-to-talk client for the P9 voice layer. Speak your answer; the adaptive
+  interviewer replies out loud.</p>
+
+  <div class="card">
+    <div class="label">Session</div>
+    <div class="row">
+      <input id="sessionId" placeholder="session_id" style="flex:1;min-width:220px;padding:.55rem;border-radius:8px;border:1px solid var(--line);background:#0b0d11;color:var(--fg)">
+      <button id="connect">Connect</button>
+      <span id="status"><span class="dot" id="dot"></span>idle</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Interviewer</div>
+    <div id="question">— not connected —</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="talk" disabled>🎤 Hold to answer</button>
+      <button id="replay" disabled>🔊 Repeat question</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Transcript</div>
+    <div id="log"><div class="sys">Create a session via <code>POST /sessions</code>, paste its id above, then Connect.</div></div>
+  </div>
+</main>
+
+<script>
+// Thin browser client. It holds NO interview logic: it captures audio, sends
+// it over the session WebSocket, plays back whatever audio it is given, and
+// renders whatever question the server reports. Every decision about what to
+// ask next, how to score an answer, and when to finish stays server-side in
+// InterviewSessionRunner / the adaptive engine.
+const $ = (id) => document.getElementById(id);
+let ws = null, stream = null, audioCtx = null, node = null, source = null;
+let pcmChunks = [], capturing = false, sourceRate = 48000;
+
+// P9 Phase 4 decision: capture raw PCM via the Web Audio API and encode
+// WAV/PCM 16 kHz mono in the browser, rather than using MediaRecorder
+// (which produces WebM/Opus in Chrome).
+//
+// Why: Azure's short-audio REST endpoint documents WAV/PCM and OGG/Opus.
+// WebM/Opus is NOT in that list. Probing showed Azure ignores the declared
+// Content-Type and sniffs the actual bytes, so sending WebM/Opus bytes
+// under a webm content type is an unverified gamble - and it could not be
+// verified locally (no Opus encoder available). WAV/PCM 16 kHz mono is
+// Azure's primary documented format and was verified end-to-end against
+// the live service, so the client sends exactly that. No server-side
+// transcoding, no extra dependency, no silent format guessing.
+const TARGET_RATE = 16000;
+
+function downsampleTo16k(input, inputRate) {
+  if (inputRate === TARGET_RATE) return input;
+  const ratio = inputRate / TARGET_RATE;
+  const outLength = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLength);
+  for (let i = 0; i < outLength; i++) {
+    // Average the source window rather than point-sampling, so we don't
+    // alias high frequencies down into the speech band.
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+    let sum = 0, n = 0;
+    for (let j = start; j < end; j++) { sum += input[j]; n++; }
+    out[i] = n ? sum / n : 0;
+  }
+  return out;
+}
+
+function encodeWav(float32, sampleRate) {
+  const bytesPerSample = 2;
+  const dataSize = float32.length * bytesPerSample;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+  const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  w(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  w(8, "WAVE");
+  w(12, "fmt ");
+  view.setUint32(16, 16, true);          // PCM fmt chunk size
+  view.setUint16(20, 1, true);           // codec 1 = PCM
+  view.setUint16(22, 1, true);           // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true); // byte rate
+  view.setUint16(32, bytesPerSample, true);              // block align
+  view.setUint16(34, 16, true);          // bits per sample
+  w(36, "data");
+  view.setUint32(40, dataSize, true);
+  let off = 44;
+  for (let i = 0; i < float32.length; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buf;
+}
+
+function setStatus(text, cls) {
+  $("status").innerHTML = `<span class="dot ${cls || ""}"></span>${text}`;
+}
+function log(text, cls) {
+  const el = document.createElement("div");
+  el.className = cls || "sys";
+  el.textContent = text;
+  $("log").prepend(el);
+}
+function b64(buf) {
+  let s = "", bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function play(b64audio, format) {
+  if (!b64audio) return;
+  const bin = atob(b64audio);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
+  new Audio(URL.createObjectURL(blob)).play().catch(() => {
+    log("(browser blocked autoplay — click anywhere, then repeat the question)", "sys");
+  });
+}
+
+$("connect").onclick = () => {
+  const id = $("sessionId").value.trim();
+  if (!id) return;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${encodeURIComponent(id)}`);
+
+  ws.onopen = () => {
+    setStatus("connected", "on");
+    $("talk").disabled = false;
+    $("replay").disabled = false;
+    ws.send(JSON.stringify({ type: "speak_question" }));
+  };
+  ws.onclose = () => {
+    setStatus("disconnected");
+    $("talk").disabled = true;
+    $("replay").disabled = true;
+  };
+  ws.onerror = () => setStatus("connection error", "err");
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "error") {
+      log(`error: ${msg.error}${msg.detail ? " — " + msg.detail : ""}`, "bad");
+      setStatus(msg.error, "err");
+      return;
+    }
+    if (msg.outcome === "no_speech_detected") {
+      // Explicitly NOT recorded as an answer — the same question is still
+      // pending, so the candidate simply tries again.
+      log("(no speech detected — please answer again)", "bad");
+      return;
+    }
+    if (msg.transcript) log(`You: ${msg.transcript}`, "you");
+    if (msg.tts_error) log("(question audio unavailable — showing text only)", "bad");
+    if (msg.next_question) {
+      $("question").textContent = msg.next_question.question_text;
+      log(`Interviewer: ${msg.next_question.question_text}`);
+    } else if (msg.status === "sealed") {
+      $("question").textContent = "Interview complete.";
+      log(`Interview finished (${msg.termination_reason || "complete"}).`);
+    }
+    play(msg.question_audio_base64, msg.audio_format);
+  };
+};
+
+async function startRecording() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
+  try {
+    stream = stream || await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+  } catch {
+    log("microphone permission denied", "bad");
+    setStatus("mic blocked", "err");
+    return;
+  }
+
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  sourceRate = audioCtx.sampleRate;
+
+  pcmChunks = [];
+  capturing = true;
+  source = audioCtx.createMediaStreamSource(stream);
+  node = audioCtx.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = (e) => {
+    if (!capturing) return;
+    pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+  source.connect(node);
+  // ScriptProcessorNode only runs while connected to a destination; routing
+  // through a muted gain node avoids echoing the candidate back at themselves.
+  const mute = audioCtx.createGain();
+  mute.gain.value = 0;
+  node.connect(mute);
+  mute.connect(audioCtx.destination);
+
+  setStatus("recording…", "rec");
+  $("talk").classList.add("rec");
+}
+
+function stopRecording() {
+  if (!capturing) return;
+  capturing = false;
+  $("talk").classList.remove("rec");
+  try { source && source.disconnect(); node && node.disconnect(); } catch {}
+
+  const total = pcmChunks.reduce((n, c) => n + c.length, 0);
+  if (!total) { setStatus("connected", "on"); return; }
+  const merged = new Float32Array(total);
+  let off = 0;
+  for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
+
+  const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
+  setStatus("thinking…", "on");
+  ws.send(JSON.stringify({
+    type: "answer",
+    audio_base64: b64(wav),
+    // WAV/PCM 16 kHz mono - Azure's primary documented short-audio format,
+    // verified working end-to-end against the live service (see the header
+    // comment for why this is NOT WebM/Opus).
+    audio_format: "wav",
+    // Lets the server ignore a re-sent recording (see VoiceTurnService's
+    // replay guard) rather than answering the NEXT question with it.
+    utterance_id: crypto.randomUUID(),
+  }));
+}
+
+// Push-to-talk: explicit start/stop avoids needing voice-activity detection
+// in this first slice (see P9 Phase 8 for the streaming/barge-in work).
+$("talk").addEventListener("mousedown", startRecording);
+$("talk").addEventListener("mouseup", stopRecording);
+$("talk").addEventListener("mouseleave", stopRecording);
+$("talk").addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+$("talk").addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
+
+$("replay").onclick = () => {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "speak_question" }));
+};
+</script>
+</body>
+</html>

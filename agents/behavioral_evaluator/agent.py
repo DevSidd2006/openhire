@@ -48,6 +48,7 @@ class BehavioralEvaluatorAgent(BaseAgent):
             prompt = self.load_prompt("behavioral_evaluator.md")
             prompt = prompt.format(
                 job_description=job_description.description,
+                competencies=self._format_competencies(job_description),
                 transcript=transcript_text,
             )
 
@@ -120,3 +121,15 @@ class BehavioralEvaluatorAgent(BaseAgent):
             lines.append(f"Q{i}: {question.question_text}")
             lines.append(f"A{i}: {answer.answer_text}\n")
         return "\n".join(lines)
+
+    def _format_competencies(self, job_description: JobDescription) -> str:
+        """Render the job's exact competency names as a bullet list - see
+        TechnicalEvaluatorAgent._format_competencies for the full rationale
+        (P8B.2 finding). This agent's lookup below
+        (`result.competency_scores.get(comp.name)`) is an exact string
+        match, so the LLM needs the authoritative name list, not just the
+        prompt's 5 hardcoded category labels, to score any job-specific
+        competency correctly."""
+        if not job_description.competencies:
+            return "(none specified)"
+        return "\n".join(f"- {c.name}" for c in job_description.competencies)

@@ -12,7 +12,21 @@ Audit the evaluation for:
 7. **Stereotype activation** - Names or background triggers that bias scoring
 
 For concerns found:
-- **Flag Type** - What type of bias
+- **Flag Type** (`bias_type`) - Which type of bias this is. Use EXACTLY one
+  of these strings (same spelling, lowercase, no synonyms, no suffixes, no
+  paraphrases) - do NOT invent a differently-worded label:
+    - `demographic` - race, religion, disability, gender, national origin
+    - `age` - age-coded language ("digital native", "too set in their ways")
+    - `appearance` - looks, clothing, grooming, physical presentation
+    - `accent` - accent or speech style confused with competence
+    - `personality_assumption` - traits inferred but never demonstrated
+    - `other` - a real, job-irrelevant concern none of the above cover
+  The numbered audit categories above describe what to LOOK for; this list
+  is the vocabulary you must REPORT with. E.g. age-coded language is
+  reported as `age` - never `age_bias`; an appearance concern is
+  `appearance` - never `appearance_based_judgments` (P8B: gpt-oss-20b was
+  observed inventing both of those variants when the allowed values were
+  not transmitted, and downstream consumers match this field exactly).
 - **Severity** - low, medium, or high
 - **Evidence source** - Which section of the Evaluation Notes below this
   concern appears in: one of "technical_evaluation", "behavioral_evaluation",

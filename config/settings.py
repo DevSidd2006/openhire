@@ -24,6 +24,14 @@ DATA_DIR.mkdir(exist_ok=True)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mock").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Groq (P8B.3): OpenHire's PRIMARY real LLM provider. gpt-oss-20b is the
+# model the agents are developed and benchmarked against; Gemini and OpenAI
+# remain supported but are no longer the target provider. The key is only
+# ever read from the environment - never hard-coded, logged, or reported.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # Embedding Configuration
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
@@ -56,13 +64,54 @@ MIN_CONFIDENCE_FOR_COVERAGE = 0.65  # a competency is only treated as
 # Evaluation Configuration
 MAX_RETRIES = 3
 TIMEOUT_SECONDS = 30
+
+# P8B.4 timeout audit: resume_parser's structured schema (ResumeParseResult
+# in schemas/llm_outputs.py) is the largest of any agent's - nested lists of
+# education/work_experience/projects/certifications entries, each its own
+# sub-schema - so under Groq's strict-mode constrained decoding
+# (providers/llm/groq.py._normalize_for_strict) it is also the slowest to
+# generate. A real Groq call was observed to exceed the global 30s
+# TIMEOUT_SECONDS on its first attempt and succeed in ~1.5s on the retry
+# (see the P8B.4 report) - correct, but a wasted 30s wait plus one extra API
+# call per occurrence, which matters when the daily quota is the scarce
+# resource. Every other agent's real-Groq latency stayed well under 30s
+# (jd_analyzer, technical/behavioral evaluator: 1-5s), so this override is
+# scoped to resume_parser only - the shared TIMEOUT_SECONDS default is
+# unchanged for every other agent.
+RESUME_PARSER_TIMEOUT_SECONDS = int(os.getenv("RESUME_PARSER_TIMEOUT_SECONDS", "45"))
 ASYNC_EXECUTION = True
 
 # Scoring Configuration
 CONFIDENCE_THRESHOLD = 0.7
 
 # Audio Configuration
-AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", "mock").lower()
+# P9 fix: the .env in this project defines AUDIO_PROCESSOR, but this
+# setting only ever read AUDIO_PROVIDER - so an operator setting
+# AUDIO_PROCESSOR=... was silently ignored and the system stayed on mock
+# with no warning. Both spellings are now accepted (AUDIO_PROVIDER wins if
+# both are set, preserving the documented name); AUDIO_PROCESSOR is
+# supported as the alias the existing .env already uses.
+AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", os.getenv("AUDIO_PROCESSOR", "mock")).lower()
+
+# P9: text-to-speech provider, selected independently of STT - a deployment
+# may reasonably transcribe with one service and synthesize with another.
+# Defaults to mock so the whole voice layer runs offline, with no API key,
+# exactly like LLM_PROVIDER=mock does for the agent layer.
+TTS_PROVIDER = os.getenv("TTS_PROVIDER", "mock").lower()
+
+# Azure Speech (P9): the first real STT/TTS implementation. Credentials are
+# read ONLY from the environment - never hard-coded, logged, echoed into a
+# transcript, or returned through the API.
+AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
+AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
+AZURE_SPEECH_VOICE = os.getenv("AZURE_SPEECH_VOICE", "en-US-JennyNeural")
+
+# P9 voice-turn safety limits.
+MAX_UTTERANCE_BYTES = int(os.getenv("MAX_UTTERANCE_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+# Below this many characters, a transcription is treated as "no speech
+# detected" rather than a real answer - protects against a stray cough or a
+# dropped connection silently becoming a scored interview answer (P9).
+MIN_TRANSCRIPT_CHARS = int(os.getenv("MIN_TRANSCRIPT_CHARS", "2"))
 
 # Debug Mode
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"

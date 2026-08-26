@@ -31,10 +31,20 @@ class EvaluationCase(BaseModel):
 class Verdict(str, Enum):
     """A case that crashes the agent/adapter (ERROR) is a different finding
     than an agent that ran fine but produced output violating an expected
-    property (FAIL) - P6 Phase 3 explicitly requires this distinction."""
+    property (FAIL) - P6 Phase 3 explicitly requires this distinction.
+
+    SKIPPED (P8B.4): the case was never actually attempted against the
+    configured provider - either because it is a MOCK_ONLY /
+    PROVIDER_FAILURE_CONTRACT case (its purpose is to simulate a scripted
+    fake-provider failure a real provider cannot be made to reproduce - see
+    evaluation/runner.py's is_mock_only_case) or because the run's
+    --max-calls budget was already exhausted. Deliberately distinct from
+    FAIL/ERROR: a SKIPPED case says nothing about whether the agent/prompt
+    is correct, and must never be counted toward a pass rate."""
     PASS = "pass"
     FAIL = "fail"
     ERROR = "error"
+    SKIPPED = "skipped"
 
 
 class MetricOutcome(BaseModel):
@@ -52,6 +62,11 @@ class EvaluationResult(BaseModel):
     metrics: List[MetricOutcome] = Field(default_factory=list)
     failures: List[str] = Field(default_factory=list)
     explanation: str = ""
+    # P8B.4: set only when verdict == SKIPPED - "MOCK_ONLY_PROVIDER_FAILURE_CONTRACT"
+    # or "BUDGET_EXHAUSTED" (see evaluation/runner.py). None for every other
+    # verdict; kept as a separate field (rather than overloading explanation)
+    # so callers can bucket SKIPPED results by reason without string parsing.
+    skip_reason: Optional[str] = None
 
     @property
     def passed(self) -> bool:

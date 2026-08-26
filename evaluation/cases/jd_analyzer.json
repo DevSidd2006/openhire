@@ -47,14 +47,14 @@
       "job_description": "Backend engineer - Python and SQL heavy role.",
       "script": ["{\"title\": \"Backend Engineer\", \"competencies\": [{\"name\": \"Python\", \"weight\": 3}, {\"name\": \"SQL\", \"weight\": 7}]}"]
     },
-    "expected_behavior": "Weights [3, 7] normalize to [0.3, 0.7] and the JobDescription still validates.",
+    "expected_behavior": "Weights [3, 7] normalize to [0.3, 0.7] and the JobDescription still validates. Bucket B (P8B audit): this exercises JDAnalyzerAgent._normalize_competencies deterministically - a real, well-behaved model has no reason to deliberately emit competency weights that don't sum to 1.0, so this is a business-logic contract test, not a real-model behavioral measurement.",
     "checks": [
       {"metric": "no_error"},
       {"metric": "schema_validity"},
       {"metric": "length_equals", "field": "output.competencies", "value": 2},
       {"metric": "field_in_range", "field": "output.competencies[1].weight", "min": 0.69, "max": 0.71}
     ],
-    "metadata": {"category": "weight_normalization"}
+    "metadata": {"category": "weight_normalization", "provider_contract": "mock_only_business_logic_contract"}
   },
   {
     "case_id": "jd_missing_experience",
@@ -120,7 +120,7 @@
       {"metric": "field_equals", "field": "output", "value": null},
       {"metric": "field_nonempty", "field": "result.error"}
     ],
-    "metadata": {"category": "malformed_output"}
+    "metadata": {"category": "malformed_output", "provider_contract": "mock_only_provider_failure_contract"}
   },
   {
     "case_id": "jd_conflicting_requirements",

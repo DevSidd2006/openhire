@@ -283,10 +283,214 @@ Hardening" below for its specific fallback policy.
   `LLMPermanentError`; network/rate-limit/5xx as `LLMTransientError`. This
   is the reference behavior every fake above is checked against.
 
+### 7a. Primary Real Provider: Groq + openai/gpt-oss-20b (P8B.3)
+
+As of P8B.3, **Groq is OpenHire's primary real LLM provider** and
+**`openai/gpt-oss-20b` is the primary benchmark model**. The project is
+developed and evaluated against that model.
+
+| Provider | `LLM_PROVIDER` | Role |
+| --- | --- | --- |
+| **Groq** | `groq` | **PRIMARY.** Real LLM behavioral evaluation and agent development. Model `openai/gpt-oss-20b`. |
+| Mock | `mock` | Local deterministic regression testing. No API key, no network. The default. |
+| Gemini | `gemini` | Supported, no longer primary. |
+| OpenAI | `openai` | Supported, no longer primary. |
+
+Configuration (`.env`, which is gitignored - the key never belongs in a
+tracked file, a log, a report, or an exception):
+
+```
+LLM_PROVIDER=groq
+GROQ_API_KEY=...
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+`GROQ_API_KEY`/`GROQ_MODEL` are read in `config/settings.py`; the factory
+in `providers/llm/__init__.py` maps `LLM_PROVIDER=groq` to `GroqProvider`.
+
+#### Two kinds of testing - do not confuse them
+
+OpenHire deliberately runs two different test regimes, and neither replaces
+the other:
+
+1. **Local deterministic regression testing** (`LLM_PROVIDER=mock`,
+   `pytest tests/`, `python -m evaluation.runner`). Uses mocks and
+   `ScriptedLLMProvider`. It answers: *does our CODE handle a given LLM
+   response correctly?* It is fast, offline, and deterministic, and it must
+   stay that way - do not replace unit tests with real API calls.
+2. **Real LLM behavioral evaluation**
+   (`python -m evaluation.runner --provider groq`). Uses the real Groq
+   model. It answers: *does the real model actually behave correctly given
+   our prompts?* This is the authoritative signal for prompt quality,
+   evidence grounding, hallucination resistance, and prompt-injection
+   resistance.
+
+**A green mock run is not evidence that the real model behaves correctly.**
+P8B.3 demonstrated this concretely: the mock suite was 83/84 PASS while the
+real model was, at the same time, obeying prompt injections in resumes,
+dropping a stated seniority level, and omitting competencies entirely when
+an answer was off-topic. Those defects were invisible to the mock run by
+construction, because the mock plays back the response the case author
+already believed was correct.
+
+#### Groq structured-output adaptation
+
+`GroqProvider.prepare_schema()` (see `providers/llm/groq.py`) contains the
+only Groq-specific schema handling in the system - no agent knows anything
+about Groq. Groq's `strict` JSON-schema mode enforces numeric bounds and
+enums, which is valuable, but demands `additionalProperties: false` on
+every object and a `required` list naming every property - neither of which
+a raw `Model.model_json_schema()` provides. The provider adds both.
+
+The single shape strict mode cannot express is an open-ended map
+(`Dict[str, CompetencyJudgment]` in the evaluator schemas). Rather than
+weaken those agent schemas, the provider detects that shape and drops to
+non-strict mode for that request only, sending the original schema
+unchanged; Pydantic validation plus `BaseAgent`'s bounded retry enforce the
+numeric bounds instead. Provider-layer adaptation, never agent-layer
+compromise.
+
 The test-provider failure behavior is intentionally designed to mirror this
 production classification, not to diverge from it for convenience - a case
 that scripts malformed JSON is exercising the SAME retry path a real
 malformed OpenAI response would take, not a shortcut around it.
+
+#### Golden-case classification: A / B / C (P8B.4, extended P8B)
+
+Not every golden case measures the same thing, and a real-provider run must
+not conflate them. Each case in `evaluation/cases/*.json` is exactly one of:
+
+- **A. Real LLM behavioral case** (the default - no `provider_contract`
+  tag). Its checks describe a contract a real, well-behaved model is
+  expected to satisfy; running it under `--provider groq` is a meaningful
+  measurement.
+- **B. Deterministic production-agent / business-logic case**
+  (`metadata.provider_contract == "mock_only_business_logic_contract"`).
+  Exercises a specific piece of AGENT CODE (competency-weight
+  normalization, confidence-based severity capping, an out-of-range
+  citation's bounds check, a claim-verification demotion path) that a
+  real, well-behaved model has no reason to trigger on its own initiative
+  - the mock script simulates a MISBEHAVING model on purpose, to prove the
+  defensive code catches it.
+- **C. Provider/infrastructure-failure case**
+  (`metadata.provider_contract == "mock_only_provider_failure_contract"`).
+  Simulates the PROVIDER itself misbehaving (malformed JSON, missing
+  required fields on every retry, a permanent auth error).
+
+Under `LLM_PROVIDER=mock`, every case (A, B, C) runs exactly as always -
+this classification changes nothing about the 84-case mock baseline. Under
+a real provider, B and C cases are skipped before ever reaching the API
+(`SKIPPED/MOCK_ONLY_BUSINESS_LOGIC_CONTRACT` /
+`SKIPPED/MOCK_ONLY_PROVIDER_FAILURE_CONTRACT`) - see
+`evaluation/runner.py`'s `is_mock_only_case`/`mock_only_skip_reason`.
+`--max-calls N` bounds the real calls one invocation may make (counts every
+actual provider call including retries, not case count); once exhausted,
+remaining cases are `SKIPPED/BUDGET_EXHAUSTED`, never fabricated as
+PASS/FAIL.
+
+#### Real Groq benchmark results (P8B, three batches)
+
+All 61 real-LLM-applicable cases (of 84 total; the rest are agents with no
+LLM call at all - `resume_matcher`, `scoring`, `report_generator`,
+`leaderboard` - or bucket B/C) have now been run at least once against real
+Groq (`openai/gpt-oss-20b`). This is a real-model BEHAVIOR signal, not a
+correctness certification - see "does the real model actually behave
+correctly" above; a few findings below are legitimate, accepted model
+variance rather than defects.
+
+| Batch | Agents | Attempted | Pass | Fail | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 1 | jd_analyzer, resume_parser (partial), technical_evaluator (partial), behavioral_evaluator, integrity, bias_checker | 28 | 21 | 7 | Bias Checker `bias_type` prompt fix (below) |
+| 2 | technical_evaluator, resume_parser (completion) | 19 | 15 | 4 | Resume Parser stochastic-extraction finding |
+| 3 | interviewer_evaluate, interviewer_session_turn, interviewer_adaptive_sequence, resume_auditor | 11 | 8 | 3 | Adaptive-sequence fixture-content fix (below); Groq's daily token quota (200k/day) was exhausted mid-batch, blocking live re-verification of that fix |
+
+**Genuine fixes made from real-model findings:**
+- `prompts/bias_checker.md` (Batch 1): the model detected bias correctly
+  but invented non-canonical `bias_type` values (`age_bias`,
+  `appearance_based_judgments`) because the prompt only gave English-prose
+  category headings, not the exact enum vocabulary. Fixed by enumerating
+  the exact allowed values in the prompt. Live-reverified: both affected
+  cases now pass.
+- `evaluation/cases/interviewer.json` (Batch 3): `interviewer_adaptive_sequence`
+  cases' `answer_texts` were meta-descriptive placeholders (e.g. `"a
+  strong python answer"`) written for the SCRIPTED provider, which ignores
+  answer content entirely. Under a real provider the literal placeholder
+  text IS the simulated answer, and a real Groq call correctly scored it
+  as vague/low (it genuinely is non-substantive text) - not a defect, but
+  a fixture-content bug making the case incoherent for real-provider
+  testing. Fixed by replacing the placeholders with genuine strong/weak
+  answer content; the check/contract itself (sequence must differ by
+  answer quality; must terminate on sufficient evidence) was **not**
+  weakened. Not yet live-reverified (quota exhausted) - see the P8B batch
+  3 report for the exact next step.
+
+**Legitimate real-model behavior, documented rather than "fixed" (no code/
+prompt/case-expectation change):**
+- Citation ambiguity: a real model sometimes cites the sole/only transcript
+  exchange even for a low-scoring or off-topic answer, producing
+  `evidence_status="supported"` where a scripted case assumed an uncited
+  (`"insufficient"`) outcome. Both are individually correct;
+  `evaluation/cases/{technical_evaluator,behavioral_evaluator}.json` note
+  this explicitly and a companion pytest regression pins down the
+  "cited" outcome as also correct.
+- Resume Parser stochastic extraction: on two ambiguous/adversarial inputs,
+  identical re-submissions to real Groq (temperature 0.7) alternated
+  between a fully-empty-but-valid extraction and a correct, fuller one.
+  Confirmed via direct reproduction, not assumed. `prompts/resume_parser.md`
+  already gives the injection-experience scenario as a worked example, so
+  no further prompt change was applicable; this is model variance, not a
+  prompt or code defect. See `evaluation/cases/resume_parser.json` for the
+  specific cases and `tests/test_p8b3_groq_agent_fixes.py::
+  TestResumeParserAcceptsFullyEmptyValidResultAsNonFabrication` for the
+  pinned contract (an all-empty valid result is accepted, never routed to
+  the deterministic fallback or treated as a bug).
+
+- Adaptive-interviewer confidence calibration (P8B.5): `openai/gpt-oss-20b`
+  reports its own `confidence` field conservatively and stochastically -
+  frequently ~0.6 even for genuinely strong, concrete, detailed answers
+  (directly observed). Because `MIN_CONFIDENCE_FOR_COVERAGE` is 0.65, any
+  golden case gated on the interview reaching
+  `sufficient_evidence_collected` becomes a coin-flip on model calibration
+  rather than a measure of engine correctness: the two affected cases were
+  run four times against real Groq with byte-identical fixtures and
+  produced a mix of pass and fail, including one run terminating via
+  `no_further_progress_possible` after correctly exhausting
+  `MAX_FOLLOW_UPS_PER_COMPETENCY` without the threshold ever being cleared.
+  **`MIN_CONFIDENCE_FOR_COVERAGE` was deliberately NOT lowered** - tuning a
+  production threshold to accommodate one model's calibration would weaken
+  real product behavior to make a benchmark pass. Both cases were instead
+  reclassified to bucket B (see below), and
+  `tests/test_adaptive_interview.py::TestAdaptiveSelection::
+  test_coverage_threshold_is_not_cleared_by_sub_threshold_confidence` pins
+  the threshold decision down so it is never silently reversed. The
+  deterministic engine itself (`utils/adaptive_interview.py`) was verified
+  correct in every one of those runs.
+
+**Reclassified to bucket B (not a real-model behavioral case after all):**
+`tech_out_of_range_citation_never_grounded`, `behav_out_of_range_citation_never_grounded`,
+`audit_ambiguous_evidence_demoted_to_review` - each scripts a MISBEHAVING
+model (an impossible citation, an ungrounded overclaim) to test defensive
+code; a real, well-behaved model never triggers that path (it either cites
+validly or honestly reports insufficient evidence), so these measure agent
+robustness, not real-model behavior.
+`interviewer_adaptive_sequence_differs_by_answer_quality`,
+`interviewer_adaptive_termination_sufficient_evidence` (P8B.5) - both gated
+on a numeric confidence threshold the model's own self-reported
+`confidence` must clear (see the calibration limitation above), so
+exercising the deterministic threshold logic meaningfully requires
+CONTROLLED confidence inputs, exactly like the integrity severity-cap case.
+`interviewer_adaptive_termination_max_questions` remains bucket A and
+passes reliably against real Groq - it is gated on a deterministic question
+COUNT, not on model-reported confidence, which is precisely why it is
+stable where the other two were not.
+
+**Known limitation:** Groq's account-level daily token quota (200,000
+tokens/day, independent of this project's own `--max-calls` call-count
+budget) can be exhausted mid-session by cumulative usage across multiple
+benchmark runs the same day. When it is, the framework surfaces this as a
+normal `LLMTransientError`-driven retry-then-fail (never silently
+fabricated as a pass), and evaluation must pause until the quota window
+resets - there is no code-level workaround, and none is warranted.
 
 ### 8. Comprehensive Auditing
 - Audit log for every agent with duration and status
@@ -604,7 +808,7 @@ export EMBEDDING_PROVIDER=openai
 python main.py
 ```
 
-The OpenAI provider is structurally implemented but has not yet been live-tested against the real API — mock mode is the verified path.
+The Groq provider IS live-tested against the real API and is the primary real provider (`LLM_PROVIDER=groq`, model `openai/gpt-oss-20b`) — see "Primary Real Provider" above. The OpenAI and Gemini providers are structurally implemented but are not the benchmarked path.
 
 ## 📖 Pipeline Flow
 
@@ -732,9 +936,14 @@ Environment variables (copy `.env.example` to `.env`):
 
 ```bash
 # LLM Provider
-LLM_PROVIDER=mock           # "mock" or "openai"
-OPENAI_API_KEY=sk-...       # Only if using OpenAI
-OPENAI_MODEL=gpt-4-turbo    # Default model
+LLM_PROVIDER=mock              # "groq" (primary real), "mock" (default), "openai", "gemini"
+
+# Groq - PRIMARY real provider / benchmark model (P8B.3)
+GROQ_API_KEY=...               # Only if using Groq. Keep in .env (gitignored) only.
+GROQ_MODEL=openai/gpt-oss-20b
+
+OPENAI_API_KEY=sk-...          # Only if using OpenAI
+OPENAI_MODEL=gpt-4-turbo       # Default model
 
 # Embeddings
 EMBEDDING_PROVIDER=local    # "local" or "openai"
@@ -785,7 +994,7 @@ schemas/
 └── audit.py              # AuditLog, PipelineRun
 providers/
 ├── __init__.py
-├── llm/                  # LLMProvider (base + MockLLMProvider + OpenAIProvider)
+├── llm/                  # LLMProvider (base + Mock + Groq[primary] + OpenAI + Gemini)
 ├── embeddings/           # EmbeddingProvider (base + LocalEmbeddingProvider)
 ├── vector_store/         # VectorStore (base + FAISSVectorStore, MockVectorStore)
 └── audio/                # AudioProcessor (base + MockAudioProcessor)

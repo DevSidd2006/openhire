@@ -45,7 +45,7 @@
   {
     "case_id": "tech_unrelated_answer_no_fabricated_competency",
     "agent": "technical_evaluator",
-    "description": "The candidate's answer never addresses SQL or System Design at all - the LLM (simulated correctly) only scores the ONE competency it has something to say about.",
+    "description": "P8B contract decision (Option A): Python WAS explicitly asked about ('Tell us about a Python project.') and must be INCLUDED with a low score/confidence, even though the answer was completely off-topic - that is a real, reportable 'asked but not demonstrated' judgment, not fabrication. SQL and System Design were NEVER asked about and must NOT appear - including either would be a fabricated competency judgment. (Superseded the pre-P8B.3 'zero competencies' expectation this case previously encoded - see the P8B contract-decision report for the full analysis.)",
     "input": {
       "job": {"job_id": "job_te_03", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 0.34}, {"name": "SQL", "weight": 0.33}, {"name": "System Design", "weight": 0.33}]},
       "resume": {"candidate_id": "cand_te_03", "candidate_name": "Test", "skills": ["Python"]},
@@ -53,14 +53,17 @@
         "interview_id": "int_te_03", "candidate_id": "cand_te_03", "job_id": "job_te_03", "start_time": "t0", "is_sealed": true,
         "exchanges": [[{"question_id": "q1", "question_text": "Tell us about a Python project.", "category": "technical"}, {"question_id": "q1", "answer_text": "I really enjoy hiking on weekends."}]]
       },
-      "script": ["{\"technical_score\": 1.0, \"competency_scores\": {}, \"strengths\": [], \"weaknesses\": [\"Off-topic response\"], \"explanation\": \"Answer does not address any technical competency.\", \"confidence\": 0.3}"]
+      "script": ["{\"technical_score\": 1.0, \"competency_scores\": {\"Python\": {\"score\": 1.0, \"confidence\": 0.2, \"explanation\": \"Completely off-topic - never addressed Python at all.\"}}, \"strengths\": [], \"weaknesses\": [\"Off-topic response\"], \"explanation\": \"Answer does not address the question asked.\", \"confidence\": 0.3}"]
     },
-    "expected_behavior": "No competency is scored - SQL/System Design are not fabricated as evaluated, and Python is not given a score it wasn't actually judged on.",
+    "expected_behavior": "Exactly ONE competency is scored: Python (it was asked about), with a low score and low confidence. SQL and System Design are never asked and must not be fabricated as evaluated. No evidence_question_number is given in the script (the answer 'I really enjoy hiking on weekends' has nothing genuinely relevant to cite), so evidence_status must be 'insufficient' - the low score stands, but is never dressed up as evidence-grounded.",
     "checks": [
       {"metric": "no_error"},
-      {"metric": "length_equals", "field": "output.competency_scores", "value": 0}
+      {"metric": "length_equals", "field": "output.competency_scores", "value": 1},
+      {"metric": "field_equals", "field": "output.competency_scores[0].competency_name", "value": "Python"},
+      {"metric": "field_in_range", "field": "output.competency_scores[0].score", "min": 0, "max": 3},
+      {"metric": "field_equals", "field": "output.competency_scores[0].evidence_status", "value": "insufficient"}
     ],
-    "metadata": {"category": "unrelated_answer"}
+    "metadata": {"category": "asked_offtopic_included_others_not_fabricated"}
   },
   {
     "case_id": "tech_out_of_range_citation_never_grounded",
@@ -75,14 +78,14 @@
       },
       "script": ["{\"technical_score\": 9.0, \"competency_scores\": {\"Python\": {\"score\": 9.0, \"confidence\": 0.9, \"evidence_question_number\": 5, \"explanation\": \"Excellent (citing a question that was never asked).\"}}, \"strengths\": [], \"weaknesses\": [], \"explanation\": \"x\", \"confidence\": 0.9}"]
     },
-    "expected_behavior": "evidence_question_number=5 does not exist (only 1 exchange) - resolves to no evidence, competency is marked insufficient despite the LLM's high score claim.",
+    "expected_behavior": "evidence_question_number=5 does not exist (only 1 exchange) - resolves to no evidence, competency is marked insufficient despite the LLM's high score claim. Bucket B (P8B Batch 2 audit, mirrors behav_out_of_range_citation_never_grounded): this exercises resolve_transcript_evidence's out-of-range bounds check (utils/evidence.py) deterministically - a real, well-behaved model has no reason to cite a question number that was never asked, so this is a defensive-code contract test, not a real-model behavioral measurement. Confirmed: a real Groq run on this exact scenario cited a VALID question number (1, the only one that exists) instead, producing evidence_status='supported' - the out-of-range scenario is unreachable via a well-behaved model.",
     "checks": [
       {"metric": "no_error"},
       {"metric": "field_equals", "field": "output.competency_scores[0].evidence_status", "value": "insufficient"},
       {"metric": "length_equals", "field": "output.competency_scores[0].evidence", "value": 0},
       {"metric": "evidence_grounded", "field": "output"}
     ],
-    "metadata": {"category": "critical_invariant_unanswered_question"}
+    "metadata": {"category": "critical_invariant_unanswered_question", "provider_contract": "mock_only_business_logic_contract"}
   },
   {
     "case_id": "tech_evidence_text_never_exceeds_transcript",

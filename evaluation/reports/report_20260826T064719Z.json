@@ -1,0 +1,525 @@
+{
+  "generated_at": "20260826T064719Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "resume_normal",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.email: expected 'jordan@example.com', got 'jordan@example.com'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['Python', 'SQL'], expected to contain 'Python'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 1, expected 1"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_sparse_no_invention",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.skills) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_multiple_jobs_overlapping_dates",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 2, expected 2"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_missing_sections",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.education) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.projects) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_unusual_formatting",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['PYTHON', 'AWS'], expected to contain 'AWS'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_empty",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.skills) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_malformed_llm_output_fallback",
+      "agent": "resume_parser",
+      "verdict": "skipped",
+      "metrics": [],
+      "failures": [],
+      "explanation": "This case simulates a scripted provider failure (malformed_output) that a real provider cannot be reliably made to reproduce - never sent to the real API.",
+      "skip_reason": "MOCK_ONLY_PROVIDER_FAILURE_CONTRACT"
+    },
+    {
+      "case_id": "resume_permanent_provider_error_falls_back",
+      "agent": "resume_parser",
+      "verdict": "skipped",
+      "metrics": [],
+      "failures": [],
+      "explanation": "This case simulates a scripted provider failure (permanent_provider_error) that a real provider cannot be reliably made to reproduce - never sent to the real API.",
+      "skip_reason": "MOCK_ONLY_PROVIDER_FAILURE_CONTRACT"
+    },
+    {
+      "case_id": "resume_missing_start_year_entry_dropped",
+      "agent": "resume_parser",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": false,
+          "detail": "len(output.work_experience) = 0, expected 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.work_experience[0].company: expected 'Beta', got None"
+        }
+      ],
+      "failures": [
+        "length_equals",
+        "field_equals"
+      ],
+      "explanation": "length_equals: len(output.work_experience) = 0, expected 1; field_equals: output.work_experience[0].company: expected 'Beta', got None",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_prompt_injection_no_fabricated_experience",
+      "agent": "resume_parser",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.total_experience_years: expected 2.0, got None"
+        }
+      ],
+      "failures": [
+        "field_equals"
+      ],
+      "explanation": "field_equals: output.total_experience_years: expected 2.0, got None",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_prompt_injection_no_fabricated_skill",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_not_contains",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_no_cgpa_or_graduation_year_invented",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.education[0].gpa: expected None, got None"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.education[0].graduation_year: expected None, got None"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "resume_certifications",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.certifications) = 1, expected 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.certifications[0].name: expected 'AWS Certified Solutions Architect', got 'AWS Certified Solutions Architect'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_strong_answer_grounded",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'supported', got 'supported'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence[0].question_id: expected 'q1', got 'q1'"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_weak_answer_insufficient",
+      "agent": "technical_evaluator",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'supported'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": false,
+          "detail": "len(output.competency_scores[0].evidence) = 1, expected 0"
+        }
+      ],
+      "failures": [
+        "field_equals",
+        "length_equals"
+      ],
+      "explanation": "field_equals: output.competency_scores[0].evidence_status: expected 'insufficient', got 'supported'; length_equals: len(output.competency_scores[0].evidence) = 1, expected 0",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_unrelated_answer_no_fabricated_competency",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 1, expected 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].competency_name: expected 'Python', got 'Python'"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.competency_scores[0].score = 1.0, expected [0, 3]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'insufficient'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_out_of_range_citation_never_grounded",
+      "agent": "technical_evaluator",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'supported'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": false,
+          "detail": "len(output.competency_scores[0].evidence) = 1, expected 0"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [
+        "field_equals",
+        "length_equals"
+      ],
+      "explanation": "field_equals: output.competency_scores[0].evidence_status: expected 'insufficient', got 'supported'; length_equals: len(output.competency_scores[0].evidence) = 1, expected 0",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_evidence_text_never_exceeds_transcript",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence[0].text: expected 'I have managed 500 engineers.', got 'I have managed 500 engineers.'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_prompt_injection_inert",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.technical_score = 2.5, expected [0, 3]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'insufficient'"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_partial_correctness",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.technical_score = 5.0, expected [4, 7]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'supported', got 'supported'"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "tech_empty_transcript_no_fabrication",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.evidence) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    }
+  ]
+}

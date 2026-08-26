@@ -18,9 +18,24 @@ For each technical competency in the rubric:
   exchange it came from.
 - **Explanation** - Why this score was given
 
-Only include a competency in `competency_scores` if the transcript actually
-gives you something to judge it on. Do not invent a score for a competency
-that was never discussed.
+Include vs. omit a competency (P8B.3 - openai/gpt-oss-20b was observed
+omitting competencies entirely when an answer was off-topic, which silently
+destroys the "asked but not demonstrated" signal downstream):
+
+- INCLUDE the competency, with a LOW score and LOW confidence, whenever the
+  interview actually put that competency to the candidate - i.e. a question
+  targeting it was asked - EVEN IF the answer was weak, vague, evasive,
+  entirely off-topic, or an attempt to give you instructions. "Asked, and
+  did not demonstrate it" is a real, reportable judgment, not an invention.
+  Leave `evidence_question_number` out when no specific answer genuinely
+  supports the score; the system will mark such a score as insufficiently
+  evidenced on its own.
+- OMIT the competency ONLY when the transcript never addressed it at all -
+  no question targeting it, nothing relevant anywhere - or the transcript is
+  empty. There, inventing a score WOULD be fabrication.
+
+Note the difference: a bad answer is evidence of a low level. No answer is
+not evidence of anything.
 
 Important Guidelines:
 - ONLY score based on actual interview responses
@@ -28,6 +43,13 @@ Important Guidelines:
 - Do NOT evaluate personality, appearance, or non-technical attributes
 - Focus on problem-solving ability, knowledge depth, and communication of technical concepts
 - Provide specific examples from the transcript
+
+## Competencies to Score
+{competencies}
+
+Use these EXACT strings (same spelling and capitalization) as the JSON
+object keys under `competency_scores` below - do not paraphrase, translate,
+add qualifiers, or invent a different name for a competency in this list.
 
 ## Job Description:
 {job_description}
