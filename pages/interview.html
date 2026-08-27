@@ -161,27 +161,59 @@
   renderNavbar();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const sessionId = urlParams.get('session_id') || ('sess-' + Date.now().toString().slice(-6));
-  const appId = urlParams.get('app_id') || 'app-01';
+  const sessionId = urlParams.get('session_id');
+  const appId = urlParams.get('app_id') || '';
 
-  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId}`;
+  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId || '—'}`;
 
-  const questions = [
-    "How do you design high-concurrency microservices and resolve caching race hazards?",
-    "What is your approach to performing zero-downtime database schema migrations in production?",
-    "Describe a technical trade-off where you had to balance latency vs data consistency."
-  ];
-  let currentIdx = 0;
+  let currentQuestion = null;
+  let maxQuestions = 0;
+  let ended = false;
 
-  function loadQuestion() {
-    if (currentIdx < questions.length) {
-      document.getElementById('qCounter').textContent = `QUESTION ${currentIdx + 1} OF ${questions.length} • ADAPTIVE PROBE`;
-      document.getElementById('currentQText').textContent = questions[currentIdx];
-      addLog('Interviewer', questions[currentIdx]);
-    } else {
-      document.getElementById('currentQText').textContent = "Interview completed. Finalizing multi-agent evaluation score...";
-      document.getElementById('statusBadge').textContent = 'Status: Evaluating';
-      setTimeout(finishSession, 1200);
+  function setStatus(text) {
+    document.getElementById('statusBadge').textContent = `Status: ${text}`;
+  }
+
+  function showQuestion(question, questionsAsked) {
+    currentQuestion = question;
+    if (!question) return;
+    document.getElementById('qCounter').textContent =
+      `QUESTION ${questionsAsked}${maxQuestions ? ' OF ' + maxQuestions : ''} • ADAPTIVE PROBE`;
+    document.getElementById('currentQText').textContent = question.question_text;
+    addLog('Interviewer', question.question_text);
+  }
+
+  function endInterview(terminationReason) {
+    ended = true;
+    document.getElementById('currentQText').textContent =
+      'Interview completed. Finalizing multi-agent evaluation...';
+    setStatus('Evaluating');
+    document.getElementById('typeInput').disabled = true;
+    document.getElementById('btnMic').disabled = true;
+    addLog('System', `Interview sealed${terminationReason ? ' (' + terminationReason + ')' : ''}. Transcript is now immutable.`);
+    setTimeout(() => {
+      window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
+    }, 1500);
+  }
+
+  async function loadSession() {
+    if (!sessionId) {
+      document.getElementById('currentQText').textContent = 'No interview session specified.';
+      setStatus('Error');
+      return;
+    }
+    try {
+      const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+      maxQuestions = state.progress ? state.progress.max_questions : 0;
+      if (state.status === 'sealed' || state.status === 'failed') {
+        endInterview(state.termination_reason);
+        return;
+      }
+      showQuestion(state.current_question, state.progress ? state.progress.questions_asked : 0);
+      setStatus('Ready');
+    } catch (err) {
+      document.getElementById('currentQText').textContent = `Could not load this interview: ${err.message}`;
+      setStatus('Error');
     }
   }
 
@@ -195,31 +227,50 @@
 
   function stopSpeech() {
     const btn = document.getElementById('btnMic');
-    const badge = document.getElementById('statusBadge');
     btn.classList.remove('recording');
     btn.innerHTML = '🎙️ Hold to Speak Answer';
-    badge.textContent = 'Status: Evaluating Response';
+    setStatus('Ready');
+    // Voice capture is not wired up in this build (see voice-interview.html
+    // for the real WebSocket/Azure Speech integration) - be honest about
+    // that rather than fabricating a submitted answer. Text is the real
+    // path here.
+    addLog('System', 'Voice capture is not connected in this demo build — please type your answer below.');
+  }
 
-    setTimeout(() => {
-      addLog('Candidate', 'Audio answer submitted and evaluated against competency rubric.');
-      currentIdx++;
-      loadQuestion();
-      badge.textContent = 'Status: Ready';
-    }, 1000);
+  async function submitAnswer(answerText) {
+    if (ended || !sessionId) return;
+    addLog('Candidate', answerText);
+    setStatus('Evaluating Response');
+    try {
+      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/answers`, {
+        method: 'POST',
+        body: { answer_text: answerText },
+      });
+      if (result.status === 'sealed' || result.status === 'failed') {
+        endInterview(result.termination_reason);
+        return;
+      }
+      // Re-read the session for the authoritative questions_asked counter
+      // rather than tracking it by hand on the client.
+      const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+      showQuestion(result.next_question, state.progress ? state.progress.questions_asked : 0);
+      setStatus('Ready');
+    } catch (err) {
+      addLog('System', `Could not submit that answer: ${err.message}`);
+      setStatus('Ready');
+    }
   }
 
   function submitText() {
     const input = document.getElementById('typeInput');
     const val = input.value.trim();
     if (!val) return;
-    addLog('Candidate', val);
     input.value = '';
-    currentIdx++;
-    loadQuestion();
+    submitAnswer(val);
   }
 
   function repeatQuestion() {
-    alert(`Interviewer: "${questions[currentIdx] || 'Completed.'}"`);
+    alert(`Interviewer: "${currentQuestion ? currentQuestion.question_text : 'Completed.'}"`);
   }
 
   function addLog(speaker, text) {
@@ -239,12 +290,17 @@
     log.scrollTop = log.scrollHeight;
   }
 
-  function finishSession() {
-    alert('Interview transcript sealed! Multi-agent evaluation generated.');
-    window.location.href = `report.html?app_id=${encodeURIComponent(appId)}&session_id=${encodeURIComponent(sessionId)}`;
+  async function finishSession() {
+    if (!sessionId || ended) return;
+    try {
+      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
+      endInterview(result.termination_reason || 'manual_finish');
+    } catch (err) {
+      alert(`Could not finish the interview: ${err.message}`);
+    }
   }
 
-  loadQuestion();
+  loadSession();
 </script>
 </body>
 </html>

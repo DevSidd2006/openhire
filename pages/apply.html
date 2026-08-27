@@ -44,15 +44,18 @@
   renderNavbar();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const jobId = urlParams.get('job_id') || 'backend-lead-01';
-  document.getElementById('applyTargetJob').textContent = `Target Role: ${jobId}`;
+  const jobId = urlParams.get('job_id');
+  document.getElementById('applyTargetJob').textContent = jobId ? `Target Role: ${jobId}` : 'No job selected';
+  if (!jobId) {
+    document.getElementById('btnApply').disabled = true;
+  }
 
   const user = getCurrentUser();
   if (user && user.name) {
     document.getElementById('candidateName').value = user.name;
   }
 
-  function handleApplicationSubmit() {
+  async function handleApplicationSubmit() {
     const name = document.getElementById('candidateName').value.trim();
     const resume = document.getElementById('resumeText').value.trim();
     if (!name || !resume) {
@@ -64,24 +67,47 @@
     btn.disabled = true;
     btn.textContent = 'Parsing Resume...';
 
-    const apps = getStoredApplications();
-    const newApp = {
-      application_id: 'app-' + Date.now().toString().slice(-6),
-      candidate_name: name,
-      job_id: jobId,
-      resume_text: resume,
-      match_score: Math.floor(Math.random() * 10 + 88),
-      status: 'SHORTLISTED',
-      session_id: 'session-' + Date.now().toString().slice(-6)
-    };
+    try {
+      // 1. Register the candidate (ResumeParserAgent extracts skills/
+      //    education/experience from the raw text server-side).
+      const candidate = await apiRequest('/candidates', {
+        method: 'POST',
+        body: { candidate_name: name, resume_text: resume },
+      });
+      setCurrentUser(Object.assign({}, user, { role: 'candidate', candidate_id: candidate.candidate_id }));
 
-    apps.unshift(newApp);
-    saveApplications(apps);
+      // 2. Create the application.
+      btn.textContent = 'Submitting application...';
+      const appResult = await apiRequest('/applications', {
+        method: 'POST',
+        body: { job_id: jobId, candidate_id: candidate.candidate_id },
+      });
+      const applicationId = appResult.application.application_id;
 
-    setTimeout(() => {
-      alert(`Resume parsed! Match score: ${newApp.match_score}%. Launching interview.`);
-      window.location.href = `interview.html?session_id=${newApp.session_id}&app_id=${newApp.application_id}`;
-    }, 700);
+      // 3. Run matching for this job (ResumeMatcherAgent) - this scores
+      //    every SUBMITTED application for the job, including ours.
+      btn.textContent = 'Matching against rubric...';
+      const matchResult = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
+      const ourApplication = matchResult.applications.find(a => a.application_id === applicationId) || appResult.application;
+
+      const matchPct = ourApplication.matching_score ? Math.round(ourApplication.matching_score.match_score * 100) : null;
+
+      if (ourApplication.status !== 'shortlisted') {
+        alert(`Thanks for applying!${matchPct !== null ? ` Match score: ${matchPct}%.` : ''} This role isn't a strong enough match right now, so no interview will be scheduled.`);
+        window.location.href = 'candidate.html';
+        return;
+      }
+
+      // 4. Shortlisted - start the adaptive interview session.
+      btn.textContent = 'Starting interview...';
+      const sessionId = await ensureInterviewSession(ourApplication);
+      alert(`Resume parsed! Match score: ${matchPct}%. Launching interview.`);
+      window.location.href = `interview.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(applicationId)}`;
+    } catch (err) {
+      alert(`Could not submit your application: ${err.message}`);
+      btn.disabled = false;
+      btn.textContent = 'Submit Resume & Match Fit';
+    }
   }
 </script>
 </body>
