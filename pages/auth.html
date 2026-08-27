@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenHire — Sign In & Role Selection</title>
+<title>OpenHire — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="navbarContainer"></div>
 
 <main class="container">
-  <div style="max-width: 460px; margin: 3rem auto;" class="card">
-    <div class="card-header">
-      <h2 class="card-title">Sign In / Role Selection</h2>
+  <div style="max-width: 420px; margin: 3.5rem auto;" class="card">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <h2 class="card-title">Sign In</h2>
     </div>
-    <p class="card-sub" style="margin-bottom:1.5rem;">Select your workspace role to enter the recruitment or interview portal.</p>
+    <p class="card-sub" style="margin-bottom:1.25rem;">Select your workspace role to access portal views.</p>
     
     <div class="form-group">
       <label class="form-label">Full Name</label>
@@ -23,14 +25,14 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">Select Role</label>
-      <select id="userRole" class="form-control">
-        <option value="recruiter">👔 Recruiter (Post Jobs, Manage Shortlists & Audits)</option>
-        <option value="candidate" selected>🎓 Candidate (Browse Jobs, Apply & Take AI Interview)</option>
+      <label class="form-label">Role</label>
+      <select id="userRole" class="form-control" style="cursor:pointer;">
+        <option value="recruiter">Recruiter</option>
+        <option value="candidate" selected>Candidate</option>
       </select>
     </div>
 
-    <button class="btn-primary" style="width:100%; margin-top:1rem;" onclick="handleLoginSubmit()">Continue to Portal</button>
+    <button class="btn-primary" style="width:100%; margin-top:0.75rem;" onclick="handleLoginSubmit()">Continue</button>
   </div>
 </main>
 
