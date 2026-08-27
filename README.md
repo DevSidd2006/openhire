@@ -6,13 +6,17 @@ OpenHire runs structured, voice-based interviews at scale, evaluates candidates 
 
 ## Documentation
 
+- [Interactive Roadmap & Progress Tracker](pages/roadmap.html) — live dashboard tracking milestone deliverables, role ownership, and completion percentages.
 - [Multi-Agent System implementation](docs/multi-agent-system.md) — the Stage 3-level agent pipeline (orchestrator, evaluators, scoring, reporting) built ahead of schedule as a working foundation.
+- [Stage 1 Project Flow](docs/roles/PROJECT_FLOW.md) — the step-by-step interview path and role interface shapes.
 
 ## Team
 
 5-person team split across: **Frontend · Backend · Database · Multi-Agent System · Fullstack**
 
-## Roadmap
+## Roadmap & Status
+
+> 📊 **Live Tracker:** Open [`pages/roadmap.html`](pages/roadmap.html) in your browser (or visit `/app/roadmap.html` when running the server) for interactive, real-time checklist tracking across all roles and stages.
 
 Development is staged so every milestone is a working, demoable system — not a partial build. Stage 1 ships before Stage 2 begins, and so on.
 
@@ -48,6 +52,139 @@ Everything needed to run this on a real Indian campus drive at volume: multiling
 
 **Goal:** a hardened, compliant, India-ready product that can actually be sold and operated at scale. Difficulty: Very High.
 
+## Database Architecture
+
+```mermaid
+erDiagram
+    ORGANIZATIONS ||--o{ ORGANIZATION_MEMBERS : has
+    ORGANIZATIONS ||--o{ CREDIT_TRANSACTIONS : records
+    ORGANIZATIONS ||--o{ JOBS : owns
+
+    JOBS ||--o{ APPLICATIONS : receives
+    JOBS ||--o{ JOB_RUBRICS : defines
+    JOBS ||--o| JOB_LEADERBOARDS : ranks
+    JOBS ||--o{ PIPELINE_RUNS : executes
+
+    CANDIDATES ||--o{ APPLICATIONS : submits
+    CANDIDATES ||--o{ INTERVIEWS : attends
+    CANDIDATES ||--o{ TRANSCRIPTS : provides
+
+    APPLICATIONS ||--o| INTERVIEWS : initiates
+    APPLICATIONS ||--o| EVALUATIONS : results_in
+
+    INTERVIEWS ||--o{ TRANSCRIPTS : records
+    INTERVIEWS ||--o| EVALUATIONS : generates
+    INTERVIEWS ||--o| INTERVIEW_CONNECTIVITY_TELEMETRY : logs
+
+    EVALUATIONS ||--o{ CANDIDATE_COMPETENCY_SCORES : breaks_down
+    EVALUATIONS ||--o| HUMAN_REVIEW_DECISIONS : reviewed_by
+    EVALUATIONS ||--o{ ASYNC_AGENT_TASKS : dispatches
+
+    PIPELINE_RUNS ||--o{ AGENT_AUDIT_LOGS : tracks
+
+    JOBS {
+        varchar id PK
+        varchar title
+        jsonb questions
+        boolean is_active
+        jsonb job_data
+        timestamptz created_at
+    }
+
+    CANDIDATES {
+        varchar id PK
+        varchar name
+        varchar email
+        jsonb resume
+        boolean used_fallback
+        timestamptz created_at
+    }
+
+    APPLICATIONS {
+        varchar id PK
+        varchar job_id FK
+        varchar candidate_id FK
+        varchar status
+        jsonb matching_score
+        varchar session_id
+    }
+
+    INTERVIEWS {
+        varchar id PK
+        varchar session_id UK
+        varchar job_id FK
+        varchar candidate_id FK
+        varchar status
+        jsonb state
+    }
+
+    TRANSCRIPTS {
+        varchar id PK
+        varchar interview_id
+        varchar candidate_id FK
+        varchar job_id FK
+        text answer_text
+        boolean is_sealed
+    }
+
+    EVALUATIONS {
+        varchar id PK
+        varchar session_id UK
+        varchar interview_id
+        varchar candidate_id FK
+        varchar job_id FK
+        numeric overall_score
+        jsonb result
+    }
+
+    JOB_RUBRICS {
+        varchar id PK
+        varchar job_id FK
+        varchar interview_type
+        jsonb competencies
+        numeric pass_threshold
+    }
+
+    CANDIDATE_COMPETENCY_SCORES {
+        varchar id PK
+        varchar evaluation_id FK
+        varchar competency
+        numeric score
+        numeric weight
+    }
+
+    JOB_LEADERBOARDS {
+        varchar id PK
+        varchar job_id UK_FK
+        jsonb ranked_entries
+        jsonb summary
+    }
+
+    DOCUMENT_EMBEDDINGS {
+        varchar id PK
+        varchar doc_id
+        varchar doc_type
+        text content
+        vector embedding
+    }
+
+    PIPELINE_RUNS {
+        varchar run_id PK
+        varchar job_id FK
+        varchar stage
+        varchar status
+        numeric duration_seconds
+    }
+
+    AGENT_AUDIT_LOGS {
+        varchar log_id PK
+        varchar run_id FK
+        varchar agent_name
+        varchar status
+        jsonb evidence_ids
+    }
+```
+
 ## Difficulty at a glance
 
 | Domain | Stage 1 | Stage 2 | Stage 3 | Stage 4 |
@@ -59,3 +196,4 @@ Everything needed to run this on a real Indian campus drive at volume: multiling
 | Fullstack | Medium | Medium–High | High | High |
 
 Multi-Agent System is the steepest curve on the team — plan pairing or backup coverage there from Stage 2 onward. Backend and Fullstack ramp hardest in Stage 4, when integrations, scale, and security all land at once.
+

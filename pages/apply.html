@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Apply</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div style="max-width: 680px; margin: 1.5rem auto;" class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Apply with Resume</h2>
+        <p class="card-sub" id="applyTargetJob">Target Role: —</p>
+      </div>
+      <button class="btn-outline" onclick="window.history.back()">Back</button>
+    </div>
+
+    <div class="form-group" style="margin-top:1.25rem;">
+      <label class="form-label">Full Name</label>
+      <input type="text" id="candidateName" class="form-control" placeholder="e.g. Alex Morgan" value="Alex Morgan">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Resume / CV Plaintext</label>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">
+        Paste your resume text. <code>ResumeParserAgent</code> will extract skills, education, and project claims.
+      </p>
+      <textarea id="resumeText" class="form-control" rows="9" placeholder="EXPERIENCE&#10;Software Engineer @ Acme Corp...&#10;&#10;SKILLS&#10;Python, FastAPI, Distributed Caching, PostgreSQL, Docker..."></textarea>
+    </div>
+
+    <button class="btn-primary" id="btnApply" style="width:100%; margin-top:0.5rem;" onclick="handleApplicationSubmit()">Submit Resume & Match Fit</button>
+  </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+  renderNavbar();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobId = urlParams.get('job_id') || 'backend-lead-01';
+  document.getElementById('applyTargetJob').textContent = `Target Role: ${jobId}`;
+
+  const user = getCurrentUser();
+  if (user && user.name) {
+    document.getElementById('candidateName').value = user.name;
+  }
+
+  function handleApplicationSubmit() {
+    const name = document.getElementById('candidateName').value.trim();
+    const resume = document.getElementById('resumeText').value.trim();
+    if (!name || !resume) {
+      alert('Please fill out your name and resume text.');
+      return;
+    }
+
+    const btn = document.getElementById('btnApply');
+    btn.disabled = true;
+    btn.textContent = 'Parsing Resume...';
+
+    const apps = getStoredApplications();
+    const newApp = {
+      application_id: 'app-' + Date.now().toString().slice(-6),
+      candidate_name: name,
+      job_id: jobId,
+      resume_text: resume,
+      match_score: Math.floor(Math.random() * 10 + 88),
+      status: 'SHORTLISTED',
+      session_id: 'session-' + Date.now().toString().slice(-6)
+    };
+
+    apps.unshift(newApp);
+    saveApplications(apps);
+
+    setTimeout(() => {
+      alert(`Resume parsed! Match score: ${newApp.match_score}%. Launching interview.`);
+      window.location.href = `interview.html?session_id=${newApp.session_id}&app_id=${newApp.application_id}`;
+    }, 700);
+  }
+</script>
+</body>
+</html>

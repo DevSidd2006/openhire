@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Interview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .interview-box {
+    max-width: 740px;
+    margin: 1.5rem auto;
+  }
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.9rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    margin-right: 6px;
+  }
+  .question-panel {
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .question-counter {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+  }
+  .question-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-main);
+  }
+  .audio-stage {
+    text-align: center;
+    padding: 2.25rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+  }
+  .mic-button {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 0.85rem 2rem;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .mic-button:hover { background: var(--primary-hover); }
+  .mic-button.recording {
+    background: var(--danger);
+    animation: livePulse 1.2s infinite;
+  }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+  }
+  .transcript-area {
+    background: var(--bg);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius);
+    padding: 0.9rem;
+    max-height: 180px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .log-line { padding: 0.25rem 0; }
+  .speaker-tag { font-weight: 600; }
+  .speaker-tag.ai { color: var(--primary); }
+  .speaker-tag.cand { color: var(--success); }
+</style>
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="interview-box">
+    
+    <div class="session-header">
+      <div>
+        <span class="status-dot"></span>
+        <span style="color:var(--text-main);">LIVE EVALUATION</span>
+      </div>
+      <div id="sessionMetaText">SESSION: —</div>
+    </div>
+
+    <!-- Question View -->
+    <div class="question-panel">
+      <div class="question-counter" id="qCounter">QUESTION 1 OF 3 • ADAPTIVE PROBE</div>
+      <div class="question-text" id="currentQText">Loading prompt...</div>
+    </div>
+
+    <!-- Audio Interaction -->
+    <div class="audio-stage">
+      <div style="margin-bottom: 1.25rem;">
+        <span class="tag" id="statusBadge">Status: Ready</span>
+      </div>
+
+      <div style="display:flex; justify-content:center; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+        <button class="mic-button" id="btnMic" 
+                onmousedown="startSpeech()" onmouseup="stopSpeech()"
+                ontouchstart="startSpeech()" ontouchend="stopSpeech()">
+          🎙️ Hold to Speak Answer
+        </button>
+        <button class="btn-secondary" onclick="repeatQuestion()">
+          🔊 Replay
+        </button>
+      </div>
+
+      <div style="max-width: 480px; margin: 1.25rem auto 0; display:flex; gap: 0.5rem;">
+        <input type="text" id="typeInput" class="form-control" placeholder="Or type your response...">
+        <button class="btn-secondary" onclick="submitText()">Send</button>
+      </div>
+    </div>
+
+    <!-- Immutable Transcript -->
+    <div class="card">
+      <div class="card-header" style="margin-bottom:0.75rem;">
+        <span style="font-size:12px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted);">Immutable Transcript</span>
+        <button class="btn-danger" style="padding:0.3rem 0.7rem; font-size:11.5px;" onclick="finishSession()">Complete Interview</button>
+      </div>
+      <div class="transcript-area" id="transcriptLog">
+        <div class="log-line"><span class="speaker-tag" style="color:var(--text-faint);">[SYS]</span> Adaptive session started. Transcript sealed upon finish.</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+  renderNavbar();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const sessionId = urlParams.get('session_id') || ('sess-' + Date.now().toString().slice(-6));
+  const appId = urlParams.get('app_id') || 'app-01';
+
+  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId}`;
+
+  const questions = [
+    "How do you design high-concurrency microservices and resolve caching race hazards?",
+    "What is your approach to performing zero-downtime database schema migrations in production?",
+    "Describe a technical trade-off where you had to balance latency vs data consistency."
+  ];
+  let currentIdx = 0;
+
+  function loadQuestion() {
+    if (currentIdx < questions.length) {
+      document.getElementById('qCounter').textContent = `QUESTION ${currentIdx + 1} OF ${questions.length} • ADAPTIVE PROBE`;
+      document.getElementById('currentQText').textContent = questions[currentIdx];
+      addLog('Interviewer', questions[currentIdx]);
+    } else {
+      document.getElementById('currentQText').textContent = "Interview completed. Finalizing multi-agent evaluation score...";
+      document.getElementById('statusBadge').textContent = 'Status: Evaluating';
+      setTimeout(finishSession, 1200);
+    }
+  }
+
+  function startSpeech() {
+    const btn = document.getElementById('btnMic');
+    const badge = document.getElementById('statusBadge');
+    btn.classList.add('recording');
+    btn.innerHTML = '🔴 Recording... (Release to Send)';
+    badge.textContent = 'Status: Recording Audio';
+  }
+
+  function stopSpeech() {
+    const btn = document.getElementById('btnMic');
+    const badge = document.getElementById('statusBadge');
+    btn.classList.remove('recording');
+    btn.innerHTML = '🎙️ Hold to Speak Answer';
+    badge.textContent = 'Status: Evaluating Response';
+
+    setTimeout(() => {
+      addLog('Candidate', 'Audio answer submitted and evaluated against competency rubric.');
+      currentIdx++;
+      loadQuestion();
+      badge.textContent = 'Status: Ready';
+    }, 1000);
+  }
+
+  function submitText() {
+    const input = document.getElementById('typeInput');
+    const val = input.value.trim();
+    if (!val) return;
+    addLog('Candidate', val);
+    input.value = '';
+    currentIdx++;
+    loadQuestion();
+  }
+
+  function repeatQuestion() {
+    alert(`Interviewer: "${questions[currentIdx] || 'Completed.'}"`);
+  }
+
+  function addLog(speaker, text) {
+    const log = document.getElementById('transcriptLog');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const isAi = speaker === 'Interviewer';
+
+    const tag = document.createElement('span');
+    tag.className = `speaker-tag ${isAi ? 'ai' : 'cand'}`;
+    tag.textContent = `[${speaker.toUpperCase()}]`;
+
+    line.appendChild(tag);
+    line.appendChild(document.createTextNode(` ${text}`));
+
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function finishSession() {
+    alert('Interview transcript sealed! Multi-agent evaluation generated.');
+    window.location.href = `report.html?app_id=${encodeURIComponent(appId)}&session_id=${encodeURIComponent(sessionId)}`;
+  }
+
+  loadQuestion();
+</script>
+</body>
+</html>

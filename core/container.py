@@ -40,7 +40,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional
-
 from api.registry import SessionRegistry
 from core.config import AppSettings
 from core.logging import get_logger

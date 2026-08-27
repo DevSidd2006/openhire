@@ -23,7 +23,6 @@ websockets>=12.0
 # stubs, so this dependency being present does not change any existing
 # behaviour.
 asyncpg>=0.29.0
-
 # Optional dependencies
 openai>=1.0.0
 groq>=1.0.0  # P8B.3: PRIMARY real provider (required if LLM_PROVIDER=groq)
