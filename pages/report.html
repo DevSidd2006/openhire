@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Candidate Evaluation Report</title>
+<link rel="stylesheet" href="css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div style="max-width: 860px; margin: 0 auto;">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Candidate Evaluation Report</h2>
+        <p class="card-sub" id="reportMeta">Candidate: — | Application: —</p>
+      </div>
+      <button class="btn-outline" onclick="window.history.back()">Back</button>
+    </div>
+
+    <!-- Final Verdict Card -->
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1.5rem;">
+      <div>
+        <div style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Final Verdict</div>
+        <div id="reportRecommendation" style="font-size:1.5rem; font-weight:800; color:var(--success); margin-top:0.25rem;">STRONG HIRE</div>
+        <p id="reportSummary" class="card-sub" style="max-width:540px; margin-top:0.4rem;">
+          Candidate demonstrated clear technical mastery in distributed caching, zero-downtime database strategies, and strong structured problem-solving.
+        </p>
+      </div>
+      <div style="text-align:center;">
+        <div class="score-badge" id="reportScore" style="width:64px; height:64px; font-size:1.5rem;">89</div>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">Overall Weighted Score</div>
+      </div>
+    </div>
+
+    <!-- Multi-Agent Dimensional Scores -->
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="card-title" style="font-size:1rem; margin-bottom:1rem;">Agent Dimensional Breakdown</h3>
+        <div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.75rem; align-items:center;">
+            <div>
+              <strong>Technical Evaluator</strong>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Systems, Concurrency, Arch</div>
+            </div>
+            <span class="score-pill high">8.8 / 10</span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.75rem; align-items:center;">
+            <div>
+              <strong>Behavioral Evaluator</strong>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Communication & Teamwork</div>
+            </div>
+            <span class="score-pill high">9.0 / 10</span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.75rem; align-items:center;">
+            <div>
+              <strong>Resume Claim Auditor</strong>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Claim Verification Rate</div>
+            </div>
+            <span class="score-pill high">100% Match</span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.75rem; align-items:center;">
+            <div>
+              <strong>Anti-Bias Checker</strong>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Demographic & Rubric Safety</div>
+            </div>
+            <span class="score-pill high">Passed (Clean)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title" style="font-size:1rem; margin-bottom:1rem;">Integrity & Evidence Trail</h3>
+        <p class="card-sub" style="margin-bottom:0.75rem;">Verified Transcript Quotes:</p>
+        <div class="quote-box">
+          "Candidate correctly articulated cache invalidation trade-offs (write-through vs cache-aside) matching resume claim #2."
+        </div>
+        <div class="quote-box">
+          "Zero discrepancies detected between submitted resume milestones and live responses."
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+  renderNavbar();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const appId = urlParams.get('app_id') || 'app-01';
+
+  const apps = getStoredApplications();
+  const app = apps.find(a => a.application_id === appId) || {
+    candidate_name: 'Alex Morgan',
+    application_id: appId
+  };
+
+  document.getElementById('reportMeta').textContent = `Candidate: ${app.candidate_name} | Application ID: ${appId}`;
+</script>
+</body>
+</html>
