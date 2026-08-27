@@ -4,32 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Job Details</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="navbarContainer"></div>
 
 <main class="container">
-  <div class="card-header">
+  <div class="card-header" style="margin-bottom:1.5rem;">
     <div>
       <h2 class="card-title" id="jobTitle">Job Title</h2>
-      <p class="card-sub" id="jobMeta">Job ID: —</p>
+      <p class="card-sub" id="jobMeta">Role ID: —</p>
     </div>
     <div id="jobActions"></div>
   </div>
 
   <div class="grid-2">
     <div class="card">
-      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Required Competencies & Skills</h3>
-      <div id="jobCompetencies" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.5rem;"></div>
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Required Competencies</h3>
+      <div id="jobCompetencies" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:1.25rem;"></div>
       
-      <h4 style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.5rem;">Job Description</h4>
-      <p id="jobDescription" style="font-size:0.9rem; color:var(--text-main); white-space:pre-wrap;"></p>
+      <h4 style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.4rem;">Description</h4>
+      <p id="jobDescription" style="font-size:0.9rem; color:var(--text-main); white-space:pre-wrap; line-height:1.6;"></p>
     </div>
 
     <div class="card" id="jobSidebar">
-      <!-- Dynamic role card -->
+      <!-- Role sidebar action card -->
     </div>
   </div>
 </main>
@@ -51,12 +53,12 @@
   };
 
   document.getElementById('jobTitle').textContent = job.title || job.job_id;
-  document.getElementById('jobMeta').textContent = `Reference: ${job.job_id}`;
+  document.getElementById('jobMeta').textContent = `Role ID: ${job.job_id}`;
   document.getElementById('jobDescription').textContent = job.description;
 
   const compEl = document.getElementById('jobCompetencies');
   compEl.innerHTML = (job.competencies || ['Technical Assessment', 'Communication']).map(c => `
-    <span class="tag" style="background:var(--primary-glow); color:var(--primary); font-weight:600; padding:0.35rem 0.75rem;">
+    <span class="tag" style="background:var(--primary-subtle); color:var(--primary); font-weight:500; padding:0.25rem 0.6rem; border-color:rgba(59,130,246,0.2);">
       ✓ ${c}
     </span>
   `).join('');
@@ -66,21 +68,21 @@
 
   if (user && user.role === 'recruiter') {
     actionsEl.innerHTML = `
-      <button class="btn-primary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Inspect Leaderboard</button>
+      <button class="btn-primary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Leaderboard</button>
     `;
     sidebarEl.innerHTML = `
-      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Recruiter Panel</h3>
-      <p class="card-sub" style="margin-bottom:1.25rem;">Candidates submitting resumes will be evaluated automatically against this job rubric.</p>
-      <button class="btn-secondary" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">View Candidate Shortlist & Audits</button>
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
+      <p class="card-sub" style="margin-bottom:1rem;">Candidate submissions are evaluated against this rubric.</p>
+      <button class="btn-secondary" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Inspect Candidate Shortlist</button>
     `;
   } else {
     actionsEl.innerHTML = `
       <button class="btn-primary" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply Now</button>
     `;
     sidebarEl.innerHTML = `
-      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Submit Application</h3>
-      <p class="card-sub" style="margin-bottom:1.25rem;">Paste your resume to get matched by the Resume Matcher Agent and receive your AI voice interview invite.</p>
-      <button class="btn-primary" style="width:100%;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply with Resume</button>
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Ready to Apply?</h3>
+      <p class="card-sub" style="margin-bottom:1rem;">Submit your CV to match qualifications and generate your adaptive interview invite.</p>
+      <button class="btn-primary" style="width:100%;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Submit Resume Application</button>
     `;
   }
 </script>

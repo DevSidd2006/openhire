@@ -4,29 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Candidate Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="navbarContainer"></div>
 
 <main class="container">
-  <div class="card-header">
+  <div class="card-header" style="margin-bottom:1.5rem;">
     <div>
-      <h2 class="card-title">Candidate Hub</h2>
-      <p class="card-sub">Browse open roles, apply with your resume, and launch your adaptive voice interview.</p>
+      <h2 class="card-title">Candidate Dashboard</h2>
+      <p class="card-sub">Browse open drives, apply with your resume, and launch your voice interview.</p>
     </div>
   </div>
 
   <div class="card">
-    <h3 class="card-title" style="font-size:1.1rem; margin-bottom:1rem;">Available Job Positions</h3>
-    <div id="candidateJobList" class="grid-2">
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Available Positions</h3>
+      <span class="tag">Active</span>
+    </div>
+    <div id="candidateJobList" class="grid-2" style="margin-top:0.25rem;">
       <!-- Dynamic list -->
     </div>
   </div>
 
   <div class="card">
-    <h3 class="card-title" style="font-size:1.1rem; margin-bottom:1rem;">My Applications & Interviews</h3>
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">My Applications</h3>
+    </div>
     <div id="candidateApplicationsList">
       <!-- Applications list -->
     </div>
@@ -42,14 +49,14 @@
 
   listEl.innerHTML = jobs.map(job => `
     <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
-      <h4 style="font-weight:700; font-size:1.05rem; margin-bottom:0.4rem;">${job.title || job.job_id}</h4>
+      <h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem;">${job.title || job.job_id}</h4>
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
-        ${(job.description || '').substring(0, 110)}...
+        ${(job.description || '').substring(0, 100)}...
       </p>
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="tag">${(job.competencies || []).length} Competencies</span>
-        <button class="btn-primary" style="padding:0.35rem 0.85rem; font-size:0.8rem;" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
-          Apply Now
+        <span class="tag">${(job.competencies || []).length} Skills</span>
+        <button class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
+          Apply →
         </button>
       </div>
     </div>
@@ -59,17 +66,17 @@
   const appListEl = document.getElementById('candidateApplicationsList');
 
   if (!apps.length) {
-    appListEl.innerHTML = '<p class="card-sub">You have no active applications yet. Select a role above to apply!</p>';
+    appListEl.innerHTML = '<p class="card-sub">No active applications. Apply to a position above.</p>';
   } else {
     appListEl.innerHTML = apps.map(app => `
-      <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
         <div>
-          <h4 style="font-weight:700;">Role: ${app.job_id}</h4>
-          <p class="card-sub">Match Score: <strong style="color:var(--primary);">${app.match_score || 88}%</strong> | Status: <span class="tag">${app.status || 'SHORTLISTED'}</span></p>
+          <h4 style="font-weight:600;">Role: ${app.job_id}</h4>
+          <p class="card-sub">Match: <strong style="color:var(--primary); font-family:var(--font-mono);">${app.match_score || 88}%</strong> | Status: <span class="tag">${app.status || 'SHORTLISTED'}</span></p>
         </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button class="btn-primary" onclick="window.location.href='interview.html?session_id=${encodeURIComponent(app.session_id || 'sess-01')}&app_id=${encodeURIComponent(app.application_id)}'">🎙️ Launch AI Interview</button>
-          <button class="btn-outline" onclick="window.location.href='report.html?app_id=${encodeURIComponent(app.application_id)}'">View Report</button>
+        <div style="display:flex; gap:0.4rem;">
+          <button class="btn-primary" style="padding:0.35rem 0.8rem; font-size:12px;" onclick="window.location.href='interview.html?session_id=${encodeURIComponent(app.session_id || 'sess-01')}&app_id=${encodeURIComponent(app.application_id)}'">🎙️ Launch Interview</button>
+          <button class="btn-outline" style="padding:0.35rem 0.7rem; font-size:12px;" onclick="window.location.href='report.html?app_id=${encodeURIComponent(app.application_id)}'">Report</button>
         </div>
       </div>
     `).join('');

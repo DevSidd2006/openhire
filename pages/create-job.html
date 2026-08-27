@@ -3,25 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenHire — Post New Job</title>
+<title>OpenHire — Post Job</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="navbarContainer"></div>
 
 <main class="container">
-  <div style="max-width: 720px; margin: 0 auto;" class="card">
+  <div style="max-width: 680px; margin: 1.5rem auto;" class="card">
     <div class="card-header">
-      <h2 class="card-title">Post New Job Description</h2>
+      <div>
+        <h2 class="card-title">Post Job Description</h2>
+        <p class="card-sub">Extract technical competencies and rubrics using <code>JDAnalyzerAgent</code>.</p>
+      </div>
       <button class="btn-outline" onclick="window.location.href='recruiter.html'">Back</button>
     </div>
-    <p class="card-sub" style="margin-bottom:1.5rem;">
-      Paste your raw Job Description. The <code>JDAnalyzerAgent</code> extracts the competency rubric, core skills, and evaluation weights.
-    </p>
     
-    <div class="form-group">
-      <label class="form-label">Job Title / Identifier</label>
+    <div class="form-group" style="margin-top:1.25rem;">
+      <label class="form-label">Position Title</label>
       <input type="text" id="jobTitle" class="form-control" placeholder="e.g. Distributed Systems Engineer">
     </div>
 
@@ -30,13 +32,13 @@
       <textarea id="jobDescription" class="form-control" rows="8" placeholder="We are seeking an engineer experienced in Python, high-throughput microservices, PostgreSQL, and distributed caching..."></textarea>
     </div>
 
-    <button class="btn-primary" id="btnSubmit" style="width:100%;" onclick="handleJobCreate()">Analyze & Publish Position</button>
+    <button class="btn-primary" id="btnSubmit" style="width:100%; margin-top:0.5rem;" onclick="handleJobCreate()">Analyze & Publish Position</button>
   </div>
 </main>
 
 <script src="js/app.js"></script>
 <script>
-  renderNavbar('dashboard');
+  renderNavbar('create-job');
 
   function handleJobCreate() {
     const title = document.getElementById('jobTitle').value.trim();
@@ -48,7 +50,7 @@
 
     const btn = document.getElementById('btnSubmit');
     btn.disabled = true;
-    btn.textContent = 'Analyzing JD with Agent...';
+    btn.textContent = 'Analyzing JD...';
 
     const jobs = getStoredJobs();
     const newJob = {
