@@ -9,14 +9,22 @@ const API_BASE = '';
 
 /**
  * Thin fetch wrapper shared by every real backend call in this frontend.
- * JSON-encodes a non-string body, throws a plain Error with a
+ * JSON-encodes a plain-object body (and sets Content-Type: application/json
+ * for it); a `FormData` body (multipart file uploads - see
+ * pages/apply.html's resume upload) is passed through untouched, with NO
+ * Content-Type header set, so the browser can add its own `multipart/
+ * form-data; boundary=...` - setting that header manually is a classic way
+ * to silently corrupt a multipart upload. Throws a plain Error with a
  * human-readable `.message` (never a raw stack trace) on any network or
  * HTTP failure, and returns the parsed JSON body on success.
  */
 async function apiRequest(path, options = {}) {
   const opts = Object.assign({}, options);
-  opts.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
-  if (opts.body && typeof opts.body !== 'string') {
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  opts.headers = isFormData
+    ? Object.assign({}, options.headers || {})
+    : Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (opts.body && !isFormData && typeof opts.body !== 'string') {
     opts.body = JSON.stringify(opts.body);
   }
 

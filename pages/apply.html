@@ -28,9 +28,21 @@
     </div>
 
     <div class="form-group">
+      <label class="form-label">Upload Resume (PDF or DOCX)</label>
+      <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">
+        Uploading extracts your resume's text and runs it through <code>ResumeParserAgent</code> automatically - review the result below before submitting. Only .pdf and .docx are supported (not legacy .doc).
+      </p>
+      <div style="display:flex; gap:0.5rem;">
+        <input type="file" id="resumeFile" class="form-control" accept=".pdf,.docx" style="flex:1;">
+        <button class="btn-secondary" id="btnParseFile" onclick="handleResumeFileUpload()">Parse File</button>
+      </div>
+      <div id="resumePreview" style="display:none; margin-top:0.75rem; padding:0.75rem 0.9rem; background:var(--bg); border:1px solid var(--surface-border); border-radius:var(--radius); font-size:0.85rem;"></div>
+    </div>
+
+    <div class="form-group">
       <label class="form-label">Resume / CV Plaintext</label>
       <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">
-        Paste your resume text. <code>ResumeParserAgent</code> will extract skills, education, and project claims.
+        Uploading a file above fills this in automatically - review and edit it here before submitting, or paste your resume text directly.
       </p>
       <textarea id="resumeText" class="form-control" rows="9" placeholder="EXPERIENCE&#10;Software Engineer @ Acme Corp...&#10;&#10;SKILLS&#10;Python, FastAPI, Distributed Caching, PostgreSQL, Docker..."></textarea>
     </div>
@@ -53,6 +65,55 @@
   const user = getCurrentUser();
   if (user && user.name) {
     document.getElementById('candidateName').value = user.name;
+  }
+
+  async function handleResumeFileUpload() {
+    const fileInput = document.getElementById('resumeFile');
+    const file = fileInput.files[0];
+    if (!file) {
+      alert('Choose a .pdf or .docx file first.');
+      return;
+    }
+    const name = document.getElementById('candidateName').value.trim();
+    if (!name) {
+      alert('Enter your full name first - the resume parser needs it (it does not detect a name from the document itself).');
+      return;
+    }
+
+    const btn = document.getElementById('btnParseFile');
+    btn.disabled = true;
+    btn.textContent = 'Extracting & parsing…';
+
+    try {
+      const formData = new FormData();
+      formData.append('resume_file', file);
+      formData.append('candidate_name', name);
+      const result = await apiRequest('/candidates/parse-resume-file', {
+        method: 'POST',
+        body: formData,
+      });
+
+      document.getElementById('resumeText').value = result.resume_text;
+
+      const r = result.parsed_resume;
+      const previewEl = document.getElementById('resumePreview');
+      previewEl.style.display = 'block';
+      previewEl.innerHTML = `
+        <div style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.4rem;">Extracted from ${r.source_format ? r.source_format.toUpperCase() : 'document'}${result.used_fallback ? ' (fallback parser)' : ''}</div>
+        <div style="margin-bottom:0.3rem;"><strong>Contact:</strong> ${r.email || '—'} ${r.phone ? '· ' + r.phone : ''}</div>
+        <div style="margin-bottom:0.3rem;"><strong>Experience:</strong> ${r.total_experience_years != null ? r.total_experience_years + ' years' : 'not detected'}</div>
+        <div style="margin-bottom:0.3rem;"><strong>Education:</strong> ${r.education.length ? r.education.map(e => `${e.degree} · ${e.institution}`).join('; ') : 'not detected'}</div>
+        <div style="display:flex; gap:0.3rem; flex-wrap:wrap; margin-top:0.4rem;">
+          ${r.skills.length ? r.skills.map(s => `<span class="tag">${s}</span>`).join('') : '<span class="card-sub">No skills detected.</span>'}
+        </div>
+        <p class="card-sub" style="margin-top:0.5rem;">Review the resume text below - fix anything that extracted incorrectly before submitting.</p>
+      `;
+    } catch (err) {
+      alert(`Could not parse this resume: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Parse File';
+    }
   }
 
   async function handleApplicationSubmit() {

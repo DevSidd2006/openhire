@@ -126,8 +126,8 @@
       </div>
 
       <div style="display:flex; justify-content:center; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-        <button class="mic-button" id="btnMic" 
-                onmousedown="startSpeech()" onmouseup="stopSpeech()"
+        <button class="mic-button" id="btnMic" disabled
+                onmousedown="startSpeech()" onmouseup="stopSpeech()" onmouseleave="stopSpeech()"
                 ontouchstart="startSpeech()" ontouchend="stopSpeech()">
           🎙️ Hold to Speak Answer
         </button>
@@ -175,12 +175,17 @@
   }
 
   function showQuestion(question, questionsAsked) {
-    currentQuestion = question;
     if (!question) return;
+    // Both transports can report the SAME current question (a REST GET on
+    // load, then a WS "speak_question" reply) - only log it once.
+    const isSameQuestion = currentQuestion && currentQuestion.question_id === question.question_id;
+    currentQuestion = question;
     document.getElementById('qCounter').textContent =
       `QUESTION ${questionsAsked}${maxQuestions ? ' OF ' + maxQuestions : ''} • ADAPTIVE PROBE`;
     document.getElementById('currentQText').textContent = question.question_text;
-    addLog('Interviewer', question.question_text);
+    if (!isSameQuestion) {
+      addLog('Interviewer', question.question_text);
+    }
   }
 
   function endInterview(terminationReason) {
@@ -190,6 +195,9 @@
     setStatus('Evaluating');
     document.getElementById('typeInput').disabled = true;
     document.getElementById('btnMic').disabled = true;
+    if (voice.ws) {
+      voice.ws.close();
+    }
     addLog('System', `Interview sealed${terminationReason ? ' (' + terminationReason + ')' : ''}. Transcript is now immutable.`);
     setTimeout(() => {
       window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
@@ -211,30 +219,223 @@
       }
       showQuestion(state.current_question, state.progress ? state.progress.questions_asked : 0);
       setStatus('Ready');
+      voice.connect();
     } catch (err) {
       document.getElementById('currentQText').textContent = `Could not load this interview: ${err.message}`;
       setStatus('Error');
     }
   }
 
+  async function refreshProgressAfter(nextQuestion) {
+    // Re-read the session for the authoritative questions_asked counter
+    // rather than tracking it by hand on the client - shared by the text
+    // and voice answer paths so the counter logic lives in one place.
+    const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+    showQuestion(nextQuestion, state.progress ? state.progress.questions_asked : 0);
+  }
+
+  // ---------------------------------------------------------------------
+  // Voice: reuses the EXISTING WebSocket interview transport
+  // (api/routes/voice.py, WS /ws/sessions/{id}) and the EXISTING push-to-
+  // talk audio capture/encoding from pages/voice-interview.html - not a
+  // second implementation. That endpoint drives the SAME
+  // InterviewService/InterviewSessionRunner the text answers above call,
+  // so there is exactly one interview engine, one transcript, one
+  // evaluation regardless of which transport answered a given question.
+  // ---------------------------------------------------------------------
+  const voice = (() => {
+    const TARGET_RATE = 16000;
+    let ws = null, stream = null, audioCtx = null, node = null, source = null;
+    let pcmChunks = [], capturing = false, sourceRate = 48000;
+
+    function downsampleTo16k(input, inputRate) {
+      if (inputRate === TARGET_RATE) return input;
+      const ratio = inputRate / TARGET_RATE;
+      const outLength = Math.floor(input.length / ratio);
+      const out = new Float32Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        const start = Math.floor(i * ratio);
+        const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+        let sum = 0, n = 0;
+        for (let j = start; j < end; j++) { sum += input[j]; n++; }
+        out[i] = n ? sum / n : 0;
+      }
+      return out;
+    }
+
+    function encodeWav(float32, sampleRate) {
+      const bytesPerSample = 2;
+      const dataSize = float32.length * bytesPerSample;
+      const buf = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buf);
+      const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+      w(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      w(8, 'WAVE');
+      w(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * bytesPerSample, true);
+      view.setUint16(32, bytesPerSample, true);
+      view.setUint16(34, 16, true);
+      w(36, 'data');
+      view.setUint32(40, dataSize, true);
+      let off = 44;
+      for (let i = 0; i < float32.length; i++, off += 2) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+      return buf;
+    }
+
+    function b64(buf) {
+      let s = '', bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s);
+    }
+
+    function play(b64audio, format) {
+      if (!b64audio) return;
+      const bin = atob(b64audio);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
+      new Audio(URL.createObjectURL(blob)).play().catch(() => {
+        addLog('System', '(browser blocked autoplay for the question audio — click anywhere on the page, then Replay)');
+      });
+    }
+
+    function connect() {
+      if (!sessionId || ended) return;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${encodeURIComponent(sessionId)}`);
+
+      ws.onopen = () => {
+        document.getElementById('btnMic').disabled = false;
+        ws.send(JSON.stringify({ type: 'speak_question' }));
+      };
+      ws.onclose = () => {
+        document.getElementById('btnMic').disabled = true;
+      };
+      ws.onerror = () => {
+        document.getElementById('btnMic').disabled = true;
+        if (!ended) {
+          addLog('System', 'Voice connection unavailable — you can still type your answers below.');
+        }
+      };
+      ws.onmessage = async (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch (e) {
+          addLog('System', 'Received a malformed message from the voice channel — ignoring it.');
+          return;
+        }
+        if (msg.type === 'error') {
+          addLog('System', `Voice error: ${msg.error}${msg.detail ? ' — ' + msg.detail : ''}`);
+          setStatus('Ready');
+          return;
+        }
+        if (msg.outcome === 'no_speech_detected') {
+          addLog('System', '(no speech detected — please try answering again)');
+          setStatus('Ready');
+          return;
+        }
+        if (msg.transcript) {
+          addLog('Candidate', msg.transcript);
+        }
+        if (msg.tts_error) {
+          addLog('System', '(question audio unavailable — showing text only)');
+        }
+        if (msg.status === 'sealed') {
+          endInterview(msg.termination_reason);
+        } else if (msg.next_question) {
+          await refreshProgressAfter(msg.next_question);
+          setStatus('Ready');
+        }
+        play(msg.question_audio_base64, msg.audio_format);
+      };
+    }
+
+    async function startRecording() {
+      if (!ws || ws.readyState !== WebSocket.OPEN || capturing || ended) return;
+      try {
+        stream = stream || await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        });
+      } catch (e) {
+        addLog('System', 'Microphone permission denied — please type your answer below.');
+        return;
+      }
+
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      sourceRate = audioCtx.sampleRate;
+
+      pcmChunks = [];
+      capturing = true;
+      source = audioCtx.createMediaStreamSource(stream);
+      node = audioCtx.createScriptProcessor(4096, 1, 1);
+      node.onaudioprocess = (e) => {
+        if (!capturing) return;
+        pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      source.connect(node);
+      const mute = audioCtx.createGain();
+      mute.gain.value = 0;
+      node.connect(mute);
+      mute.connect(audioCtx.destination);
+
+      const btn = document.getElementById('btnMic');
+      btn.classList.add('recording');
+      btn.innerHTML = '🔴 Recording... (Release to Send)';
+      setStatus('Recording Audio');
+    }
+
+    function stopRecording() {
+      const btn = document.getElementById('btnMic');
+      btn.classList.remove('recording');
+      btn.innerHTML = '🎙️ Hold to Speak Answer';
+      if (!capturing) return;
+      capturing = false;
+      try { source && source.disconnect(); node && node.disconnect(); } catch (e) {}
+
+      const total = pcmChunks.reduce((n, c) => n + c.length, 0);
+      if (!total) { setStatus('Ready'); return; }
+      const merged = new Float32Array(total);
+      let off = 0;
+      for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
+
+      const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
+      addLog('System', '(processing your answer…)');
+      setStatus('Evaluating Response');
+      ws.send(JSON.stringify({
+        type: 'answer',
+        audio_base64: b64(wav),
+        audio_format: 'wav',
+        utterance_id: crypto.randomUUID(),
+      }));
+    }
+
+    function replay() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'speak_question' }));
+        return true;
+      }
+      return false;
+    }
+
+    return { connect, startRecording, stopRecording, replay, get ws() { return ws; } };
+  })();
+
   function startSpeech() {
-    const btn = document.getElementById('btnMic');
-    const badge = document.getElementById('statusBadge');
-    btn.classList.add('recording');
-    btn.innerHTML = '🔴 Recording... (Release to Send)';
-    badge.textContent = 'Status: Recording Audio';
+    voice.startRecording();
   }
 
   function stopSpeech() {
-    const btn = document.getElementById('btnMic');
-    btn.classList.remove('recording');
-    btn.innerHTML = '🎙️ Hold to Speak Answer';
-    setStatus('Ready');
-    // Voice capture is not wired up in this build (see voice-interview.html
-    // for the real WebSocket/Azure Speech integration) - be honest about
-    // that rather than fabricating a submitted answer. Text is the real
-    // path here.
-    addLog('System', 'Voice capture is not connected in this demo build — please type your answer below.');
+    voice.stopRecording();
   }
 
   async function submitAnswer(answerText) {
@@ -250,10 +451,7 @@
         endInterview(result.termination_reason);
         return;
       }
-      // Re-read the session for the authoritative questions_asked counter
-      // rather than tracking it by hand on the client.
-      const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
-      showQuestion(result.next_question, state.progress ? state.progress.questions_asked : 0);
+      await refreshProgressAfter(result.next_question);
       setStatus('Ready');
     } catch (err) {
       addLog('System', `Could not submit that answer: ${err.message}`);
@@ -270,6 +468,7 @@
   }
 
   function repeatQuestion() {
+    if (voice.replay()) return;
     alert(`Interviewer: "${currentQuestion ? currentQuestion.question_text : 'Completed.'}"`);
   }
 
