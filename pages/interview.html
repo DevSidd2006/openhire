@@ -227,7 +227,14 @@
     const line = document.createElement('div');
     line.className = 'log-line';
     const isAi = speaker === 'Interviewer';
-    line.innerHTML = `<span class="speaker-tag ${isAi ? 'ai' : 'cand'}">[${speaker.toUpperCase()}]</span> ${text}`;
+
+    const tag = document.createElement('span');
+    tag.className = `speaker-tag ${isAi ? 'ai' : 'cand'}`;
+    tag.textContent = `[${speaker.toUpperCase()}]`;
+
+    line.appendChild(tag);
+    line.appendChild(document.createTextNode(` ${text}`));
+
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
   }
