@@ -16,6 +16,9 @@ httpx>=0.27  # also used by FastAPI's TestClient, and by the P9 Azure Speech pro
 # azure-cognitiveservices-speech wheel - see that module's docstring.
 websockets>=12.0
 
+# Database
+asyncpg>=0.29.0
+
 # Optional dependencies
 openai>=1.0.0
 groq>=1.0.0  # P8B.3: PRIMARY real provider (required if LLM_PROVIDER=groq)

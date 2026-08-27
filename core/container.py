@@ -34,7 +34,7 @@ to two lines here and nowhere else.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from api.registry import SessionRegistry
 from core.config import AppSettings
@@ -171,18 +171,42 @@ class ServiceContainer:
                 )
 
 
-def build_default_container(settings: AppSettings) -> ServiceContainer:
+def build_default_container(
+    settings: AppSettings,
+    db_pool: Optional[Any] = None,
+) -> ServiceContainer:
     """Compose the application's dependencies.
 
-    ------------------------------------------------------------------
-    THE DATABASE REPLACEMENT POINT.
-
-    The two repository constructions below are the temporary in-process
-    stubs. Replace them with the database-backed implementations when the
-    schema lands, and set `persistence_is_ephemeral=False`. Nothing else in
-    the backend needs to change.
-    ------------------------------------------------------------------
+    If a PostgreSQL connection pool is provided (or DATABASE_URL is set),
+    instantiates persistent PostgreSQL repositories. Otherwise falls back
+    to in-memory temporary adapters.
     """
+    from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
+
+    if db_pool is not None:
+        from repositories.postgres import (
+            PostgresApplicationRepository,
+            PostgresCandidateRepository,
+            PostgresEvaluationRepository,
+            PostgresJobRepository,
+            PostgresSessionRepository,
+            PostgresTranscriptRepository,
+        )
+
+        logger.info("persistence is DURABLE: using PostgreSQL repositories.")
+        return ServiceContainer(
+            settings=settings,
+            session_repository=PostgresSessionRepository(db_pool),
+            transcript_repository=PostgresTranscriptRepository(db_pool),
+            job_repository=PostgresJobRepository(db_pool),
+            candidate_repository=PostgresCandidateRepository(db_pool),
+            application_repository=PostgresApplicationRepository(db_pool),
+            evaluation_repository=PostgresEvaluationRepository(db_pool),
+            evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
+            auth_provider=AnonymousAuthProvider(),
+            persistence_is_ephemeral=False,
+        )
+
     from repositories.memory import (
         EPHEMERAL_BACKEND_NAME,
         InMemoryApplicationRepository,
@@ -192,7 +216,6 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         InMemorySessionRepository,
         InMemoryTranscriptRepository,
     )
-    from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
 
     logger.warning(
         "persistence is EPHEMERAL: using %s. Interview session records, "
