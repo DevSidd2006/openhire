@@ -16,6 +16,14 @@ httpx>=0.27  # also used by FastAPI's TestClient, and by the P9 Azure Speech pro
 # azure-cognitiveservices-speech wheel - see that module's docstring.
 websockets>=12.0
 
+# Database chunk: PostgreSQL-backed repositories (repositories/postgres/).
+# Only imported when AppSettings.database_url is set - see
+# core/container.py:build_default_container. Every existing test leaves
+# DATABASE_URL unset and keeps using repositories/memory.py's in-process
+# stubs, so this dependency being present does not change any existing
+# behaviour.
+asyncpg>=0.29.0
+
 # Optional dependencies
 openai>=1.0.0
 groq>=1.0.0  # P8B.3: PRIMARY real provider (required if LLM_PROVIDER=groq)

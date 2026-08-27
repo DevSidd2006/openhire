@@ -28,13 +28,18 @@ replaces the registry the services use. The container is additive.
 Construction is the only place stubs are named
 -----------------------------------------------
 `build_default_container()` is the single site that mentions
-`repositories.memory`. Swapping in the database implementation is a change
-to two lines here and nowhere else.
+`repositories.memory` or `repositories.postgres`. Which one gets built is
+governed entirely by `AppSettings.database_url`: empty selects the
+in-process stubs (every existing deployment and test), set selects the real
+PostgreSQL-backed repositories (repositories/postgres/). Nothing else in
+the backend - no service, no route, no other part of this file - needs to
+know or care which one is in use; both sides satisfy the exact same ABCs
+from repositories/interfaces.py.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from api.registry import SessionRegistry
 from core.config import AppSettings
@@ -48,6 +53,12 @@ from repositories.interfaces import (
     SessionRepository,
     TranscriptRepository,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
+    # Deferred so this module (imported unconditionally at startup) does
+    # not require asyncpg to be installed unless a database is actually
+    # configured - see build_default_container below.
+    from repositories.postgres import PostgresConnectionPool
 from services.evaluation_dispatcher import EvaluationDispatcher
 
 logger = get_logger("core.container")
@@ -86,6 +97,13 @@ class ServiceContainer:
     # stubs. Surfaced on /health and warned about at startup - see
     # repositories/memory.py.
     persistence_is_ephemeral: bool = True
+
+    # The shared PostgreSQL connection pool, when `settings.database_url`
+    # is set - None while running on the in-memory stubs. Held here (rather
+    # than only inside the repositories that use it) purely so `aclose()`
+    # can release it at shutdown; nothing else in the backend touches this
+    # field directly.
+    database_pool: Optional[PostgresConnectionPool] = None
 
     # The runtime registry of live InterviewSessionRunner objects. Optional
     # because the canonical location remains `app.state.registry` (see the
@@ -158,6 +176,7 @@ class ServiceContainer:
             "evaluation_repository",
             "evaluation_dispatcher",
             "auth_provider",
+            "database_pool",
         ):
             component = getattr(self, name, None)
             closer = getattr(component, "aclose", None)
@@ -177,12 +196,54 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
     ------------------------------------------------------------------
     THE DATABASE REPLACEMENT POINT.
 
-    The two repository constructions below are the temporary in-process
-    stubs. Replace them with the database-backed implementations when the
-    schema lands, and set `persistence_is_ephemeral=False`. Nothing else in
-    the backend needs to change.
+    Which repositories get built is governed by exactly one thing:
+    `settings.database_url`. Empty (the default - no existing deployment or
+    test sets it) means the temporary in-process stubs from
+    repositories/memory.py, unchanged from before this database chunk
+    landed. Set means the real repositories/postgres implementations,
+    sharing one lazily-opened connection pool. Nothing else in the backend
+    needs to change either way - every caller only ever sees the
+    repository ABCs from repositories/interfaces.py.
     ------------------------------------------------------------------
     """
+    from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
+
+    logger.warning(
+        "evaluation background execution is TEMPORARY local asyncio "
+        "(services/evaluation_dispatcher.py) - an evaluation still RUNNING "
+        "when the process exits is abandoned, not resumed. Replace with a "
+        "durable queue/worker in core/container.build_default_container()."
+    )
+
+    if settings.database_url:
+        from repositories.postgres import (
+            POSTGRES_BACKEND_NAME,
+            PostgresApplicationRepository,
+            PostgresCandidateRepository,
+            PostgresConnectionPool,
+            PostgresEvaluationRepository,
+            PostgresJobRepository,
+            PostgresSessionRepository,
+            PostgresTranscriptRepository,
+        )
+
+        logger.info("persistence backend: %s", POSTGRES_BACKEND_NAME)
+        pool = PostgresConnectionPool(settings.database_url)
+
+        return ServiceContainer(
+            settings=settings,
+            session_repository=PostgresSessionRepository(pool),
+            transcript_repository=PostgresTranscriptRepository(pool),
+            job_repository=PostgresJobRepository(pool),
+            candidate_repository=PostgresCandidateRepository(pool),
+            application_repository=PostgresApplicationRepository(pool),
+            evaluation_repository=PostgresEvaluationRepository(pool),
+            evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
+            auth_provider=AnonymousAuthProvider(),
+            persistence_is_ephemeral=False,
+            database_pool=pool,
+        )
+
     from repositories.memory import (
         EPHEMERAL_BACKEND_NAME,
         InMemoryApplicationRepository,
@@ -192,20 +253,13 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         InMemorySessionRepository,
         InMemoryTranscriptRepository,
     )
-    from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
 
     logger.warning(
         "persistence is EPHEMERAL: using %s. Interview session records, "
         "sealed transcripts, jobs, candidates, applications and evaluation "
-        "jobs will not survive a restart. Replace in "
-        "core/container.build_default_container().",
+        "jobs will not survive a restart. Set DATABASE_URL to use "
+        "repositories/postgres instead.",
         EPHEMERAL_BACKEND_NAME,
-    )
-    logger.warning(
-        "evaluation background execution is TEMPORARY local asyncio "
-        "(services/evaluation_dispatcher.py) - an evaluation still RUNNING "
-        "when the process exits is abandoned, not resumed. Replace with a "
-        "durable queue/worker in core/container.build_default_container()."
     )
 
     return ServiceContainer(
