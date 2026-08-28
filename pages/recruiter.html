@@ -36,28 +36,43 @@
 <script>
   renderNavbar('dashboard');
 
-  const jobs = getStoredJobs();
   const listEl = document.getElementById('recruiterJobList');
+  listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
 
-  listEl.innerHTML = jobs.map(job => `
-    <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem;">
-        <h4 style="font-weight:600; font-size:1rem;">${job.title || job.job_id}</h4>
-        <span class="tag">${job.job_id}</span>
-      </div>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
-        ${(job.description || '').substring(0, 100)}...
-      </p>
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
-          ${(job.competencies || ['Technical']).slice(0, 3).map(c => `<span class="tag">${c}</span>`).join('')}
+  (async () => {
+    let jobs;
+    try {
+      jobs = await fetchJobs();
+    } catch (err) {
+      listEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load jobs: ${err.message}</p>`;
+      return;
+    }
+
+    if (!jobs.length) {
+      listEl.innerHTML = '<p class="card-sub">No postings yet. Click "+ Post Job" to create one.</p>';
+      return;
+    }
+
+    listEl.innerHTML = jobs.map(job => `
+      <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem;">
+          <h4 style="font-weight:600; font-size:1rem;">${job.title || job.job_id}</h4>
+          <span class="tag">${job.job_id}</span>
         </div>
-        <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="event.stopPropagation(); window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">
-          Leaderboard
-        </button>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+          ${(job.description || '').substring(0, 100)}...
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+            ${(job.competencies || ['Technical']).slice(0, 3).map(c => `<span class="tag">${c}</span>`).join('')}
+          </div>
+          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="event.stopPropagation(); window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">
+            Leaderboard
+          </button>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  })();
 </script>
 </body>
 </html>

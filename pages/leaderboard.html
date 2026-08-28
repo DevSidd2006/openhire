@@ -52,48 +52,71 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
+  const tbody = document.getElementById('leaderboardTableBody');
+
   if (jobId) {
     document.getElementById('leaderboardMeta').textContent = `Ranked applicants for role: ${jobId}`;
+  } else {
+    document.getElementById('leaderboardMeta').textContent = 'No job selected.';
+    tbody.innerHTML = '<tr><td colspan="7" class="card-sub">Open this page from a specific job (Recruiter Dashboard → a posting → Leaderboard) to see its ranked candidates.</td></tr>';
   }
 
-  function loadLeaderboard() {
-    const apps = getStoredApplications();
-    const defaultCandidates = [
-      { candidate_name: "Alex Morgan", match_score: 94, final_score: 89, recommendation: "STRONG HIRE", flags: "0 Flags", application_id: "app-01" },
-      { candidate_name: "Jordan Lee", match_score: 88, final_score: 84, recommendation: "HIRE", flags: "0 Flags", application_id: "app-02" },
-      { candidate_name: "Sam Taylor", match_score: 79, final_score: 73, recommendation: "REVIEW", flags: "1 Discrepancy", application_id: "app-03" }
-    ];
+  async function loadLeaderboard() {
+    if (!jobId) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="card-sub">Loading leaderboard…</td></tr>';
+    try {
+      const data = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/leaderboard`);
+      const entries = data.leaderboard.entries || [];
+      const incomplete = data.leaderboard.incomplete_candidates || [];
 
-    const displayList = apps.length ? apps.map((a, idx) => ({
-      candidate_name: a.candidate_name,
-      match_score: a.match_score || 88,
-      final_score: a.final_score || 87,
-      recommendation: a.recommendation || "STRONG HIRE",
-      flags: "0 Flags",
-      application_id: a.application_id
-    })).concat(defaultCandidates) : defaultCandidates;
+      if (!entries.length && !incomplete.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="card-sub">No shortlisted candidates yet for this job.</td></tr>';
+        return;
+      }
 
-    const tbody = document.getElementById('leaderboardTableBody');
-    tbody.innerHTML = displayList.map((c, idx) => `
-      <tr>
-        <td style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">#${idx + 1}</td>
-        <td><strong style="color:var(--text-main);">${c.candidate_name}</strong></td>
-        <td><span class="score-pill high">${c.match_score}%</span></td>
-        <td><span class="score-pill high">${c.final_score}</span></td>
-        <td><span class="tag" style="color:var(--success); border-color:rgba(16,185,129,0.25); font-weight:500;">${c.recommendation}</span></td>
-        <td><span style="font-size:11.5px; font-family:var(--font-mono); color:${c.flags.includes('0') ? 'var(--success)' : 'var(--warning)'};">${c.flags}</span></td>
-        <td>
-          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="window.location.href='report.html?app_id=${encodeURIComponent(c.application_id)}'">
-            Report →
-          </button>
-        </td>
-      </tr>
-    `).join('');
+      const rows = entries.map((c, idx) => `
+        <tr>
+          <td style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">#${c.rank}</td>
+          <td><strong style="color:var(--text-main);">${c.candidate_name}</strong></td>
+          <td><span class="score-pill high">${c.job_fit_score.toFixed(1)}/10</span></td>
+          <td><span class="score-pill high">${c.weighted_score.toFixed(1)}</span></td>
+          <td><span class="tag" style="color:var(--success); border-color:rgba(16,185,129,0.25); font-weight:500;">${c.recommendation.replace(/_/g, ' ')}</span></td>
+          <td><span style="font-size:11.5px; font-family:var(--font-mono); color:${(c.has_integrity_issues || c.has_bias_concerns) ? 'var(--warning)' : 'var(--success)'};">${(c.has_integrity_issues || c.has_bias_concerns) ? 'Flagged' : '0 Flags'}</span></td>
+          <td>
+            <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="window.location.href='report.html?job_id=${encodeURIComponent(jobId)}&candidate_id=${encodeURIComponent(c.candidate_id)}'">
+              Report →
+            </button>
+          </td>
+        </tr>
+      `);
+
+      const incompleteRows = incomplete.map(candidateId => `
+        <tr>
+          <td>—</td>
+          <td><strong style="color:var(--text-main);">${candidateId}</strong></td>
+          <td colspan="4" class="card-sub">Evaluation not yet complete</td>
+          <td></td>
+        </tr>
+      `);
+
+      tbody.innerHTML = rows.concat(incompleteRows).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="card-sub" style="color:var(--danger, #ef4444);">Could not load leaderboard: ${err.message}</td></tr>`;
+    }
   }
 
-  function reMatchShortlist() {
-    alert('Executed Resume Matcher across candidates. Ranks refreshed!');
-    loadLeaderboard();
+  async function reMatchShortlist() {
+    if (!jobId) {
+      alert('Select a job first.');
+      return;
+    }
+    try {
+      const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
+      alert(`Matcher ran: ${result.matched} matched, ${result.shortlisted} shortlisted, ${result.rejected} rejected.`);
+      loadLeaderboard();
+    } catch (err) {
+      alert(`Could not run the matcher: ${err.message}`);
+    }
   }
 
   loadLeaderboard();

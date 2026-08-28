@@ -848,12 +848,16 @@ function viewJobDetail(jobId) {
 }
 
 function startApply(jobId) {
-  currentActiveJobId = jobId;
-  document.getElementById('applyJobTitle').textContent = `Target Role: ${jobId}`;
-  if (currentUser && currentUser.name) {
-    document.getElementById('applyCandidateName').value = currentUser.name;
-  }
-  navigateTo('apply');
+  // This portal's own in-page "apply" view (view-apply, above) is a
+  // client-side mock with no real backend calls - job listings here come
+  // from the hardcoded clientCache, not GET /jobs, so there is no real
+  // job_id to submit an application against from inside this page. Rather
+  // than duplicate a second real upload/parse/apply implementation here,
+  // hand off to apply.html, which already has the real file-upload ->
+  // ResumeParserAgent (incl. OCR fallback) -> review/edit -> real
+  // POST /candidates + /applications + matching flow, fully wired and
+  // verified. See the resume-upload frontend-integration task for why.
+  window.location.href = `apply.html?job_id=${encodeURIComponent(jobId)}`;
 }
 
 async function submitApplication() {

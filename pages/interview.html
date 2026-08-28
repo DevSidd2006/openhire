@@ -358,9 +358,15 @@
         <div class="ai-orb" id="aiOrbIcon">🤖</div>
       </div>
 
-      <div style="margin-top: 1.5rem; text-align:center;">
-        <h3 style="font-weight:600; font-size:1.1rem; margin-bottom:0.25rem;">OpenHire AI Interviewer</h3>
-        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubPrompt">Adaptive Technical Evaluator</p>
+      <div style="display:flex; justify-content:center; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+        <button class="mic-button" id="btnMic" disabled
+                onmousedown="startSpeech()" onmouseup="stopSpeech()" onmouseleave="stopSpeech()"
+                ontouchstart="startSpeech()" ontouchend="stopSpeech()">
+          🎙️ Hold to Speak Answer
+        </button>
+        <button class="btn-secondary" onclick="repeatQuestion()">
+          🔊 Replay
+        </button>
       </div>
 
       <div class="tile-tag">
@@ -434,142 +440,315 @@
   renderNavbar();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const sessionId = urlParams.get('session_id') || ('sess-' + Date.now().toString().slice(-6));
-  const appId = urlParams.get('app_id') || 'app-01';
+  const sessionId = urlParams.get('session_id');
+  const appId = urlParams.get('app_id') || '';
 
-  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId}`;
+  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId || '—'}`;
 
-  const currentUser = getCurrentUser();
-  if (currentUser && currentUser.name) {
-    document.getElementById('candidateDisplayName').textContent = `${currentUser.name} (You)`;
-    document.getElementById('candidateTagText').textContent = `${currentUser.name} (Candidate)`;
-    const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-    document.getElementById('userFallbackAvatar').textContent = initials || 'ME';
+  let currentQuestion = null;
+  let maxQuestions = 0;
+  let ended = false;
+
+  function setStatus(text) {
+    document.getElementById('statusBadge').textContent = `Status: ${text}`;
   }
 
-  const questions = [
-    "How do you design high-concurrency microservices and resolve caching race hazards in distributed systems?",
-    "What is your approach to performing zero-downtime database schema migrations in production?",
-    "Describe a technical trade-off where you had to balance latency versus consistency."
-  ];
-  let currentIdx = 0;
-  let isSpeakingAI = false;
-  let videoStream = null;
-
-  function loadQuestion() {
-    if (currentIdx < questions.length) {
-      document.getElementById('qCounter').textContent = `Q${currentIdx + 1} OF ${questions.length}`;
-      document.getElementById('currentQText').textContent = questions[currentIdx];
-      addLog('Interviewer', questions[currentIdx]);
-      triggerAISpeaking(questions[currentIdx]);
-    } else {
-      document.getElementById('currentQText').textContent = "Interview finished! Compiling agent scorecard...";
-      document.getElementById('statusBadge').textContent = 'Scoring';
-      setTimeout(finishSession, 1200);
+  function showQuestion(question, questionsAsked) {
+    if (!question) return;
+    // Both transports can report the SAME current question (a REST GET on
+    // load, then a WS "speak_question" reply) - only log it once.
+    const isSameQuestion = currentQuestion && currentQuestion.question_id === question.question_id;
+    currentQuestion = question;
+    document.getElementById('qCounter').textContent =
+      `QUESTION ${questionsAsked}${maxQuestions ? ' OF ' + maxQuestions : ''} • ADAPTIVE PROBE`;
+    document.getElementById('currentQText').textContent = question.question_text;
+    if (!isSameQuestion) {
+      addLog('Interviewer', question.question_text);
     }
   }
 
-  function triggerAISpeaking(text) {
-    const aiTile = document.getElementById('aiTile');
-    const aiState = document.getElementById('aiSpeechState');
-    const aiSub = document.getElementById('aiSubPrompt');
-    
-    isSpeakingAI = true;
-    aiTile.classList.add('speaking');
-    aiState.textContent = 'Speaking...';
-    aiState.style.color = 'var(--primary)';
-    aiSub.textContent = 'Asking question...';
-
-    // Simulate speaking duration based on length
-    const duration = Math.min(Math.max(text.length * 40, 2500), 5000);
+  function endInterview(terminationReason) {
+    ended = true;
+    document.getElementById('currentQText').textContent =
+      'Interview completed. Finalizing multi-agent evaluation...';
+    setStatus('Evaluating');
+    document.getElementById('typeInput').disabled = true;
+    document.getElementById('btnMic').disabled = true;
+    if (voice.ws) {
+      voice.ws.close();
+    }
+    addLog('System', `Interview sealed${terminationReason ? ' (' + terminationReason + ')' : ''}. Transcript is now immutable.`);
     setTimeout(() => {
-      aiTile.classList.remove('speaking');
-      aiState.textContent = 'Listening';
-      aiState.style.color = 'var(--text-muted)';
-      aiSub.textContent = 'Awaiting candidate response';
-      isSpeakingAI = false;
-    }, duration);
+      window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
+    }, 1500);
   }
 
-  function startSpeech() {
-    if (isSpeakingAI) return;
-    const btn = document.getElementById('btnMicHold');
-    const userTile = document.getElementById('userTile');
-    const userMicStatus = document.getElementById('userMicStatus');
-    const userWave = document.getElementById('userWave');
-    const badge = document.getElementById('statusBadge');
+  async function loadSession() {
+    if (!sessionId) {
+      document.getElementById('currentQText').textContent = 'No interview session specified.';
+      setStatus('Error');
+      return;
+    }
+    try {
+      const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+      maxQuestions = state.progress ? state.progress.max_questions : 0;
+      if (state.status === 'sealed' || state.status === 'failed') {
+        endInterview(state.termination_reason);
+        return;
+      }
+      showQuestion(state.current_question, state.progress ? state.progress.questions_asked : 0);
+      setStatus('Ready');
+      voice.connect();
+    } catch (err) {
+      document.getElementById('currentQText').textContent = `Could not load this interview: ${err.message}`;
+      setStatus('Error');
+    }
+  }
 
-    btn.classList.add('speaking');
-    userTile.classList.add('user-speaking');
-    userMicStatus.textContent = 'Speaking...';
-    userMicStatus.style.color = 'var(--success)';
-    badge.textContent = 'Recording';
-    userWave.style.display = 'inline-flex';
+  async function refreshProgressAfter(nextQuestion) {
+    // Re-read the session for the authoritative questions_asked counter
+    // rather than tracking it by hand on the client - shared by the text
+    // and voice answer paths so the counter logic lives in one place.
+    const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+    showQuestion(nextQuestion, state.progress ? state.progress.questions_asked : 0);
+  }
+
+  // ---------------------------------------------------------------------
+  // Voice: reuses the EXISTING WebSocket interview transport
+  // (api/routes/voice.py, WS /ws/sessions/{id}) and the EXISTING push-to-
+  // talk audio capture/encoding from pages/voice-interview.html - not a
+  // second implementation. That endpoint drives the SAME
+  // InterviewService/InterviewSessionRunner the text answers above call,
+  // so there is exactly one interview engine, one transcript, one
+  // evaluation regardless of which transport answered a given question.
+  // ---------------------------------------------------------------------
+  const voice = (() => {
+    const TARGET_RATE = 16000;
+    let ws = null, stream = null, audioCtx = null, node = null, source = null;
+    let pcmChunks = [], capturing = false, sourceRate = 48000;
+
+    function downsampleTo16k(input, inputRate) {
+      if (inputRate === TARGET_RATE) return input;
+      const ratio = inputRate / TARGET_RATE;
+      const outLength = Math.floor(input.length / ratio);
+      const out = new Float32Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        const start = Math.floor(i * ratio);
+        const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+        let sum = 0, n = 0;
+        for (let j = start; j < end; j++) { sum += input[j]; n++; }
+        out[i] = n ? sum / n : 0;
+      }
+      return out;
+    }
+
+    function encodeWav(float32, sampleRate) {
+      const bytesPerSample = 2;
+      const dataSize = float32.length * bytesPerSample;
+      const buf = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buf);
+      const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+      w(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      w(8, 'WAVE');
+      w(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * bytesPerSample, true);
+      view.setUint16(32, bytesPerSample, true);
+      view.setUint16(34, 16, true);
+      w(36, 'data');
+      view.setUint32(40, dataSize, true);
+      let off = 44;
+      for (let i = 0; i < float32.length; i++, off += 2) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+      return buf;
+    }
+
+    function b64(buf) {
+      let s = '', bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s);
+    }
+
+    function play(b64audio, format) {
+      if (!b64audio) return;
+      const bin = atob(b64audio);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
+      new Audio(URL.createObjectURL(blob)).play().catch(() => {
+        addLog('System', '(browser blocked autoplay for the question audio — click anywhere on the page, then Replay)');
+      });
+    }
+
+    function connect() {
+      if (!sessionId || ended) return;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${encodeURIComponent(sessionId)}`);
+
+      ws.onopen = () => {
+        document.getElementById('btnMic').disabled = false;
+        ws.send(JSON.stringify({ type: 'speak_question' }));
+      };
+      ws.onclose = () => {
+        document.getElementById('btnMic').disabled = true;
+      };
+      ws.onerror = () => {
+        document.getElementById('btnMic').disabled = true;
+        if (!ended) {
+          addLog('System', 'Voice connection unavailable — you can still type your answers below.');
+        }
+      };
+      ws.onmessage = async (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch (e) {
+          addLog('System', 'Received a malformed message from the voice channel — ignoring it.');
+          return;
+        }
+        if (msg.type === 'error') {
+          addLog('System', `Voice error: ${msg.error}${msg.detail ? ' — ' + msg.detail : ''}`);
+          setStatus('Ready');
+          return;
+        }
+        if (msg.outcome === 'no_speech_detected') {
+          addLog('System', '(no speech detected — please try answering again)');
+          setStatus('Ready');
+          return;
+        }
+        if (msg.transcript) {
+          addLog('Candidate', msg.transcript);
+        }
+        if (msg.tts_error) {
+          addLog('System', '(question audio unavailable — showing text only)');
+        }
+        if (msg.status === 'sealed') {
+          endInterview(msg.termination_reason);
+        } else if (msg.next_question) {
+          await refreshProgressAfter(msg.next_question);
+          setStatus('Ready');
+        }
+        play(msg.question_audio_base64, msg.audio_format);
+      };
+    }
+
+    async function startRecording() {
+      if (!ws || ws.readyState !== WebSocket.OPEN || capturing || ended) return;
+      try {
+        stream = stream || await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        });
+      } catch (e) {
+        addLog('System', 'Microphone permission denied — please type your answer below.');
+        return;
+      }
+
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      sourceRate = audioCtx.sampleRate;
+
+      pcmChunks = [];
+      capturing = true;
+      source = audioCtx.createMediaStreamSource(stream);
+      node = audioCtx.createScriptProcessor(4096, 1, 1);
+      node.onaudioprocess = (e) => {
+        if (!capturing) return;
+        pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      source.connect(node);
+      const mute = audioCtx.createGain();
+      mute.gain.value = 0;
+      node.connect(mute);
+      mute.connect(audioCtx.destination);
+
+      const btn = document.getElementById('btnMic');
+      btn.classList.add('recording');
+      btn.innerHTML = '🔴 Recording... (Release to Send)';
+      setStatus('Recording Audio');
+    }
+
+    function stopRecording() {
+      const btn = document.getElementById('btnMic');
+      btn.classList.remove('recording');
+      btn.innerHTML = '🎙️ Hold to Speak Answer';
+      if (!capturing) return;
+      capturing = false;
+      try { source && source.disconnect(); node && node.disconnect(); } catch (e) {}
+
+      const total = pcmChunks.reduce((n, c) => n + c.length, 0);
+      if (!total) { setStatus('Ready'); return; }
+      const merged = new Float32Array(total);
+      let off = 0;
+      for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
+
+      const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
+      addLog('System', '(processing your answer…)');
+      setStatus('Evaluating Response');
+      ws.send(JSON.stringify({
+        type: 'answer',
+        audio_base64: b64(wav),
+        audio_format: 'wav',
+        utterance_id: crypto.randomUUID(),
+      }));
+    }
+
+    function replay() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'speak_question' }));
+        return true;
+      }
+      return false;
+    }
+
+    return { connect, startRecording, stopRecording, replay, get ws() { return ws; } };
+  })();
+
+  function startSpeech() {
+    voice.startRecording();
   }
 
   function stopSpeech() {
-    const btn = document.getElementById('btnMicHold');
-    const userTile = document.getElementById('userTile');
-    const userMicStatus = document.getElementById('userMicStatus');
-    const userWave = document.getElementById('userWave');
-    const badge = document.getElementById('statusBadge');
+    voice.stopRecording();
+  }
 
-    btn.classList.remove('speaking');
-    userTile.classList.remove('user-speaking');
-    userMicStatus.textContent = 'Mic Ready';
-    userMicStatus.style.color = 'var(--text-muted)';
-    userWave.style.display = 'none';
-    badge.textContent = 'Evaluating...';
-
-    setTimeout(() => {
-      addLog('Candidate', 'Audio answer recorded and verified against rubric.');
-      currentIdx++;
-      loadQuestion();
-      badge.textContent = 'Ready';
-    }, 900);
+  async function submitAnswer(answerText) {
+    if (ended || !sessionId) return;
+    addLog('Candidate', answerText);
+    setStatus('Evaluating Response');
+    try {
+      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/answers`, {
+        method: 'POST',
+        body: { answer_text: answerText },
+      });
+      if (result.status === 'sealed' || result.status === 'failed') {
+        endInterview(result.termination_reason);
+        return;
+      }
+      await refreshProgressAfter(result.next_question);
+      setStatus('Ready');
+    } catch (err) {
+      addLog('System', `Could not submit that answer: ${err.message}`);
+      setStatus('Ready');
+    }
   }
 
   function submitText() {
     const input = document.getElementById('typeInput');
     const val = input.value.trim();
     if (!val) return;
-    addLog('Candidate', val);
     input.value = '';
-    currentIdx++;
-    loadQuestion();
+    submitAnswer(val);
   }
 
   function repeatQuestion() {
-    triggerAISpeaking(questions[currentIdx] || 'Completed.');
-  }
-
-  async function toggleCamera() {
-    const video = document.getElementById('userVideo');
-    const avatar = document.getElementById('userFallbackAvatar');
-    const btn = document.getElementById('btnCamToggle');
-
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop());
-      videoStream = null;
-      video.style.display = 'none';
-      avatar.style.display = 'flex';
-      btn.classList.remove('active');
-    } else {
-      try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        video.srcObject = videoStream;
-        video.style.display = 'block';
-        avatar.style.display = 'none';
-        btn.classList.add('active');
-      } catch (err) {
-        alert('Camera permission denied or camera not found.');
-      }
-    }
-  }
-
-  function toggleTranscript() {
-    const panel = document.getElementById('transcriptContainer');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (voice.replay()) return;
+    alert(`Interviewer: "${currentQuestion ? currentQuestion.question_text : 'Completed.'}"`);
   }
 
   function addLog(speaker, text) {
@@ -589,14 +768,17 @@
     log.scrollTop = log.scrollHeight;
   }
 
-  function finishSession() {
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop());
+  async function finishSession() {
+    if (!sessionId || ended) return;
+    try {
+      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
+      endInterview(result.termination_reason || 'manual_finish');
+    } catch (err) {
+      alert(`Could not finish the interview: ${err.message}`);
     }
-    window.location.href = `report.html?app_id=${encodeURIComponent(appId)}&session_id=${encodeURIComponent(sessionId)}`;
   }
 
-  loadQuestion();
+  loadSession();
 </script>
 </body>
 </html>

@@ -61,14 +61,12 @@
         <div style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.25rem;">
           RECOMMENDATION
         </div>
-        <div style="font-size:1.5rem; font-weight:700; color:#34d399;">STRONG HIRE</div>
-        <p class="card-sub" style="margin-top:0.35rem; max-width: 520px;">
-          Strong proficiency in distributed architectures, zero-downtime migrations, and clear technical communication. Zero integrity discrepancies.
-        </p>
+        <div style="font-size:1.5rem; font-weight:700; color:#34d399;" id="recommendationText">Loading…</div>
+        <p class="card-sub" style="margin-top:0.35rem; max-width: 520px;" id="recommendationExplanation"></p>
       </div>
       <div style="text-align:right;">
-        <div class="score-number">89</div>
-        <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:0.25rem;">COMPOSITE SCORE</div>
+        <div class="score-number" id="compositeScore">—</div>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-top:0.25rem;">COMPOSITE SCORE / 10</div>
       </div>
     </div>
 
@@ -76,29 +74,29 @@
     <div class="grid-2">
       <div class="card">
         <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Dimensional Scores</h3>
-        
+
         <div class="metric-item">
           <div>
             <div style="font-weight:500;">Technical Evaluator</div>
-            <div style="font-size:11.5px; color:var(--text-muted);">Architecture & Concurrency</div>
+            <div style="font-size:11.5px; color:var(--text-muted);" id="technicalSummary">Architecture & implementation</div>
           </div>
-          <span class="score-pill high">8.8 / 10</span>
+          <span class="score-pill high" id="technicalScore">— / 10</span>
         </div>
 
         <div class="metric-item">
           <div>
             <div style="font-weight:500;">Behavioral Evaluator</div>
-            <div style="font-size:11.5px; color:var(--text-muted);">Communication & Ownership</div>
+            <div style="font-size:11.5px; color:var(--text-muted);" id="behavioralSummary">Communication & ownership</div>
           </div>
-          <span class="score-pill high">9.0 / 10</span>
+          <span class="score-pill high" id="behavioralScore">— / 10</span>
         </div>
 
         <div class="metric-item">
           <div>
-            <div style="font-weight:500;">Resume Claim Auditor</div>
-            <div style="font-size:11.5px; color:var(--text-muted);">Claim Verification Rate</div>
+            <div style="font-weight:500;">Job Fit</div>
+            <div style="font-size:11.5px; color:var(--text-muted);" id="jobFitSummary">Resume/role alignment</div>
           </div>
-          <span class="score-pill high">100% Match</span>
+          <span class="score-pill high" id="jobFitScore">— / 10</span>
         </div>
 
         <div class="metric-item">
@@ -106,7 +104,7 @@
             <div style="font-weight:500;">Integrity Agent</div>
             <div style="font-size:11.5px; color:var(--text-muted);">Discrepancy Check</div>
           </div>
-          <span class="score-pill high">0 Flags</span>
+          <span class="score-pill high" id="integrityFlags">0 Flags</span>
         </div>
 
         <div class="metric-item">
@@ -114,20 +112,22 @@
             <div style="font-weight:500;">Anti-Bias Check</div>
             <div style="font-size:11.5px; color:var(--text-muted);">Rubric Compliance</div>
           </div>
-          <span class="score-pill high">Clean</span>
+          <span class="score-pill high" id="biasFlags">Clean</span>
+        </div>
+
+        <div class="metric-item">
+          <div>
+            <div style="font-weight:500;">Human Review</div>
+            <div style="font-size:11.5px; color:var(--text-muted);">Recruiter follow-up required?</div>
+          </div>
+          <span class="score-pill high" id="humanReview">No</span>
         </div>
       </div>
 
       <div class="card">
-        <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Evidence Trail</h3>
-        <p class="card-sub" style="margin-bottom:0.6rem;">Transcript quotes supporting score:</p>
-        
-        <div class="quote-box">
-          "Correctly distinguished cache-aside vs write-through invalidation to resolve high-concurrency race hazards (verifies resume claim #2)."
-        </div>
-        <div class="quote-box">
-          "Provided clear blue-green schema migration strategy for zero downtime."
-        </div>
+        <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Strengths & Evidence</h3>
+        <p class="card-sub" style="margin-bottom:0.6rem;">From the interview transcript:</p>
+        <div id="evidenceQuotes"></div>
       </div>
     </div>
 
@@ -139,15 +139,116 @@
   renderNavbar();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const appId = urlParams.get('app_id') || 'app-01';
+  const sessionId = urlParams.get('session_id');
+  const appId = urlParams.get('app_id');
+  const jobId = urlParams.get('job_id');
+  const candidateId = urlParams.get('candidate_id');
 
-  const apps = getStoredApplications();
-  const app = apps.find(a => a.application_id === appId) || {
-    candidate_name: 'Alex Morgan',
-    job_id: 'backend-lead-01'
-  };
+  function setRecommendationColor(rec) {
+    const el = document.getElementById('recommendationText');
+    const colors = {
+      strong_candidate: '#34d399',
+      candidate: '#34d399',
+      human_review: '#f59e0b',
+      insufficient_evidence: '#ef4444',
+    };
+    el.style.color = colors[rec] || '#34d399';
+    el.textContent = (rec || 'pending').replace(/_/g, ' ').toUpperCase();
+  }
 
-  document.getElementById('reportHeaderMeta').textContent = `Candidate: ${app.candidate_name} • Role: ${app.job_id}`;
+  function renderReport(evaluation, applicationMeta) {
+    document.getElementById('reportHeaderMeta').textContent =
+      `Candidate: ${(applicationMeta && applicationMeta.candidate_name) || evaluation.result.candidate_name} • Role: ${evaluation.job_id}`;
+
+    const report = evaluation.result;
+    setRecommendationColor(report.recommendation);
+    document.getElementById('recommendationExplanation').textContent = report.explanation;
+    document.getElementById('compositeScore').textContent = report.scores.weighted_final_score.toFixed(1);
+    document.getElementById('technicalScore').textContent = `${report.scores.technical_score.toFixed(1)} / 10`;
+    document.getElementById('technicalSummary').textContent = report.technical_summary;
+    document.getElementById('behavioralScore').textContent = `${report.scores.behavioral_score.toFixed(1)} / 10`;
+    document.getElementById('behavioralSummary').textContent = report.behavioral_summary;
+    document.getElementById('jobFitScore').textContent = `${report.scores.job_fit_score.toFixed(1)} / 10`;
+    document.getElementById('jobFitSummary').textContent = report.job_fit_summary;
+    document.getElementById('integrityFlags').textContent = `${report.integrity_flags.length} Flags`;
+    document.getElementById('biasFlags').textContent = report.bias_flags.length ? `${report.bias_flags.length} Flags` : 'Clean';
+    document.getElementById('humanReview').textContent = report.requires_human_review ? 'Yes' : 'No';
+
+    const quotesEl = document.getElementById('evidenceQuotes');
+    const quotes = [];
+    (report.scores.competency_scores || []).forEach(cs => {
+      (cs.evidence || []).slice(0, 1).forEach(ev => quotes.push(ev.text));
+    });
+    quotesEl.innerHTML = quotes.length
+      ? quotes.slice(0, 4).map(q => `<div class="quote-box">"${q}"</div>`).join('')
+      : '<p class="card-sub">No transcript evidence recorded.</p>';
+  }
+
+  function renderPending(status) {
+    document.getElementById('recommendationText').textContent =
+      status === 'failed' ? 'EVALUATION FAILED' : 'EVALUATION IN PROGRESS';
+    document.getElementById('recommendationText').style.color = status === 'failed' ? '#ef4444' : 'var(--text-muted)';
+    document.getElementById('recommendationExplanation').textContent =
+      status === 'failed'
+        ? 'The multi-agent evaluation pipeline could not complete for this interview.'
+        : 'The multi-agent evaluation pipeline is still running. This page will refresh automatically.';
+  }
+
+  async function resolveEvaluation() {
+    if (sessionId) {
+      const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
+      return data.evaluation;
+    }
+    if (appId) {
+      const data = await apiRequest(`/applications/${encodeURIComponent(appId)}/evaluation`);
+      return data.evaluation;
+    }
+    if (jobId && candidateId) {
+      // GET /applications only accepts exactly ONE of job_id/candidate_id
+      // (api/routes/applications.py) - filter for the matching candidate
+      // client-side rather than sending both.
+      const list = await apiRequest(`/applications?job_id=${encodeURIComponent(jobId)}`);
+      const application = (list.applications || []).find(a => a.candidate_id === candidateId);
+      if (!application) return null;
+      const data = await apiRequest(`/applications/${encodeURIComponent(application.application_id)}/evaluation`);
+      return data.evaluation;
+    }
+    return undefined; // no way to look this report up at all
+  }
+
+  let attempts = 0;
+  async function loadEvaluation() {
+    attempts += 1;
+    try {
+      const evaluation = await resolveEvaluation();
+      if (evaluation === undefined) {
+        document.getElementById('reportHeaderMeta').textContent = 'No report to display.';
+        document.getElementById('recommendationText').textContent = 'NO EVALUATION LINK PROVIDED';
+        document.getElementById('recommendationExplanation').textContent =
+          'Open this page from an interview, application, or leaderboard entry.';
+        return;
+      }
+      if (!evaluation || evaluation.status === 'pending' || evaluation.status === 'running') {
+        renderPending(evaluation ? evaluation.status : 'pending');
+        if (attempts < 30) {
+          setTimeout(loadEvaluation, 4000);
+        }
+        return;
+      }
+      if (evaluation.status === 'failed') {
+        renderPending('failed');
+        document.getElementById('recommendationExplanation').textContent = evaluation.error || 'Unknown error.';
+        return;
+      }
+      renderReport(evaluation, null);
+    } catch (err) {
+      document.getElementById('recommendationText').textContent = 'COULD NOT LOAD REPORT';
+      document.getElementById('recommendationText').style.color = '#ef4444';
+      document.getElementById('recommendationExplanation').textContent = err.message;
+    }
+  }
+
+  loadEvaluation();
 </script>
 </body>
 </html>

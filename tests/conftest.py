@@ -21,6 +21,21 @@ hermetic: its result now depends only on the code under test. `setdefault`
 is used, not assignment, so an explicitly exported environment variable
 still wins - a deliberate real-provider run (`LLM_PROVIDER=groq pytest ...`)
 is unaffected.
+
+DATABASE_URL joined this list for the exact same reason (Database chunk):
+a developer's `.env` may set it so a manually-run server uses PostgreSQL
+(core/container.py:build_default_container), but a test that builds its app
+via `get_settings()`/`AppSettings.from_env()` rather than an explicit
+`AppSettings()` (most of the FastAPI `TestClient` fixtures do) would then
+silently get a REAL `PostgresConnectionPool` instead of the in-memory
+stubs the suite is written against - and since pytest-asyncio gives most
+tests their own event loop, that pool ends up reused across loops the same
+way `tests/test_postgres_repositories.py` had to guard against, producing
+"Event loop is closed" failures in tests that were never meant to touch a
+database at all. Pinning it empty here keeps `DATABASE_URL` fully separate
+from `TEST_DATABASE_URL` (which `tests/test_postgres_repositories.py`
+reads on purpose to opt into a real Postgres run) - this suite's default
+behaviour never depends on what a developer's `.env` happens to contain.
 """
 import os
 
@@ -32,6 +47,7 @@ for _var, _value in (
     ("TTS_PROVIDER", "mock"),
     ("VECTOR_STORE_TYPE", "mock"),
     ("ENVIRONMENT", "test"),
+    ("DATABASE_URL", ""),
 ):
     os.environ.setdefault(_var, _value)
 

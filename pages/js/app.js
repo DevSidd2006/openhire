@@ -1,7 +1,116 @@
 /**
  * Minimal & fast navigation and state handler
  */
-const API_BASE = '/api';
+// The backend (api/app.py) serves these pages itself under /app/ and
+// registers every route with no path prefix (AppSettings.api_prefix
+// defaults to "") - so API calls are same-origin, root-relative paths
+// like "/jobs", not "/api/jobs".
+const API_BASE = '';
+
+/**
+ * Thin fetch wrapper shared by every real backend call in this frontend.
+ * JSON-encodes a plain-object body (and sets Content-Type: application/json
+ * for it); a `FormData` body (multipart file uploads - see
+ * pages/apply.html's resume upload) is passed through untouched, with NO
+ * Content-Type header set, so the browser can add its own `multipart/
+ * form-data; boundary=...` - setting that header manually is a classic way
+ * to silently corrupt a multipart upload. Throws a plain Error with a
+ * human-readable `.message` (never a raw stack trace) on any network or
+ * HTTP failure, and returns the parsed JSON body on success.
+ */
+async function apiRequest(path, options = {}) {
+  const opts = Object.assign({}, options);
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  opts.headers = isFormData
+    ? Object.assign({}, options.headers || {})
+    : Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (opts.body && !isFormData && typeof opts.body !== 'string') {
+    opts.body = JSON.stringify(opts.body);
+  }
+
+  let res;
+  try {
+    res = await fetch(API_BASE + path, opts);
+  } catch (err) {
+    throw new Error('Cannot reach the OpenHire backend. Please check that the server is running.');
+  }
+
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch (e) { /* non-JSON body */ }
+  }
+
+  if (!res.ok) {
+    const detail = (data && (data.detail || data.error)) || `Request failed (HTTP ${res.status})`;
+    const error = new Error(detail);
+    error.status = res.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+/** Flattens a JobResponse (job_id/job/is_active/...) into the flat shape
+ * these pages render - job.title, job.description, job.competencies as a
+ * plain array of names. */
+function normalizeJob(record) {
+  const job = record.job || {};
+  return {
+    job_id: record.job_id,
+    title: job.title || record.job_id,
+    description: job.description || '',
+    competencies: (job.competencies || []).map((c) => c.name),
+    is_active: record.is_active,
+  };
+}
+
+async function fetchJobs() {
+  const data = await apiRequest('/jobs');
+  return (data.jobs || []).map(normalizeJob);
+}
+
+async function fetchJob(jobId) {
+  const record = await apiRequest(`/jobs/${encodeURIComponent(jobId)}`);
+  return normalizeJob(record);
+}
+
+async function fetchApplicationsForCandidate(candidateId) {
+  const data = await apiRequest(`/applications?candidate_id=${encodeURIComponent(candidateId)}`);
+  return data.applications || [];
+}
+
+/** Creates the interview session for an application that is already
+ * SHORTLISTED and has none yet - fetches the full job/resume records
+ * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
+ * just their ids - see api/models.py:CreateSessionRequest), and links it
+ * to the application in the same call. Returns the session_id. */
+async function ensureInterviewSession(application) {
+  if (application.session_id) {
+    return application.session_id;
+  }
+  const [job, candidate] = await Promise.all([
+    apiRequest(`/jobs/${encodeURIComponent(application.job_id)}`),
+    apiRequest(`/candidates/${encodeURIComponent(application.candidate_id)}`),
+  ]);
+  const session = await apiRequest('/sessions', {
+    method: 'POST',
+    body: {
+      candidate_id: application.candidate_id,
+      job_id: application.job_id,
+      job_description: job.job,
+      parsed_resume: candidate.resume,
+      application_id: application.application_id,
+      // The backend default (MAX_QUESTIONS_PER_INTERVIEW=12,
+      // config/settings.py) is realistic for a real interview but too long
+      // for a live demo click-through - keep this a short, deliberate demo
+      // constant, not a behavior change to the adaptive engine itself.
+      max_questions: 5,
+    },
+  });
+  return session.session_id;
+}
 
 function getCurrentUser() {
   const user = localStorage.getItem('openhire_user');
@@ -57,39 +166,3 @@ function renderNavbar(activePage = '') {
   `;
 }
 
-function getStoredJobs() {
-  const local = localStorage.getItem('openhire_jobs');
-  if (local) {
-    try { return JSON.parse(local); } catch (e) {}
-  }
-  return [
-    {
-      job_id: "backend-lead-01",
-      title: "Senior Backend Architect",
-      description: "FastAPI, distributed caching, PostgreSQL, high-concurrency systems design.",
-      competencies: ["Python", "System Design", "FastAPI", "PostgreSQL"]
-    },
-    {
-      job_id: "frontend-eng-02",
-      title: "Lead Frontend Engineer",
-      description: "TypeScript, React, WebSockets audio streaming, performant UI architecture.",
-      competencies: ["TypeScript", "React", "WebSockets", "CSS Architecture"]
-    }
-  ];
-}
-
-function saveJobs(jobs) {
-  localStorage.setItem('openhire_jobs', JSON.stringify(jobs));
-}
-
-function getStoredApplications() {
-  const local = localStorage.getItem('openhire_applications');
-  if (local) {
-    try { return JSON.parse(local); } catch (e) {}
-  }
-  return [];
-}
-
-function saveApplications(apps) {
-  localStorage.setItem('openhire_applications', JSON.stringify(apps));
-}

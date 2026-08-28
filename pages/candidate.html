@@ -44,42 +44,73 @@
 <script>
   renderNavbar('dashboard');
 
-  const jobs = getStoredJobs();
   const listEl = document.getElementById('candidateJobList');
-
-  listEl.innerHTML = jobs.map(job => `
-    <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
-      <h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem;">${job.title || job.job_id}</h4>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
-        ${(job.description || '').substring(0, 100)}...
-      </p>
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="tag">${(job.competencies || []).length} Skills</span>
-        <button class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
-          Apply →
-        </button>
-      </div>
-    </div>
-  `).join('');
-
-  const apps = getStoredApplications();
   const appListEl = document.getElementById('candidateApplicationsList');
+  listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
+  appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
 
-  if (!apps.length) {
-    appListEl.innerHTML = '<p class="card-sub">No active applications. Apply to a position above.</p>';
-  } else {
-    appListEl.innerHTML = apps.map(app => `
-      <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
-        <div>
-          <h4 style="font-weight:600;">Role: ${app.job_id}</h4>
-          <p class="card-sub">Match: <strong style="color:var(--primary); font-family:var(--font-mono);">${app.match_score || 88}%</strong> | Status: <span class="tag">${app.status || 'SHORTLISTED'}</span></p>
+  (async () => {
+    try {
+      const jobs = await fetchJobs();
+      listEl.innerHTML = jobs.length ? jobs.map(job => `
+        <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
+          <h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem;">${job.title || job.job_id}</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            ${(job.description || '').substring(0, 100)}...
+          </p>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="tag">${job.competencies.length} Skills</span>
+            <button class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
+              Apply →
+            </button>
+          </div>
         </div>
-        <div style="display:flex; gap:0.4rem;">
-          <button class="btn-primary" style="padding:0.35rem 0.8rem; font-size:12px;" onclick="window.location.href='interview.html?session_id=${encodeURIComponent(app.session_id || 'sess-01')}&app_id=${encodeURIComponent(app.application_id)}'">🎙️ Launch Interview</button>
-          <button class="btn-outline" style="padding:0.35rem 0.7rem; font-size:12px;" onclick="window.location.href='report.html?app_id=${encodeURIComponent(app.application_id)}'">Report</button>
+      `).join('') : '<p class="card-sub">No open positions right now.</p>';
+    } catch (err) {
+      listEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load jobs: ${err.message}</p>`;
+    }
+
+    const user = getCurrentUser();
+    if (!user.candidate_id) {
+      appListEl.innerHTML = '<p class="card-sub">No active applications. Apply to a position above.</p>';
+      return;
+    }
+
+    try {
+      const apps = await fetchApplicationsForCandidate(user.candidate_id);
+      if (!apps.length) {
+        appListEl.innerHTML = '<p class="card-sub">No active applications. Apply to a position above.</p>';
+        return;
+      }
+      appListEl.innerHTML = apps.map(app => {
+        const matchPct = app.matching_score ? Math.round(app.matching_score.match_score * 100) : null;
+        const canInterview = app.status === 'shortlisted' || app.status === 'interview_linked';
+        return `
+        <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
+          <div>
+            <h4 style="font-weight:600;">Role: ${app.job_id}</h4>
+            <p class="card-sub">Match: <strong style="color:var(--primary); font-family:var(--font-mono);">${matchPct !== null ? matchPct + '%' : 'pending'}</strong> | Status: <span class="tag">${app.status}</span></p>
+          </div>
+          <div style="display:flex; gap:0.4rem;">
+            ${canInterview ? `<button class="btn-primary" style="padding:0.35rem 0.8rem; font-size:12px;" onclick="launchInterview('${app.application_id}')">🎙️ Launch Interview</button>` : ''}
+            <button class="btn-outline" style="padding:0.35rem 0.7rem; font-size:12px;" onclick="window.location.href='report.html?app_id=${encodeURIComponent(app.application_id)}'">Report</button>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+      }).join('');
+    } catch (err) {
+      appListEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load applications: ${err.message}</p>`;
+    }
+  })();
+
+  async function launchInterview(applicationId) {
+    try {
+      const record = await apiRequest(`/applications/${encodeURIComponent(applicationId)}`);
+      const sessionId = await ensureInterviewSession(record.application);
+      window.location.href = `interview.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(applicationId)}`;
+    } catch (err) {
+      alert(`Could not start the interview: ${err.message}`);
+    }
   }
 </script>
 </body>
