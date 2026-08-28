@@ -105,7 +105,14 @@ def _ocr_image_bytes(image_bytes: bytes) -> str:
     # Each result entry is [box_points, recognized_text, confidence] (see
     # RapidOCR.__call__) - only the text is relevant here, in reading order
     # as RapidOCR's own layout detection already produced it.
-    return "\n".join(entry[1] for entry in result if entry[1])
+    return "\n".join(_normalize_ocr_text(entry[1]) for entry in result if entry[1])
+
+
+def _normalize_ocr_text(text: str) -> str:
+    # OCR output can collapse intra-line spaces (e.g. "DataEngineer").
+    # Restore simple camel-case word boundaries without touching acronyms
+    # such as PostgreSQL.
+    return re.sub(r"(?<=[a-z])(?=[A-Z][a-z])", " ", text)
 
 
 def _ocr_pdf_pages(content: bytes) -> str:
