@@ -69,6 +69,26 @@ class CandidateService:
         )
         return stored
 
+    async def preview_resume(
+        self, *, resume_text: str, candidate_name: str
+    ) -> tuple[ParsedResume, bool, Optional[str]]:
+        """Parse raw resume text via the existing `ResumeParserAgent` and
+        return the result WITHOUT persisting anything.
+
+        Backs the resume-upload auto-fill flow (`POST
+        /candidates/parse-resume-file`, api/routes/candidates.py): a
+        candidate needs to see and edit the extraction before a `Candidate`
+        record is actually created, so this calls the exact same `_parse`
+        helper `register_candidate` uses, just without the `save()` at the
+        end. `candidate_id` is a throwaway value - the agent takes it as an
+        input (for its own logging/run-id) but nothing here stores it, so
+        it never collides with a real candidate_id.
+        """
+        preview_id = f"preview_{uuid.uuid4().hex[:8]}"
+        return await self._parse(
+            resume_text=resume_text, candidate_id=preview_id, candidate_name=candidate_name,
+        )
+
     async def get_candidate(self, candidate_id: str) -> CandidateRecord:
         record = await self._candidates.get(candidate_id)
         if record is None:

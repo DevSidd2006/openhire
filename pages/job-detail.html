@@ -41,50 +41,59 @@
   renderNavbar();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const jobId = urlParams.get('job_id') || 'backend-lead-01';
+  const jobId = urlParams.get('job_id');
   const user = getCurrentUser();
 
-  const jobs = getStoredJobs();
-  const job = jobs.find(j => j.job_id === jobId) || {
-    job_id: jobId,
-    title: jobId,
-    description: "Detailed job description...",
-    competencies: ["System Design", "Engineering", "Algorithms"]
-  };
+  (async () => {
+    if (!jobId) {
+      document.getElementById('jobTitle').textContent = 'No job selected';
+      document.getElementById('jobMeta').textContent = '—';
+      return;
+    }
 
-  document.getElementById('jobTitle').textContent = job.title || job.job_id;
-  document.getElementById('jobMeta').textContent = `Role ID: ${job.job_id}`;
-  document.getElementById('jobDescription').textContent = job.description;
+    let job;
+    try {
+      job = await fetchJob(jobId);
+    } catch (err) {
+      document.getElementById('jobTitle').textContent = 'Job not found';
+      document.getElementById('jobMeta').textContent = err.message;
+      return;
+    }
 
-  const compEl = document.getElementById('jobCompetencies');
-  compEl.innerHTML = (job.competencies || ['Technical Assessment', 'Communication']).map(c => `
-    <span class="tag" style="background:var(--primary-subtle); color:var(--primary); font-weight:500; padding:0.25rem 0.6rem; border-color:rgba(59,130,246,0.2);">
-      ✓ ${c}
-    </span>
-  `).join('');
+    document.getElementById('jobTitle').textContent = job.title || job.job_id;
+    document.getElementById('jobMeta').textContent = `Role ID: ${job.job_id}`;
+    document.getElementById('jobDescription').textContent = job.description;
 
-  const actionsEl = document.getElementById('jobActions');
-  const sidebarEl = document.getElementById('jobSidebar');
+    const compEl = document.getElementById('jobCompetencies');
+    compEl.innerHTML = (job.competencies.length ? job.competencies : ['Technical Assessment', 'Communication']).map(c => `
+      <span class="tag" style="background:var(--primary-subtle); color:var(--primary); font-weight:500; padding:0.25rem 0.6rem; border-color:rgba(59,130,246,0.2);">
+        ✓ ${c}
+      </span>
+    `).join('');
 
-  if (user && user.role === 'recruiter') {
-    actionsEl.innerHTML = `
-      <button class="btn-primary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Leaderboard</button>
-    `;
-    sidebarEl.innerHTML = `
-      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
-      <p class="card-sub" style="margin-bottom:1rem;">Candidate submissions are evaluated against this rubric.</p>
-      <button class="btn-secondary" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Inspect Candidate Shortlist</button>
-    `;
-  } else {
-    actionsEl.innerHTML = `
-      <button class="btn-primary" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply Now</button>
-    `;
-    sidebarEl.innerHTML = `
-      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Ready to Apply?</h3>
-      <p class="card-sub" style="margin-bottom:1rem;">Submit your CV to match qualifications and generate your adaptive interview invite.</p>
-      <button class="btn-primary" style="width:100%;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Submit Resume Application</button>
-    `;
-  }
+    const actionsEl = document.getElementById('jobActions');
+    const sidebarEl = document.getElementById('jobSidebar');
+
+    if (user && user.role === 'recruiter') {
+      actionsEl.innerHTML = `
+        <button class="btn-primary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Leaderboard</button>
+      `;
+      sidebarEl.innerHTML = `
+        <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
+        <p class="card-sub" style="margin-bottom:1rem;">Candidate submissions are evaluated against this rubric.</p>
+        <button class="btn-secondary" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Inspect Candidate Shortlist</button>
+      `;
+    } else {
+      actionsEl.innerHTML = `
+        <button class="btn-primary" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply Now</button>
+      `;
+      sidebarEl.innerHTML = `
+        <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Ready to Apply?</h3>
+        <p class="card-sub" style="margin-bottom:1rem;">Submit your CV to match qualifications and generate your adaptive interview invite.</p>
+        <button class="btn-primary" style="width:100%;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Submit Resume Application</button>
+      `;
+    }
+  })();
 </script>
 </body>
 </html>

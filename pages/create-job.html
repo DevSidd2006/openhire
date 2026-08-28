@@ -40,7 +40,7 @@
 <script>
   renderNavbar('create-job');
 
-  function handleJobCreate() {
+  async function handleJobCreate() {
     const title = document.getElementById('jobTitle').value.trim();
     const desc = document.getElementById('jobDescription').value.trim();
     if (!desc) {
@@ -52,21 +52,24 @@
     btn.disabled = true;
     btn.textContent = 'Analyzing JD...';
 
-    const jobs = getStoredJobs();
-    const newJob = {
-      job_id: (title ? title.toLowerCase().replace(/\s+/g, '-') : 'job-' + Date.now()),
-      title: title || 'Software Engineer',
-      description: desc,
-      competencies: ['System Architecture', 'Core Competencies', 'Problem Solving']
-    };
+    // The backend extracts title/skills/competencies itself from the raw
+    // description via JDAnalyzerAgent (POST /jobs takes only free text -
+    // see api/models_jobs.py:CreateJobRequest); folding an explicit title
+    // into the text just gives the analyzer stronger signal for it.
+    const fullDescription = title ? `Position: ${title}\n\n${desc}` : desc;
 
-    jobs.unshift(newJob);
-    saveJobs(jobs);
-
-    setTimeout(() => {
-      alert('Job successfully parsed and published!');
-      window.location.href = 'recruiter.html';
-    }, 600);
+    try {
+      const job = await apiRequest('/jobs', {
+        method: 'POST',
+        body: { description: fullDescription },
+      });
+      alert(`Job successfully parsed and published! (${job.job.title})`);
+      window.location.href = `job-detail.html?job_id=${encodeURIComponent(job.job_id)}`;
+    } catch (err) {
+      alert(`Could not publish this job: ${err.message}`);
+      btn.disabled = false;
+      btn.textContent = 'Analyze & Publish Position';
+    }
   }
 </script>
 </body>

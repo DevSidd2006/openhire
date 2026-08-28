@@ -140,6 +140,16 @@ class AppSettings(BaseModel):
     # -- limits ----------------------------------------------------------
     max_request_body_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
 
+    # -- persistence -------------------------------------------------------
+    # Database chunk: a PostgreSQL DSN (e.g.
+    # "postgresql://user:pass@host:5432/openhire"). Empty (the default)
+    # means "no database configured" - build_default_container falls back
+    # to repositories/memory.py's in-process stubs exactly as it always
+    # has, so leaving this unset changes nothing about existing behaviour.
+    # Never logged - see public_summary(), which reports only whether
+    # persistence is durable, never the DSN itself.
+    database_url: str = ""
+
     # ------------------------------------------------------------------
     # Read-through views of config/settings.py (never copies - see docstring)
     # ------------------------------------------------------------------
@@ -267,6 +277,7 @@ class AppSettings(BaseModel):
             auth_enabled=_env_bool("AUTH_ENABLED", False),
             auth_required_by_default=_env_bool("AUTH_REQUIRED_BY_DEFAULT", False),
             max_request_body_bytes=_env_int("MAX_REQUEST_BODY_BYTES", 12 * 1024 * 1024),
+            database_url=_env("DATABASE_URL", ""),
         )
 
 

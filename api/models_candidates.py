@@ -94,9 +94,29 @@ class UpdateCandidateRequest(BaseModel):
     total_experience_years: Optional[float] = None
 
 
+# ---------------------------------------------------------------------------
+# POST /candidates/parse-resume-file
+# ---------------------------------------------------------------------------
+
+class ParseResumeFileResponse(BaseModel):
+    """A PREVIEW only - nothing is persisted by this call. `parsed_resume`
+    reuses the existing `ParsedResume` schema directly (no narrowed/second
+    representation); `resume_text` is the plain text actually extracted
+    from the uploaded file, echoed back so the frontend can show/let the
+    candidate edit it before the existing `POST /candidates` (unmodified)
+    is what actually creates the record - see api/routes/candidates.py.
+    """
+
+    parsed_resume: ParsedResume
+    resume_text: str
+    used_fallback: bool
+    parse_warning: Optional[str] = None
+
+
 __all__ = [
     "CandidateListResponse",
     "CandidateResponse",
+    "ParseResumeFileResponse",
     "RegisterCandidateRequest",
     "UpdateCandidateRequest",
 ]
