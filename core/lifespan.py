@@ -109,11 +109,7 @@ def build_lifespan(settings: AppSettings):
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging(settings)
 
-        # Database initialization & migrations (if configured)
-        from db.connection import init_db, close_db
-        db_pool = await init_db()
-
-        container = build_default_container(settings, db_pool=db_pool)
+        container = build_default_container(settings)
         validate_startup_configuration(settings, container)
         app.state.container = container
 
@@ -133,7 +129,6 @@ def build_lifespan(settings: AppSettings):
             logger.info("shutdown: releasing application dependencies",
                         extra={"event": "shutdown"})
             await container.aclose()
-            await close_db()
 
     return lifespan
 

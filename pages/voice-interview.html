@@ -4,89 +4,493 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Voice Interview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 <style>
-  :root { color-scheme: light dark; --bg:#0f1115; --fg:#e8eaed; --muted:#9aa0a6; --accent:#4f8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --card:#171a21; --line:#262b36; }
-  * { box-sizing:border-box; }
-  body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--fg);
-         font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  main { max-width:720px; margin:0 auto; }
-  h1 { font-size:1.4rem; margin:0 0 .25rem; }
-  .sub { color:var(--muted); margin:0 0 1.5rem; font-size:.9rem; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem 1.15rem; margin-bottom:1rem; }
-  .label { font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:.4rem; }
-  #question { font-size:1.1rem; }
-  button { font:inherit; padding:.6rem 1.1rem; border-radius:8px; border:1px solid var(--line);
-           background:#222735; color:var(--fg); cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--accent); }
-  button:disabled { opacity:.45; cursor:not-allowed; }
-  button.rec { background:var(--err); border-color:var(--err); color:#fff; }
-  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
-  #status { font-size:.85rem; color:var(--muted); margin-left:.3rem; }
-  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--muted); margin-right:.4rem; }
-  .dot.on { background:var(--ok); } .dot.rec { background:var(--err); } .dot.err { background:var(--err); }
-  #log { font-size:.85rem; max-height:260px; overflow:auto; }
-  #log div { padding:.35rem 0; border-bottom:1px solid var(--line); }
-  #log div:last-child { border-bottom:0; }
-  .you { color:var(--accent); } .sys { color:var(--muted); } .bad { color:var(--err); }
-  code { background:#0b0d11; padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+  body {
+    background: #0d0f14;
+    overflow-x: hidden;
+  }
+  
+  .meet-container {
+    max-width: 1200px;
+    margin: 1.2rem auto;
+    padding: 0 1.25rem 5rem;
+  }
+
+  .meet-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+  }
+
+  .rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .rec-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: pulse 1.2s infinite;
+  }
+
+  /* 50/50 Video Grid */
+  .meet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    min-height: 440px;
+  }
+
+  @media (max-width: 860px) {
+    .meet-grid {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+  }
+
+  .meet-tile {
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    min-height: 380px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .meet-tile.speaking {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary), 0 8px 32px rgba(59, 130, 246, 0.25);
+  }
+
+  .meet-tile.user-speaking {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger), 0 8px 32px rgba(239, 68, 68, 0.25);
+  }
+
+  .tile-tag {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    background: rgba(15, 18, 26, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--surface-border);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-main);
+    z-index: 10;
+  }
+
+  .tile-top-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(15, 18, 26, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--surface-border);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    z-index: 10;
+  }
+
+  /* AI Glowing Orb */
+  .ai-orb-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .ai-orb {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #6366f1, #06b6d4);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    color: #fff;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2;
+  }
+
+  .ai-aura {
+    position: absolute;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: 2px solid rgba(59, 130, 246, 0.4);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .meet-tile.speaking .ai-orb {
+    transform: scale(1.08);
+    animation: orbPulse 1.2s infinite alternate;
+  }
+
+  .meet-tile.speaking .ai-aura {
+    opacity: 1;
+    animation: auraRipple 1.6s infinite;
+  }
+
+  @keyframes orbPulse {
+    0% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); }
+    100% { box-shadow: 0 0 55px rgba(99, 102, 241, 0.8), 0 0 20px rgba(6, 182, 212, 0.6); }
+  }
+
+  @keyframes auraRipple {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  #userVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 16px;
+  }
+
+  .user-avatar-fallback {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: #1e2433;
+    border: 2px solid var(--surface-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  /* Question Overlay Subtitle Bar */
+  .question-subtitle-bar {
+    background: rgba(17, 20, 28, 0.95);
+    border: 1px solid var(--surface-border);
+    backdrop-filter: blur(16px);
+    border-radius: 12px;
+    padding: 1.1rem 1.5rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .q-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: uppercase;
+    background: var(--primary-subtle);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .q-live-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-main);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  /* Control Dock */
+  .meet-dock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(17, 20, 28, 0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--surface-border);
+    padding: 0.75rem 1.5rem;
+    border-radius: 40px;
+    max-width: 620px;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  .dock-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: #1c2230;
+    border: 1px solid var(--surface-border);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+  }
+
+  .dock-btn:hover:not(:disabled) {
+    background: #273044;
+    border-color: var(--surface-border-light);
+    transform: translateY(-2px);
+  }
+
+  .dock-btn.speaking {
+    background: var(--danger) !important;
+    border-color: var(--danger) !important;
+    color: #fff !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+    animation: livePulse 1.2s infinite;
+  }
+
+  .dock-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+
+  .dock-btn.btn-end {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    width: auto;
+    padding: 0 1.25rem;
+    border-radius: 24px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .dock-btn.btn-end:hover { background: var(--danger); color: #fff; }
+
+  #log { font-size: 13px; max-height: 200px; overflow-y: auto; font-family: var(--font-sans); }
+  #log div { padding: 0.4rem 0; border-bottom: 1px solid var(--surface-border); }
+  #log div:last-child { border-bottom: none; }
+  .you { color: var(--primary); font-weight: 500; }
+  .sys { color: var(--text-muted); }
+  .bad { color: #f87171; }
 </style>
 </head>
 <body>
-<main>
-  <h1>OpenHire — Voice Interview</h1>
-  <p class="sub">Push-to-talk client for the P9 voice layer. Speak your answer; the adaptive
-  interviewer replies out loud.</p>
+<div id="navbarContainer"></div>
 
-  <div class="card">
-    <div class="label">Session</div>
-    <div class="row">
-      <input id="sessionId" placeholder="session_id" style="flex:1;min-width:220px;padding:.55rem;border-radius:8px;border:1px solid var(--line);background:#0b0d11;color:var(--fg)">
-      <button id="connect">Connect</button>
-      <span id="status"><span class="dot" id="dot"></span>idle</span>
+<main class="meet-container">
+  
+  <div class="meet-topbar">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <div class="rec-badge"><span class="rec-dot"></span> P9 VOICE ENGINE</div>
+      <div style="display:flex; gap:0.4rem; align-items:center;">
+        <input id="sessionId" class="form-control" placeholder="Session UUID..." style="width:200px; padding:0.3rem 0.6rem; font-size:12px;">
+        <button id="connect" class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;">Connect</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; background:var(--surface); padding:0.25rem 0.6rem; border-radius:8px; border:1px solid var(--surface-border);">
+        <label for="sttMode" style="font-size:11px; font-family:var(--font-mono); color:var(--text-muted);">STT:</label>
+        <select id="sttMode" style="background:transparent; border:none; color:var(--text-main); font-size:11.5px; outline:none; cursor:pointer;">
+          <option value="browser" style="background:#11141c;">⚡ Browser Native STT (Free & Fast)</option>
+          <option value="server" style="background:#11141c;">🎙️ Server Audio STT (WAV Upload)</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span id="status" style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted); display:inline-flex; align-items:center;">
+        <span class="dot" id="dot"></span>idle
+      </span>
+      <button class="btn-outline" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="window.history.back()">Exit</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="label">Interviewer</div>
-    <div id="question">— not connected —</div>
+  <!-- Live Question Bar -->
+  <div class="question-subtitle-bar">
+    <span class="q-badge">LIVE PROBE</span>
+    <div class="q-live-text" id="question">— connect to launch interview —</div>
+    <button class="btn-outline" id="replay" style="padding:0.35rem 0.75rem; font-size:12px;" disabled>🔊 Repeat</button>
   </div>
 
-  <div class="card">
-    <div class="row">
-      <button id="talk" disabled>🎤 Hold to answer</button>
-      <button id="replay" disabled>🔊 Repeat question</button>
+  <!-- Google Meet 50/50 Video Grid -->
+  <div class="meet-grid">
+    
+    <!-- AI Tile (50%) -->
+    <div class="meet-tile" id="aiTile">
+      <div class="tile-top-status">
+        <span id="aiStateLabel">Waiting</span>
+      </div>
+
+      <div class="ai-orb-wrap">
+        <div class="ai-aura"></div>
+        <div class="ai-orb">🤖</div>
+      </div>
+
+      <div style="margin-top: 1.5rem; text-align:center;">
+        <h3 style="font-weight:600; font-size:1.1rem; margin-bottom:0.25rem;">OpenHire Adaptive Interviewer</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubStatus">Microsoft Edge Neural Voice / Server Engine</p>
+      </div>
+
+      <div class="tile-tag">
+        <span class="dot on"></span> AI Evaluator (Voice Stream)
+      </div>
     </div>
+
+    <!-- Candidate Tile (50%) -->
+    <div class="meet-tile" id="userTile">
+      <div class="tile-top-status">
+        <span id="userTileStatus">Mic Inactive</span>
+      </div>
+
+      <video id="userVideo" autoplay playsinline muted style="display:none;"></video>
+      <div class="user-avatar-fallback" id="userFallbackAvatar">ME</div>
+
+      <div style="margin-top: 1.25rem; text-align:center;" id="userMetaWrap">
+        <h3 style="font-weight:600; font-size:1.05rem; margin-bottom:0.25rem;" id="userDisplayName">Candidate (You)</h3>
+        <div class="wave-bars" id="voiceWaveBox" style="display:none; margin:0 auto;">
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="tile-tag">
+        <span class="dot on"></span> Candidate Feed
+      </div>
+    </div>
+
   </div>
 
-  <div class="card">
-    <div class="label">Transcript</div>
-    <div id="log"><div class="sys">Create a session via <code>POST /sessions</code>, paste its id above, then Connect.</div></div>
+  <!-- Bottom Meet Control Dock -->
+  <div class="meet-dock">
+    <button class="dock-btn" id="talk" title="Hold to Answer" disabled>
+      🎤
+    </button>
+    <button class="dock-btn" id="btnCamToggle" title="Toggle Camera" onclick="toggleCamera()">
+      📹
+    </button>
+    <button class="dock-btn btn-end" onclick="window.history.back()">
+      Leave Session
+    </button>
   </div>
+
+  <!-- Sealed Transcript -->
+  <div class="card">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Real-Time Transcript</span>
+      <span class="tag">Streaming</span>
+    </div>
+    <div id="log"><div class="sys">Enter session ID above and click Connect to initialize voice stream.</div></div>
+  </div>
+
 </main>
 
+<script src="js/app.js"></script>
 <script>
-// Thin browser client. It holds NO interview logic: it captures audio, sends
-// it over the session WebSocket, plays back whatever audio it is given, and
-// renders whatever question the server reports. Every decision about what to
-// ask next, how to score an answer, and when to finish stays server-side in
-// InterviewSessionRunner / the adaptive engine.
+  renderNavbar();
+
+  const user = getCurrentUser();
+  if (user && user.name) {
+    document.getElementById('userDisplayName').textContent = `${user.name} (You)`;
+    const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    document.getElementById('userFallbackAvatar').textContent = initials || 'ME';
+  }
+
+  let videoStream = null;
+  async function toggleCamera() {
+    const video = document.getElementById('userVideo');
+    const avatar = document.getElementById('userFallbackAvatar');
+    const btn = document.getElementById('btnCamToggle');
+
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      videoStream = null;
+      video.style.display = 'none';
+      avatar.style.display = 'flex';
+      btn.classList.remove('active');
+    } else {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = videoStream;
+        video.style.display = 'block';
+        avatar.style.display = 'none';
+        btn.classList.add('active');
+      } catch (err) {
+        alert('Camera permission denied or not available.');
+      }
+    }
+  }
+</script>
+<script>
 const $ = (id) => document.getElementById(id);
 let ws = null, stream = null, audioCtx = null, node = null, source = null;
 let pcmChunks = [], capturing = false, sourceRate = 48000;
-
-// P9 Phase 4 decision: capture raw PCM via the Web Audio API and encode
-// WAV/PCM 16 kHz mono in the browser, rather than using MediaRecorder
-// (which produces WebM/Opus in Chrome).
-//
-// Why: Azure's short-audio REST endpoint documents WAV/PCM and OGG/Opus.
-// WebM/Opus is NOT in that list. Probing showed Azure ignores the declared
-// Content-Type and sniffs the actual bytes, so sending WebM/Opus bytes
-// under a webm content type is an unverified gamble - and it could not be
-// verified locally (no Opus encoder available). WAV/PCM 16 kHz mono is
-// Azure's primary documented format and was verified end-to-end against
-// the live service, so the client sends exactly that. No server-side
-// transcoding, no extra dependency, no silent format guessing.
 const TARGET_RATE = 16000;
+
+// Browser Native Speech Recognition
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recognizedText = "";
+let nativeSttSupported = !!SpeechRecognition;
+
+if (nativeSttSupported) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-IN"; // Default to Indian English
+
+  recognition.onresult = (event) => {
+    let current = "";
+    for (let i = 0; i < event.results.length; i++) {
+      current += event.results[i][0].transcript;
+    }
+    recognizedText = current.trim();
+    if (recognizedText) {
+      const userTileStatus = document.getElementById("userTileStatus");
+      if (userTileStatus) userTileStatus.textContent = `"${recognizedText.slice(-30)}"`;
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e.error);
+  };
+} else {
+  // If not supported by browser, select server audio mode automatically
+  const sttSelect = $("sttMode");
+  if (sttSelect) {
+    sttSelect.value = "server";
+    const opt = sttSelect.querySelector('option[value="browser"]');
+    if (opt) opt.disabled = true;
+  }
+}
 
 function downsampleTo16k(input, inputRate) {
   if (inputRate === TARGET_RATE) return input;
@@ -94,8 +498,6 @@ function downsampleTo16k(input, inputRate) {
   const outLength = Math.floor(input.length / ratio);
   const out = new Float32Array(outLength);
   for (let i = 0; i < outLength; i++) {
-    // Average the source window rather than point-sampling, so we don't
-    // alias high frequencies down into the speech band.
     const start = Math.floor(i * ratio);
     const end = Math.min(Math.floor((i + 1) * ratio), input.length);
     let sum = 0, n = 0;
@@ -115,13 +517,13 @@ function encodeWav(float32, sampleRate) {
   view.setUint32(4, 36 + dataSize, true);
   w(8, "WAVE");
   w(12, "fmt ");
-  view.setUint32(16, 16, true);          // PCM fmt chunk size
-  view.setUint16(20, 1, true);           // codec 1 = PCM
-  view.setUint16(22, 1, true);           // mono
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true); // byte rate
-  view.setUint16(32, bytesPerSample, true);              // block align
-  view.setUint16(34, 16, true);          // bits per sample
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, 16, true);
   w(36, "data");
   view.setUint32(40, dataSize, true);
   let off = 44;
@@ -146,14 +548,35 @@ function b64(buf) {
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return btoa(s);
 }
+
 function play(b64audio, format) {
   if (!b64audio) return;
   const bin = atob(b64audio);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
-  new Audio(URL.createObjectURL(blob)).play().catch(() => {
-    log("(browser blocked autoplay — click anywhere, then repeat the question)", "sys");
+  
+  const aiTile = document.getElementById("aiTile");
+  const aiStateLabel = document.getElementById("aiStateLabel");
+  
+  if (aiTile) aiTile.classList.add("speaking");
+  if (aiStateLabel) {
+    aiStateLabel.textContent = "Speaking...";
+    aiStateLabel.style.color = "var(--primary)";
+  }
+
+  const audio = new Audio(URL.createObjectURL(blob));
+  audio.onended = () => {
+    if (aiTile) aiTile.classList.remove("speaking");
+    if (aiStateLabel) {
+      aiStateLabel.textContent = "Listening";
+      aiStateLabel.style.color = "var(--text-muted)";
+    }
+  };
+  audio.play().catch(() => {
+    if (aiTile) aiTile.classList.remove("speaking");
+    if (aiStateLabel) aiStateLabel.textContent = "Ready";
+    log("(browser blocked autoplay — click repeat to listen)", "sys");
   });
 }
 
@@ -167,12 +590,14 @@ $("connect").onclick = () => {
     setStatus("connected", "on");
     $("talk").disabled = false;
     $("replay").disabled = false;
+    $("aiStateLabel").textContent = "Connected";
     ws.send(JSON.stringify({ type: "speak_question" }));
   };
   ws.onclose = () => {
     setStatus("disconnected");
     $("talk").disabled = true;
     $("replay").disabled = true;
+    $("aiStateLabel").textContent = "Disconnected";
   };
   ws.onerror = () => setStatus("connection error", "err");
 
@@ -184,8 +609,6 @@ $("connect").onclick = () => {
       return;
     }
     if (msg.outcome === "no_speech_detected") {
-      // Explicitly NOT recorded as an answer — the same question is still
-      // pending, so the candidate simply tries again.
       log("(no speech detected — please answer again)", "bad");
       return;
     }
@@ -204,6 +627,18 @@ $("connect").onclick = () => {
 
 async function startRecording() {
   if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
+  
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    recognizedText = "";
+    try {
+      recognition.start();
+    } catch (e) {
+      console.log("Recognition already active or restart:", e);
+    }
+  }
+
   try {
     stream = stream || await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -227,23 +662,62 @@ async function startRecording() {
     pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
   };
   source.connect(node);
-  // ScriptProcessorNode only runs while connected to a destination; routing
-  // through a muted gain node avoids echoing the candidate back at themselves.
   const mute = audioCtx.createGain();
   mute.gain.value = 0;
   node.connect(mute);
   mute.connect(audioCtx.destination);
 
   setStatus("recording…", "rec");
-  $("talk").classList.add("rec");
+  $("talk").classList.add("speaking");
+  const userTile = document.getElementById("userTile");
+  if (userTile) userTile.classList.add("user-speaking");
+  const userTileStatus = document.getElementById("userTileStatus");
+  if (userTileStatus) {
+    userTileStatus.textContent = "Speaking...";
+    userTileStatus.style.color = "var(--danger)";
+  }
+  const wave = document.getElementById("voiceWaveBox");
+  if (wave) wave.style.display = "inline-flex";
 }
 
 function stopRecording() {
   if (!capturing) return;
   capturing = false;
-  $("talk").classList.remove("rec");
+  $("talk").classList.remove("speaking");
+  const userTile = document.getElementById("userTile");
+  if (userTile) userTile.classList.remove("user-speaking");
+  const userTileStatus = document.getElementById("userTileStatus");
+  if (userTileStatus) {
+    userTileStatus.textContent = "Mic Inactive";
+    userTileStatus.style.color = "var(--text-muted)";
+  }
+  const wave = document.getElementById("voiceWaveBox");
+  if (wave) wave.style.display = "none";
   try { source && source.disconnect(); node && node.disconnect(); } catch {}
 
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    try { recognition.stop(); } catch {}
+    const textToSend = recognizedText.trim();
+    if (!textToSend) {
+      // Fallback to server audio processing if browser returned empty transcript
+      sendAudioFallback();
+      return;
+    }
+    setStatus("thinking…", "on");
+    ws.send(JSON.stringify({
+      type: "answer_text",
+      transcript: textToSend,
+      utterance_id: crypto.randomUUID(),
+    }));
+    return;
+  }
+
+  sendAudioFallback();
+}
+
+function sendAudioFallback() {
   const total = pcmChunks.reduce((n, c) => n + c.length, 0);
   if (!total) { setStatus("connected", "on"); return; }
   const merged = new Float32Array(total);
@@ -255,20 +729,13 @@ function stopRecording() {
   ws.send(JSON.stringify({
     type: "answer",
     audio_base64: b64(wav),
-    // WAV/PCM 16 kHz mono - Azure's primary documented short-audio format,
-    // verified working end-to-end against the live service (see the header
-    // comment for why this is NOT WebM/Opus).
     audio_format: "wav",
-    // Lets the server ignore a re-sent recording (see VoiceTurnService's
-    // replay guard) rather than answering the NEXT question with it.
     utterance_id: crypto.randomUUID(),
   }));
 }
 
-// Push-to-talk: explicit start/stop avoids needing voice-activity detection
-// in this first slice (see P9 Phase 8 for the streaming/barge-in work).
-$("talk").addEventListener("mousedown", startRecording);
-$("talk").addEventListener("mouseup", stopRecording);
+$("talk").addEventListener("mousedown", startSpeech = startRecording);
+$("talk").addEventListener("mouseup", stopSpeech = stopRecording);
 $("talk").addEventListener("mouseleave", stopRecording);
 $("talk").addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
 $("talk").addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });

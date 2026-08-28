@@ -42,6 +42,16 @@ def get_speech_synthesizer() -> SpeechSynthesizer:
     if TTS_PROVIDER == "mock":
         return MockSpeechSynthesizer()
 
+    if TTS_PROVIDER in ("edge", "edge-tts", "edge_tts"):
+        from config.settings import EDGE_TTS_PITCH, EDGE_TTS_RATE, EDGE_TTS_VOICE
+        from providers.audio.edge import EdgeTextToSpeech
+
+        return EdgeTextToSpeech(
+            voice=EDGE_TTS_VOICE,
+            rate=EDGE_TTS_RATE,
+            pitch=EDGE_TTS_PITCH,
+        )
+
     if TTS_PROVIDER == "azure":
         from config.settings import (
             AZURE_SPEECH_KEY,

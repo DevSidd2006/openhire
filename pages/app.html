@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Unified Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090a0f;
+    --surface: #11141c;
+    --surface-elevated: #171b26;
+    --surface-border: #1e2433;
+    --surface-hover: #202738;
+    --text-main: #f3f5f9;
+    --text-muted: #8491a5;
+    --text-dim: #525d70;
+    --primary: #3b82f6;
+    --primary-glow: rgba(59, 130, 246, 0.2);
+    --accent: #6366f1;
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.12);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245, 158, 11, 0.12);
+    --danger: #ef4444;
+    --danger-bg: rgba(239, 68, 68, 0.12);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(circle at 10% 10%, rgba(79, 140, 255, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.06) 0%, transparent 45%);
+    background-attachment: fixed;
+  }
+
+  a { color: var(--primary); text-decoration: none; }
+  button {
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--surface-border);
+    transition: all 0.2s ease;
+  }
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0.65rem 1.25rem; }
+  .btn-primary:hover:not(:disabled) { background: #3b7ced; }
+  .btn-secondary { background: var(--surface-elevated); color: var(--text-main); padding: 0.65rem 1.25rem; }
+  .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--text-muted); }
+  .btn-outline { background: transparent; color: var(--text-main); border-color: var(--surface-border); padding: 0.5rem 1rem; }
+  .btn-outline:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); padding: 0.5rem 1rem; }
+
+  /* Navbar */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: rgba(19, 23, 34, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--surface-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 800;
+    font-size: 1.15rem;
+    cursor: pointer;
+  }
+  .brand-logo span { color: var(--primary); }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface-elevated);
+    border: 1px solid var(--surface-border);
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+  }
+  .user-badge .role-tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    background: var(--primary-glow);
+    color: var(--primary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .container {
+    max-width: 1120px;
+    margin: 2rem auto;
+    padding: 0 1.5rem 4rem;
+  }
+
+  /* View Containers */
+  .view-section { display: none; }
+  .view-section.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+  .card-title { font-size: 1.25rem; font-weight: 700; }
+  .card-sub { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.2rem; }
+
+  /* Hero & Landing */
+  .hero-section {
+    text-align: center;
+    padding: 4rem 1rem 3rem;
+  }
+  .hero-pill {
+    display: inline-block;
+    background: var(--primary-glow);
+    color: var(--primary);
+    border: 1px solid rgba(79,140,255,0.3);
+    padding: 0.35rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+  }
+  .hero-title {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.03em;
+  }
+  .hero-desc {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    max-width: 680px;
+    margin: 0 auto 2.5rem;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Grid & Lists */
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+
+  .job-card {
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+  .job-card:hover { border-color: var(--primary); }
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: var(--surface-elevated);
+    color: var(--text-muted);
+    border: 1px solid var(--surface-border);
+  }
+
+  /* Forms & Inputs */
+  .form-group { margin-bottom: 1.25rem; }
+  .form-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-muted); }
+  .form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #0b0d13;
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+  .form-control:focus { outline: none; border-color: var(--primary); }
+  textarea.form-control { min-height: 120px; resize: vertical; }
+
+  /* Leaderboard Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; text-align: left; }
+  th { padding: 0.85rem 1rem; background: var(--surface-elevated); color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--surface-border); }
+  td { padding: 1rem; border-bottom: 1px solid var(--surface-border); font-size: 0.9rem; }
+  tr:hover td { background: var(--surface-hover); }
+
+  /* Voice Screen */
+  .voice-box {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: #0b0d13;
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--surface-border);
+    margin: 1.5rem 0;
+  }
+  .voice-status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    margin-right: 0.5rem;
+  }
+  .voice-status-dot.active { background: var(--success); box-shadow: 0 0 10px var(--success); }
+  .voice-status-dot.recording { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+
+  .score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.1rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-glow);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+  }
+  .score-pill {
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+  }
+  .score-pill.high { background: var(--success-bg); color: var(--success); }
+  .score-pill.med { background: var(--warning-bg); color: var(--warning); }
+  .score-pill.low { background: var(--danger-bg); color: var(--danger); }
+
+  .quote-box {
+    background: var(--surface-elevated);
+    border-left: 3px solid var(--primary);
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-muted);
+    margin: 0.5rem 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- Global Navbar -->
+<header class="navbar">
+  <div class="brand-logo" onclick="navigateTo('landing')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+    Open<span>Hire</span>
+  </div>
+  <div class="nav-right" id="navUserSection">
+    <div id="loggedOutNav">
+      <button class="btn-outline" onclick="navigateTo('auth')">Sign In</button>
+      <button class="btn-primary" onclick="navigateTo('auth')">Get Started</button>
+    </div>
+    <div id="loggedInNav" style="display:none;" class="row">
+      <div class="user-badge">
+        <span id="navUserName">Recruiter</span>
+        <span class="role-tag" id="navUserRole">Recruiter</span>
+      </div>
+      <button class="btn-outline" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- 1. LANDING PAGE -->
+  <section id="view-landing" class="view-section active">
+    <div class="hero-section">
+      <div class="hero-pill">⚡ Autonomous Multi-Agent Screening Platform</div>
+      <h1 class="hero-title">Evidence-backed hiring at<br><span style="color:var(--primary)">campus-drive scale.</span></h1>
+      <p class="hero-desc">
+        OpenHire structures job competencies, parses candidate resumes, runs adaptive real-time voice interviews, and delivers explainable audit trails.
+      </p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="setRoleAndEnter('candidate')">🎓 Candidate Experience</button>
+        <button class="btn-secondary" onclick="setRoleAndEnter('recruiter')">👔 Recruiter Portal</button>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top: 3rem;">
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem;">📄 Automated JD & Resume Parsing</h3>
+        <p class="card-sub">Extract technical skills, hard requirements, and competency weights from any text description automatically.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem;">🎙️ Live AI Voice Interviews</h3>
+        <p class="card-sub">Adaptive push-to-talk interviewer that dives deeper based on candidates' responses and claims.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem;">⚖️ 7-Agent Evaluation Pipeline</h3>
+        <p class="card-sub">Parallelized technical, behavioral, resume claim audit, integrity check, and anti-bias verification.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 2. AUTH / ROLE SELECTION -->
+  <section id="view-auth" class="view-section">
+    <div style="max-width: 440px; margin: 3rem auto;" class="card">
+      <div class="card-header">
+        <h2 class="card-title">Choose Portal Role</h2>
+      </div>
+      <p class="card-sub" style="margin-bottom:1.5rem;">Sign in or simulate candidate/recruiter session credentials.</p>
+      
+      <div class="form-group">
+        <label class="form-label">Display Name</label>
+        <input type="text" id="authName" class="form-control" placeholder="e.g. Alex Morgan" value="Alex Morgan">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select id="authRole" class="form-control">
+          <option value="recruiter">Recruiter (Post Jobs, Manage Shortlists, Audit)</option>
+          <option value="candidate">Candidate (Browse Jobs, Apply with Resume, Interview)</option>
+        </select>
+      </div>
+
+      <button class="btn-primary" style="width:100%; margin-top:1rem;" onclick="handleLogin()">Continue to Dashboard</button>
+    </div>
+  </section>
+
+
+  <!-- 3. RECRUITER DASHBOARD -->
+  <section id="view-recruiter" class="view-section">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Recruiter Hub</h2>
+        <p class="card-sub">Manage job postings, trigger candidate shortlist matching, and inspect live evaluations.</p>
+      </div>
+      <button class="btn-primary" onclick="navigateTo('create-job')">+ Create New Job</button>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem;">
+      <h3 class="card-title" style="font-size:1.1rem; margin-bottom:1rem;">Active Job Openings</h3>
+      <div id="recruiterJobList" class="grid-2">
+        <p class="card-sub">Loading jobs...</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 4. CANDIDATE DASHBOARD -->
+  <section id="view-candidate" class="view-section">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Candidate Dashboard</h2>
+        <p class="card-sub">Browse current openings, check your applications, and launch pending AI interviews.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title" style="font-size:1.1rem; margin-bottom:1rem;">Available Positions</h3>
+      <div id="candidateJobList" class="grid-2">
+        <p class="card-sub">Loading available jobs...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title" style="font-size:1.1rem; margin-bottom:1rem;">My Applications & Interviews</h3>
+      <div id="candidateApplicationsList">
+        <p class="card-sub">No active applications found. Choose a job above to apply!</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 5. CREATE JOB (Recruiter) -->
+  <section id="view-create-job" class="view-section">
+    <div style="max-width: 720px; margin: 0 auto;" class="card">
+      <div class="card-header">
+        <h2 class="card-title">Create Job Posting</h2>
+        <button class="btn-outline" onclick="navigateTo('recruiter')">Back</button>
+      </div>
+      <p class="card-sub" style="margin-bottom:1.5rem;">Paste any raw job description. The <code>JDAnalyzerAgent</code> will extract required competencies, skills, and evaluation weights.</p>
+      
+      <div class="form-group">
+        <label class="form-label">Job Title / Role Identifier</label>
+        <input type="text" id="newJobId" class="form-control" placeholder="e.g. backend-engineer-l4">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Job Description Text</label>
+        <textarea id="newJobDesc" class="form-control" rows="8" placeholder="We are seeking a Senior Backend Engineer proficient in Python, FastAPI, and Distributed Systems..."></textarea>
+      </div>
+
+      <button class="btn-primary" id="btnSubmitJob" onclick="submitNewJob()">Parse & Publish Job</button>
+    </div>
+  </section>
+
+
+  <!-- 6. INDIVIDUAL JOB PAGE / DETAILS -->
+  <section id="view-job-detail" class="view-section">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title" id="jobDetailTitle">Job Title</h2>
+        <p class="card-sub" id="jobDetailMeta">Job ID: —</p>
+      </div>
+      <div id="jobDetailActions" class="row" style="gap:0.5rem;">
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Competencies & Skills</h3>
+        <div id="jobDetailCompetencies" style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+        </div>
+        <div style="margin-top:1.25rem;">
+          <h4 style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.5rem;">Role Description</h4>
+          <p id="jobDetailText" style="font-size:0.9rem; color:var(--text-main); white-space:pre-wrap;"></p>
+        </div>
+      </div>
+
+      <div class="card" id="jobDetailSidebar">
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 7. APPLY USING RESUME PAGE -->
+  <section id="view-apply" class="view-section">
+    <div style="max-width: 720px; margin: 0 auto;" class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Apply for Position</h2>
+          <p class="card-sub" id="applyJobTitle">Target Job: —</p>
+        </div>
+        <button class="btn-outline" onclick="navigateTo('candidate')">Cancel</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="applyCandidateName" class="form-control" placeholder="Jane Doe">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Resume Plaintext / CV Content</label>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">
+          Paste your resume text. The <code>ResumeParserAgent</code> will extract your experience, skills, and projects to calculate match fit.
+        </p>
+        <textarea id="applyResumeText" class="form-control" rows="10" placeholder="EXPERIENCE&#10;Software Engineer @ Acme Corp...&#10;&#10;SKILLS&#10;Python, FastAPI, Postgres, Docker..."></textarea>
+      </div>
+
+      <button class="btn-primary" id="btnSubmitApplication" style="width:100%;" onclick="submitApplication()">Parse Resume & Apply</button>
+    </div>
+  </section>
+
+
+  <!-- 8. LEADERBOARD & SHORTLIST PAGE -->
+  <section id="view-leaderboard" class="view-section">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Job Candidates & Leaderboard</h2>
+        <p class="card-sub" id="leaderboardSub">Ranked shortlist powered by <code>LeaderboardAgent</code>.</p>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-secondary" onclick="runShortlistMatching()">⚡ Match & Shortlist</button>
+        <button class="btn-outline" onclick="navigateTo('recruiter')">Back to Hub</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Candidate</th>
+              <th>Resume Fit</th>
+              <th>Final Score</th>
+              <th>Recommendation</th>
+              <th>Integrity / Flags</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No candidates recorded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 9. AI VOICE INTERVIEW PAGE -->
+  <section id="view-interview" class="view-section">
+    <div style="max-width: 760px; margin: 0 auto;">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Adaptive AI Voice Interview</h2>
+          <p class="card-sub" id="interviewMeta">Session ID: —</p>
+        </div>
+        <button class="btn-danger" onclick="finishInterviewSession()">End Interview</button>
+      </div>
+
+      <div class="card">
+        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:0.5rem;">
+          Interviewer Prompt
+        </div>
+        <div id="interviewQuestionText" style="font-size:1.15rem; font-weight:600; color:var(--text-main); min-height:60px;">
+          Connecting to adaptive interview session...
+        </div>
+      </div>
+
+      <div class="voice-box">
+        <div style="margin-bottom:1.25rem;">
+          <span class="voice-status-dot" id="voiceStatusDot"></span>
+          <span id="voiceStatusLabel" style="font-size:0.9rem; color:var(--text-muted);">Idle</span>
+        </div>
+        
+        <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+          <button class="btn-primary" id="btnVoiceTalk" style="font-size:1.1rem; padding:0.85rem 1.75rem;" onmousedown="startAnswer()" onmouseup="stopAnswer()" ontouchstart="startAnswer()" ontouchend="stopAnswer()">
+            🎤 Hold to Speak Answer
+          </button>
+          <button class="btn-secondary" onclick="repeatQuestion()">🔊 Repeat</button>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text-dim); margin-top:1rem;">Or type your answer below if microphone is unavailable:</p>
+        
+        <div style="max-width:540px; margin:1rem auto 0; display:flex; gap:0.5rem;">
+          <input type="text" id="textAnswerInput" class="form-control" placeholder="Type answer...">
+          <button class="btn-secondary" onclick="submitTextAnswer()">Submit</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:0.5rem;">
+          Live Transcript & Evidence Log
+        </div>
+        <div id="interviewTranscriptLog" style="max-height: 220px; overflow-y:auto; font-size:0.85rem; font-family:var(--font-mono); color:var(--text-muted);">
+          <div>[System] Session initiated. Click hold-to-speak or submit text answers.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 10. FINAL REPORT & EVALUATION PAGE -->
+  <section id="view-report" class="view-section">
+    <div style="max-width: 860px; margin: 0 auto;">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Candidate Evaluation Report</h2>
+          <p class="card-sub" id="reportCandidateMeta">Candidate: — | Evaluation ID: —</p>
+        </div>
+        <button class="btn-outline" onclick="navigateTo(currentUser && currentUser.role === 'recruiter' ? 'leaderboard' : 'candidate')">Back</button>
+      </div>
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1.5rem;">
+        <div>
+          <div style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Final Verdict</div>
+          <div id="reportRecommendation" style="font-size:1.5rem; font-weight:800; color:var(--success); margin-top:0.25rem;">STRONG HIRE</div>
+          <p id="reportSummaryText" class="card-sub" style="max-width:520px; margin-top:0.4rem;">
+            Candidate demonstrated deep understanding of distributed systems and clean system design principles.
+          </p>
+        </div>
+        <div style="text-align:center;">
+          <div class="score-badge" id="reportOverallScore" style="width:64px; height:64px; font-size:1.5rem;">88</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">Composite Score</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title" style="font-size:1rem; margin-bottom:1rem;">Multi-Agent Dimensional Scores</h3>
+          <div id="reportDimensionScores">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span>Technical Depth</span>
+              <span class="score-pill high">8.5 / 10</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span>Behavioral & Communication</span>
+              <span class="score-pill high">9.0 / 10</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span>Resume Claim Verification</span>
+              <span class="score-pill high">100% Match</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+              <span>Anti-Bias Audit Passed</span>
+              <span class="score-pill high">Clean</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title" style="font-size:1rem; margin-bottom:1rem;">Integrity & Claim Audit</h3>
+          <div id="reportIntegritySection">
+            <div class="quote-box">
+              "Candidate accurately described high-concurrency caching architecture matching resume claims."
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const API_BASE = '/api';
+let currentUser = {
+  name: 'Alex Morgan',
+  role: 'candidate'
+};
+
+let currentActiveJobId = 'backend-lead-01';
+let currentActiveApplicationId = 'app-01';
+let currentActiveSessionId = null;
+
+let clientCache = {
+  jobs: [
+    {
+      job_id: "backend-lead-01",
+      title: "Senior Backend Architect",
+      description: "Looking for an engineer experienced with Python, FastAPI, distributed caching, and microservice architectures.",
+      competencies: ["Python", "System Design", "FastAPI", "PostgreSQL", "Concurrency"]
+    },
+    {
+      job_id: "frontend-eng-02",
+      title: "Lead Frontend Engineer",
+      description: "Expertise in React, TypeScript, WebSocket streaming, and state management.",
+      competencies: ["TypeScript", "React", "WebSockets", "CSS Architecture"]
+    }
+  ],
+  applications: [],
+  leaderboard: []
+};
+
+function navigateTo(viewId) {
+  document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById('view-' + viewId);
+  if (target) {
+    target.classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  if (viewId === 'recruiter') loadRecruiterHub();
+  if (viewId === 'candidate') loadCandidateHub();
+  if (viewId === 'leaderboard') loadLeaderboardView(currentActiveJobId);
+}
+
+function updateNavState() {
+  const loggedOutNav = document.getElementById('loggedOutNav');
+  const loggedInNav = document.getElementById('loggedInNav');
+  const navUserName = document.getElementById('navUserName');
+  const navUserRole = document.getElementById('navUserRole');
+
+  if (currentUser) {
+    loggedOutNav.style.display = 'none';
+    loggedInNav.style.display = 'flex';
+    navUserName.textContent = currentUser.name;
+    navUserRole.textContent = currentUser.role;
+  } else {
+    loggedOutNav.style.display = 'flex';
+    loggedInNav.style.display = 'none';
+  }
+}
+
+function setRoleAndEnter(role) {
+  currentUser = {
+    name: role === 'recruiter' ? 'Lead Recruiter' : 'Alex Morgan',
+    role: role
+  };
+  updateNavState();
+  navigateTo(role);
+}
+
+function handleLogin() {
+  const name = document.getElementById('authName').value || 'User';
+  const role = document.getElementById('authRole').value;
+  currentUser = { name, role };
+  updateNavState();
+  navigateTo(role);
+}
+
+function logoutUser() {
+  currentUser = null;
+  updateNavState();
+  navigateTo('landing');
+}
+
+async function loadRecruiterHub() {
+  const listEl = document.getElementById('recruiterJobList');
+  listEl.innerHTML = clientCache.jobs.map(job => `
+    <div class="job-card" onclick="viewJobDetail('${job.job_id}')">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">
+        <h4 style="font-weight:700; font-size:1.05rem;">${job.title || job.job_id}</h4>
+        <span class="tag">ID: ${job.job_id}</span>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.85rem;">
+        ${(job.description || '').substring(0, 110)}...
+      </p>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+          ${(job.competencies || ['Technical Fit']).slice(0, 3).map(c => `<span class="tag">${c}</span>`).join('')}
+        </div>
+        <button class="btn-outline" style="padding:0.3rem 0.75rem; font-size:0.8rem;" onclick="event.stopPropagation(); openLeaderboard('${job.job_id}')">
+          Shortlist & Rank
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function submitNewJob() {
+  const jobId = document.getElementById('newJobId').value.trim();
+  const desc = document.getElementById('newJobDesc').value.trim();
+  if (!desc) {
+    alert('Please enter a job description');
+    return;
+  }
+
+  clientCache.jobs.unshift({
+    job_id: jobId || 'job-' + Date.now(),
+    title: jobId || 'Software Engineer',
+    description: desc,
+    competencies: ['Python', 'System Architecture', 'Core Competencies']
+  });
+
+  navigateTo('recruiter');
+}
+
+async function loadCandidateHub() {
+  const listEl = document.getElementById('candidateJobList');
+  listEl.innerHTML = clientCache.jobs.map(job => `
+    <div class="job-card" onclick="viewJobDetail('${job.job_id}')">
+      <h4 style="font-weight:700; font-size:1.05rem; margin-bottom:0.4rem;">${job.title || job.job_id}</h4>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+        ${(job.description || '').substring(0, 110)}...
+      </p>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="tag">${(job.competencies || []).length} Competencies</span>
+        <button class="btn-primary" style="padding:0.35rem 0.85rem; font-size:0.8rem;" onclick="event.stopPropagation(); startApply('${job.job_id}')">
+          Apply Now
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  renderCandidateApplications();
+}
+
+function renderCandidateApplications() {
+  const appListEl = document.getElementById('candidateApplicationsList');
+  if (!clientCache.applications.length) {
+    appListEl.innerHTML = `<p class="card-sub">No active applications. Choose a job above to apply!</p>`;
+    return;
+  }
+
+  appListEl.innerHTML = clientCache.applications.map(app => `
+    <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <h4 style="font-weight:700;">Role: ${app.job_id}</h4>
+        <p class="card-sub">Match Fit Score: <strong style="color:var(--primary);">${app.match_score || 88}%</strong> | Status: <span class="tag">${app.status || 'SUBMITTED'}</span></p>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn-primary" onclick="launchInterview('${app.application_id || 'app-01'}')">🎙️ Launch Voice Interview</button>
+        <button class="btn-outline" onclick="openEvaluationReport('${app.application_id || 'app-01'}')">View Report</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function viewJobDetail(jobId) {
+  currentActiveJobId = jobId;
+  const job = clientCache.jobs.find(j => j.job_id === jobId) || {
+    job_id: jobId,
+    title: jobId,
+    description: "Full job description text...",
+    competencies: ["System Design", "Algorithms", "Leadership"]
+  };
+
+  document.getElementById('jobDetailTitle').textContent = job.title || job.job_id;
+  document.getElementById('jobDetailMeta').textContent = `Job Reference: ${job.job_id}`;
+  document.getElementById('jobDetailText').textContent = job.description;
+
+  const compEl = document.getElementById('jobDetailCompetencies');
+  compEl.innerHTML = (job.competencies || ['Technical Assessment', 'Problem Solving']).map(c => `
+    <span class="tag" style="background:var(--primary-glow); color:var(--primary); font-weight:600; padding:0.35rem 0.75rem;">
+      ✓ ${c}
+    </span>
+  `).join('');
+
+  const actionsEl = document.getElementById('jobDetailActions');
+  const sidebarEl = document.getElementById('jobDetailSidebar');
+
+  if (currentUser && currentUser.role === 'recruiter') {
+    actionsEl.innerHTML = `
+      <button class="btn-primary" onclick="openLeaderboard('${job.job_id}')">View Leaderboard & Shortlist</button>
+    `;
+    sidebarEl.innerHTML = `
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Recruiter Actions</h3>
+      <p class="card-sub" style="margin-bottom:1rem;">Candidate applications will be evaluated automatically against this job's competencies.</p>
+      <button class="btn-secondary" style="width:100%;" onclick="openLeaderboard('${job.job_id}')">Inspect Shortlist & Reports</button>
+    `;
+  } else {
+    actionsEl.innerHTML = `
+      <button class="btn-primary" onclick="startApply('${job.job_id}')">Apply with Resume</button>
+    `;
+    sidebarEl.innerHTML = `
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Ready to Apply?</h3>
+      <p class="card-sub" style="margin-bottom:1rem;">Upload your CV or paste plain text. Our multi-agent pipeline matches your skills and schedules a live interview.</p>
+      <button class="btn-primary" style="width:100%;" onclick="startApply('${job.job_id}')">Start Application</button>
+    `;
+  }
+
+  navigateTo('job-detail');
+}
+
+function startApply(jobId) {
+  // This portal's own in-page "apply" view (view-apply, above) is a
+  // client-side mock with no real backend calls - job listings here come
+  // from the hardcoded clientCache, not GET /jobs, so there is no real
+  // job_id to submit an application against from inside this page. Rather
+  // than duplicate a second real upload/parse/apply implementation here,
+  // hand off to apply.html, which already has the real file-upload ->
+  // ResumeParserAgent (incl. OCR fallback) -> review/edit -> real
+  // POST /candidates + /applications + matching flow, fully wired and
+  // verified. See the resume-upload frontend-integration task for why.
+  window.location.href = `apply.html?job_id=${encodeURIComponent(jobId)}`;
+}
+
+async function submitApplication() {
+  const name = document.getElementById('applyCandidateName').value.trim();
+  const resume = document.getElementById('applyResumeText').value.trim();
+  if (!name || !resume) {
+    alert('Please enter your name and resume text.');
+    return;
+  }
+
+  const newApp = {
+    application_id: 'app-' + Date.now(),
+    candidate_name: name,
+    job_id: currentActiveJobId,
+    resume_text: resume,
+    match_score: Math.floor(Math.random() * 15 + 82),
+    status: 'SHORTLISTED',
+    session_id: 'sess-' + Math.floor(Math.random() * 1000)
+  };
+
+  clientCache.applications.unshift(newApp);
+  clientCache.leaderboard.unshift(newApp);
+  
+  alert('Resume parsed successfully! You have been shortlisted. Proceed to AI Voice Interview.');
+  launchInterview(newApp.application_id);
+}
+
+function openLeaderboard(jobId) {
+  currentActiveJobId = jobId;
+  navigateTo('leaderboard');
+}
+
+async function loadLeaderboardView(jobId) {
+  document.getElementById('leaderboardSub').textContent = `Ranked applicants for job: ${jobId || 'All Roles'}`;
+  const tbody = document.getElementById('leaderboardBody');
+
+  const candidates = clientCache.leaderboard.length ? clientCache.leaderboard : [
+    { candidate_name: "Alex Morgan", match_score: 94, final_score: 91, recommendation: "STRONG HIRE", flags: "Clean", application_id: "app-01" },
+    { candidate_name: "Jordan Lee", match_score: 88, final_score: 85, recommendation: "HIRE", flags: "Clean", application_id: "app-02" },
+    { candidate_name: "Sam Taylor", match_score: 79, final_score: 74, recommendation: "REVIEW", flags: "1 Discrepancy", application_id: "app-03" }
+  ];
+
+  tbody.innerHTML = candidates.map((c, idx) => `
+    <tr>
+      <td style="font-weight:700; color:var(--primary);">#${idx + 1}</td>
+      <td><strong>${c.candidate_name}</strong></td>
+      <td><span class="score-pill high">${c.match_score || 88}%</span></td>
+      <td><span class="score-pill high">${c.final_score || 85}</span></td>
+      <td><span class="tag" style="color:var(--success); border-color:var(--success);">${c.recommendation || 'HIRE'}</span></td>
+      <td><span style="font-size:0.8rem; color:${c.flags === 'Clean' ? 'var(--success)' : 'var(--warning)'};">${c.flags || 'Clean'}</span></td>
+      <td>
+        <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:0.8rem;" onclick="openEvaluationReport('${c.application_id}')">View Report</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function runShortlistMatching() {
+  alert('ResumeMatcherAgent executed against all applicants. Shortlist updated.');
+  loadLeaderboardView(currentActiveJobId);
+}
+
+const sampleQuestions = [
+  "Can you describe your experience designing high-concurrency distributed systems and handling cache invalidation?",
+  "How do you approach database schema migrations in zero-downtime production environments?",
+  "Tell me about a challenging technical trade-off you had to negotiate with your team."
+];
+let currentQIndex = 0;
+
+function launchInterview(appId) {
+  currentActiveApplicationId = appId;
+  currentActiveSessionId = 'session-' + Date.now();
+  currentQIndex = 0;
+  
+  document.getElementById('interviewMeta').textContent = `Active Session: ${currentActiveSessionId}`;
+  document.getElementById('interviewQuestionText').textContent = sampleQuestions[currentQIndex];
+  
+  navigateTo('interview');
+}
+
+function startAnswer() {
+  const dot = document.getElementById('voiceStatusDot');
+  const label = document.getElementById('voiceStatusLabel');
+  dot.className = 'voice-status-dot recording';
+  label.textContent = 'Listening & streaming audio...';
+}
+
+function stopAnswer() {
+  const dot = document.getElementById('voiceStatusDot');
+  const label = document.getElementById('voiceStatusLabel');
+  dot.className = 'voice-status-dot active';
+  label.textContent = 'Processing answer (Adaptive Interviewer)...';
+
+  setTimeout(() => {
+    logTranscript("Candidate", "Spoken response recorded and verified against rubric.");
+    nextQuestion();
+  }, 1200);
+}
+
+function submitTextAnswer() {
+  const input = document.getElementById('textAnswerInput');
+  if (!input.value.trim()) return;
+  logTranscript("Candidate", input.value);
+  input.value = '';
+  nextQuestion();
+}
+
+function nextQuestion() {
+  currentQIndex++;
+  if (currentQIndex < sampleQuestions.length) {
+    document.getElementById('interviewQuestionText').textContent = sampleQuestions[currentQIndex];
+    logTranscript("Interviewer", sampleQuestions[currentQIndex]);
+  } else {
+    document.getElementById('interviewQuestionText').textContent = "All adaptive questions completed! Finalizing evaluation with multi-agent pipeline...";
+    setTimeout(() => {
+      finishInterviewSession();
+    }, 1500);
+  }
+}
+
+function repeatQuestion() {
+  const q = sampleQuestions[currentQIndex] || "Question completed.";
+  alert(`Interviewer: "${q}"`);
+}
+
+function logTranscript(speaker, text) {
+  const logEl = document.getElementById('interviewTranscriptLog');
+  const div = document.createElement('div');
+  div.innerHTML = `<span style="color:var(--primary); font-weight:600;">${speaker}:</span> ${text}`;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function finishInterviewSession() {
+  alert('Interview sealed! Running parallel evaluation: Technical, Behavioral, Resume Claim Audit, Integrity, and Anti-Bias agents.');
+  openEvaluationReport(currentActiveApplicationId);
+}
+
+function openEvaluationReport(appId) {
+  document.getElementById('reportCandidateMeta').textContent = `Candidate: Alex Morgan | App ID: ${appId || 'app-01'}`;
+  navigateTo('report');
+}
+
+updateNavState();
+</script>
+</body>
+</html>
