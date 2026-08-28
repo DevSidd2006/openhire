@@ -31,6 +31,7 @@ for _var, _value in (
     ("AUDIO_PROCESSOR", "mock"),
     ("TTS_PROVIDER", "mock"),
     ("VECTOR_STORE_TYPE", "mock"),
+    ("DATABASE_URL", ""),
     ("ENVIRONMENT", "test"),
 ):
     os.environ.setdefault(_var, _value)

@@ -24,7 +24,12 @@ async def get_db_pool() -> Optional["asyncpg.Pool"]:
     """Get active asyncpg connection pool."""
     global _pool
     if _pool is not None:
-        return _pool
+        try:
+            if not _pool._loop.is_closed():
+                return _pool
+        except Exception:
+            pass
+        _pool = None
     
     url = get_database_url()
     if not url:

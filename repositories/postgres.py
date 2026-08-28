@@ -213,11 +213,11 @@ class PostgresTranscriptRepository(TranscriptRepository):
                     transcript.candidate_id,
                     transcript.job_id,
                     len(transcript.exchanges),
-                    transcript.summary or "",
+                    getattr(transcript, "summary", None) or getattr(transcript, "raw_transcript", None) or "",
                     None,
                     _dumps(transcript),
                     transcript.is_sealed,
-                    transcript.created_at,
+                    datetime.fromisoformat(transcript.created_at) if isinstance(getattr(transcript, "created_at", None), str) else getattr(transcript, "created_at", None) or datetime.now(timezone.utc),
                 )
         except Exception as exc:
             raise RepositoryError(f"Failed to save transcript: {exc}") from exc
@@ -255,7 +255,8 @@ class PostgresJobRepository(JobRepository):
         now = datetime.now(timezone.utc)
         record_to_save = record.model_copy(update={"updated_at": now})
 
-        questions_json = _dumps([q.model_dump() if hasattr(q, "model_dump") else q for q in record.job.questions]) if record.job.questions else "[]"
+        questions_val = getattr(record.job, "questions", None) or getattr(record.job, "interview_topics", None) or []
+        questions_json = _dumps([q.model_dump() if hasattr(q, "model_dump") else q for q in questions_val]) if questions_val else "[]"
         query = """
             INSERT INTO jobs (id, title, questions, is_active, job_data, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -358,8 +359,8 @@ class PostgresCandidateRepository(CandidateRepository):
                 row = await conn.fetchrow(
                     query,
                     record.candidate_id,
-                    record.resume.name if record.resume else None,
-                    record.resume.email if record.resume else None,
+                    getattr(record.resume, "candidate_name", None) or getattr(record.resume, "name", None) if record.resume else None,
+                    getattr(record.resume, "email", None) if record.resume else None,
                     _dumps(record.resume),
                     record.used_fallback,
                     record.parse_warning,
@@ -449,7 +450,7 @@ class PostgresApplicationRepository(ApplicationRepository):
                     application.status.value if hasattr(application.status, "value") else str(application.status),
                     _dumps(application.matching_score),
                     application.session_id,
-                    application.evaluation_id,
+                    getattr(application, "evaluation_id", None),
                     application.created_at,
                     now,
                 )
@@ -463,7 +464,7 @@ class PostgresApplicationRepository(ApplicationRepository):
     def _row_to_app(self, row: dict) -> Application:
         match_data = _loads(row["matching_score"])
         from schemas.application import ApplicationStatus
-        from schemas.matching import MatchingScore
+        from schemas.evaluation import MatchingScore
         return Application(
             application_id=row["id"],
             job_id=row["job_id"],
@@ -471,7 +472,6 @@ class PostgresApplicationRepository(ApplicationRepository):
             status=ApplicationStatus(row["status"]),
             matching_score=MatchingScore.model_validate(match_data) if match_data else None,
             session_id=row["session_id"],
-            evaluation_id=row["evaluation_id"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -528,8 +528,13 @@ class PostgresEvaluationRepository(EvaluationRepository):
         now = datetime.now(timezone.utc)
         job_to_save = job.model_copy(update={"updated_at": now})
 
-        score = job.result.overall_score if job.result else None
-        report_text = job.result.executive_summary if job.result else None
+        score = None
+        report_text = None
+        if job.result:
+            score = getattr(job.result, "overall_score", None)
+            if score is None and hasattr(job.result, "scores") and job.result.scores:
+                score = getattr(job.result.scores, "weighted_final_score", None)
+            report_text = getattr(job.result, "executive_summary", None) or getattr(job.result, "explanation", None) or getattr(job.result, "technical_summary", None)
 
         query = """
             INSERT INTO evaluations (
