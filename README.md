@@ -155,7 +155,7 @@ erDiagram
 
     JOB_LEADERBOARDS {
         varchar id PK
-        varchar job_id UK_FK
+        varchar job_id UK,FK
         jsonb ranked_entries
         jsonb summary
     }

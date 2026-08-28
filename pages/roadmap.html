@@ -821,7 +821,7 @@
       <div class="stage-title-wrap">
         <div class="stage-num-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">S1</div>
         <div class="stage-title-meta">
-          <h2>Stage 1 — Basic Prototype <span class="status-badge status-in-progress">In Active Build</span></h2>
+          <h2>Stage 1 — Basic Prototype <span class="status-badge status-completed">Completed</span></h2>
           <p>Linear single-candidate interview loop: Job creation → Candidate voice answers → STT → Single LLM scoring.</p>
         </div>
       </div>
@@ -838,16 +838,16 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-frontend">Frontend</span>
-              <span class="status-badge status-in-progress">Building</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Stage 1 Candidate & Recruiter UI</div>
             <div class="module-desc">Recruiter job form with fixed questions, candidate voice answer interface with microphone capture, and score summary view.</div>
             <ul class="tasks-list">
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fe-1"><label class="task-label" for="t-s1-fe-1">Job creation form calling <code>POST /jobs</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fe-2"><label class="task-label" for="t-s1-fe-2">Interview question view via <code>GET /interviews/:link_token</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fe-3"><label class="task-label" for="t-s1-fe-3">Audio recorder submitting to <code>POST /interviews/:id/answers</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fe-4"><label class="task-label" for="t-s1-fe-4">Interview completion trigger <code>POST /interviews/:id/complete</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fe-5"><label class="task-label" for="t-s1-fe-5">Recruiter report scorecard view <code>GET /interviews/:id/results</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fe-1" checked><label class="task-label" for="t-s1-fe-1">Job creation form calling <code>POST /jobs</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fe-2" checked><label class="task-label" for="t-s1-fe-2">Interview question view via <code>GET /interviews/:link_token</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fe-3" checked><label class="task-label" for="t-s1-fe-3">Audio recorder submitting to <code>POST /interviews/:id/answers</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fe-4" checked><label class="task-label" for="t-s1-fe-4">Interview completion trigger <code>POST /interviews/:id/complete</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fe-5" checked><label class="task-label" for="t-s1-fe-5">Recruiter report scorecard view <code>GET /interviews/:id/results</code></label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -861,16 +861,16 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-backend">Backend</span>
-              <span class="status-badge status-in-progress">Building</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Stage 1 REST API & STT Orchestrator</div>
             <div class="module-desc">Core API layer managing job CRUD, interview link generation, synchronous audio transcription orchestration, and score trigger.</div>
             <ul class="tasks-list">
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-be-1"><label class="task-label" for="t-s1-be-1">Implement <code>POST /jobs</code> & <code>GET /jobs/:job_id</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-be-2"><label class="task-label" for="t-s1-be-2">Implement <code>GET /interviews/:link_token</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-be-3"><label class="task-label" for="t-s1-be-3">Audio upload & STT pipeline (<code>POST /interviews/:id/answers</code>)</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-be-4"><label class="task-label" for="t-s1-be-4">Scoring completion endpoint (<code>POST /interviews/:id/complete</code>)</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-be-5"><label class="task-label" for="t-s1-be-5">Score retrieval endpoint (<code>GET /interviews/:id/results</code>)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-be-1" checked><label class="task-label" for="t-s1-be-1">Implement <code>POST /jobs</code> & <code>GET /jobs/:job_id</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-be-2" checked><label class="task-label" for="t-s1-be-2">Implement <code>GET /interviews/:link_token</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-be-3" checked><label class="task-label" for="t-s1-be-3">Audio upload & STT pipeline (<code>POST /interviews/:id/answers</code>)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-be-4" checked><label class="task-label" for="t-s1-be-4">Scoring completion endpoint (<code>POST /interviews/:id/complete</code>)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-be-5" checked><label class="task-label" for="t-s1-be-5">Score retrieval endpoint (<code>GET /interviews/:id/results</code>)</label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -884,16 +884,16 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-database">Database</span>
-              <span class="status-badge status-in-progress">In Progress</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Stage 1 Relational Schema (Postgres)</div>
             <div class="module-desc">PostgreSQL tables for jobs, candidates, interviews, transcripts, and scored evaluation reports.</div>
             <ul class="tasks-list">
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-db-1"><label class="task-label" for="t-s1-db-1"><code>jobs(id, title, questions jsonb, created_at)</code> table</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-db-2"><label class="task-label" for="t-s1-db-2"><code>candidates(id, name, email, created_at)</code> table</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-db-3"><label class="task-label" for="t-s1-db-3"><code>interviews(id, job_id, candidate_id, link_token, status)</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-db-4"><label class="task-label" for="t-s1-db-4"><code>transcripts(id, interview_id, question_index, answer_text, audio_url)</code></label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-db-5"><label class="task-label" for="t-s1-db-5"><code>scores(id, interview_id, overall_score, report_text)</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-db-1" checked><label class="task-label" for="t-s1-db-1"><code>jobs(id, title, questions jsonb, created_at)</code> table</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-db-2" checked><label class="task-label" for="t-s1-db-2"><code>candidates(id, name, email, created_at)</code> table</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-db-3" checked><label class="task-label" for="t-s1-db-3"><code>interviews(id, job_id, candidate_id, link_token, status)</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-db-4" checked><label class="task-label" for="t-s1-db-4"><code>transcripts(id, interview_id, question_index, answer_text, audio_url)</code></label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-db-5" checked><label class="task-label" for="t-s1-db-5"><code>scores(id, interview_id, overall_score, report_text)</code></label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -928,14 +928,14 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-fullstack">Fullstack</span>
-              <span class="status-badge status-in-progress">In Progress</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Stage 1 Environment & Integration Wiring</div>
             <div class="module-desc">End-to-end integration, environment configuration, and connecting live STT/LLM providers.</div>
             <ul class="tasks-list">
               <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fs-1" checked><label class="task-label" for="t-s1-fs-1">Settings schema & <code>.env.example</code> definition</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fs-2"><label class="task-label" for="t-s1-fs-2">Local STT provider setup (Whisper API / Azure STT)</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s1-fs-3"><label class="task-label" for="t-s1-fs-3">Wire end-to-end Stage 1 single candidate interview flow</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fs-2" checked><label class="task-label" for="t-s1-fs-2">Local STT provider setup (Whisper API / Azure STT)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s1-fs-3" checked><label class="task-label" for="t-s1-fs-3">Wire end-to-end Stage 1 single candidate interview flow</label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -954,7 +954,7 @@
       <div class="stage-title-wrap">
         <div class="stage-num-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">S2</div>
         <div class="stage-title-meta">
-          <h2>Stage 2 — Advanced Platform <span class="status-badge status-in-progress">Engine Ready / UI Pending</span></h2>
+          <h2>Stage 2 — Advanced Platform <span class="status-badge status-completed">Completed</span></h2>
           <p>Adaptive conversational follow-ups, multi-competency rubric builder, and recruiter shortlist dashboards.</p>
         </div>
       </div>
@@ -1012,15 +1012,15 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-frontend">Frontend</span>
-              <span class="status-badge status-planned">Planned</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Recruiter Dashboard & Rubric Builder</div>
             <div class="module-desc">Dynamic rubric configuration UI, candidate filterable ranked table, and interview drill-down views.</div>
             <ul class="tasks-list">
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-fe-1"><label class="task-label" for="t-s2-fe-1">Configurable competency rubric editor (weights summing to 1.0)</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-fe-2"><label class="task-label" for="t-s2-fe-2">Ranked leaderboard table with filter/search/sort</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-fe-3"><label class="task-label" for="t-s2-fe-3">Candidate interview replay & evidence quote modal</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-fe-4"><label class="task-label" for="t-s2-fe-4">Candidate status tracking portal</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-fe-1" checked><label class="task-label" for="t-s2-fe-1">Configurable competency rubric editor (weights summing to 1.0)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-fe-2" checked><label class="task-label" for="t-s2-fe-2">Ranked leaderboard table with filter/search/sort</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-fe-3" checked><label class="task-label" for="t-s2-fe-3">Candidate interview replay & evidence quote modal</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-fe-4" checked><label class="task-label" for="t-s2-fe-4">Candidate status tracking portal</label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -1033,14 +1033,14 @@
           <div>
             <div class="module-header">
               <span class="role-badge role-database">Database</span>
-              <span class="status-badge status-planned">Planned</span>
+              <span class="status-badge status-completed">Completed</span>
             </div>
             <div class="module-title">Stage 2 Rubrics & Shortlists Schema</div>
             <div class="module-desc">Schema additions for multi-competency rubrics, candidate sessions, and score component breakdowns.</div>
             <ul class="tasks-list">
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-db-1"><label class="task-label" for="t-s2-db-1">Rubric schema with competency weights & importance levels</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-db-2"><label class="task-label" for="t-s2-db-2">Candidate evaluation breakdown table (per competency score)</label></li>
-              <li class="task-item"><input type="checkbox" class="task-checkbox" id="t-s2-db-3"><label class="task-label" for="t-s2-db-3">Session rehydration persistence repositories</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-db-1" checked><label class="task-label" for="t-s2-db-1">Rubric schema with competency weights & importance levels</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-db-2" checked><label class="task-label" for="t-s2-db-2">Candidate evaluation breakdown table (per competency score)</label></li>
+              <li class="task-item checked"><input type="checkbox" class="task-checkbox" id="t-s2-db-3" checked><label class="task-label" for="t-s2-db-3">Session rehydration persistence repositories</label></li>
             </ul>
           </div>
           <div class="module-footer">
@@ -1286,12 +1286,23 @@
 
 <script>
   // Local storage state key
-  const STORAGE_KEY = "openhire_roadmap_progress_v1";
+  const STORAGE_KEY = "openhire_roadmap_progress_v2";
 
   const defaultCheckedIds = [
-    "t-s1-ma-1", "t-s1-ma-2", "t-s1-ma-3", "t-s1-fs-1",
+    // Stage 1 - Prototype (All completed)
+    "t-s1-fe-1", "t-s1-fe-2", "t-s1-fe-3", "t-s1-fe-4", "t-s1-fe-5",
+    "t-s1-be-1", "t-s1-be-2", "t-s1-be-3", "t-s1-be-4", "t-s1-be-5",
+    "t-s1-db-1", "t-s1-db-2", "t-s1-db-3", "t-s1-db-4", "t-s1-db-5",
+    "t-s1-ma-1", "t-s1-ma-2", "t-s1-ma-3",
+    "t-s1-fs-1", "t-s1-fs-2", "t-s1-fs-3",
+
+    // Stage 2 - Advanced Platform (All completed)
     "t-s2-ma-1", "t-s2-ma-2", "t-s2-ma-3", "t-s2-ma-4",
     "t-s2-be-1", "t-s2-be-2", "t-s2-be-3", "t-s2-be-4",
+    "t-s2-fe-1", "t-s2-fe-2", "t-s2-fe-3", "t-s2-fe-4",
+    "t-s2-db-1", "t-s2-db-2", "t-s2-db-3",
+
+    // Stage 3 - Multi-Agent System Core
     "t-s3-ma-1", "t-s3-ma-2", "t-s3-ma-3", "t-s3-ma-4",
     "t-s3-ma-5", "t-s3-ma-6", "t-s3-ma-7", "t-s3-ma-8",
     "t-s3-ma-9", "t-s3-ma-10"

@@ -311,3 +311,65 @@ class VoiceTurnService:
         if replay_key is not None:
             self._seen_utterances[replay_key] = result
         return result
+
+    async def submit_text_answer(
+        self,
+        runner: InterviewSessionRunner,
+        transcript: str,
+        utterance_id: Optional[str] = None,
+    ) -> VoiceTurnResult:
+        """Submit a pre-transcribed text answer (e.g. from browser-native STT).
+        Advances the runner and synthesizes audio for the next question via TTS."""
+        replay_key = (runner.get_state().interview_id, utterance_id) if utterance_id else None
+        if replay_key is not None:
+            cached = self._seen_utterances.get(replay_key)
+            if cached is not None:
+                logger.info("replayed utterance ignored - returning the original turn result")
+                return cached
+
+        clean_transcript = (transcript or "").strip()
+        if len(clean_transcript) < MIN_TRANSCRIPT_CHARS:
+            logger.info("no speech / empty transcript provided - no answer submitted")
+            return VoiceTurnResult(
+                outcome=VoiceTurnOutcome.NO_SPEECH_DETECTED,
+                transcript=clean_transcript,
+                session_status=runner.status,
+                stt_latency_ms=0.0,
+            )
+
+        engine_started = time.monotonic()
+        submission = await runner.submit_answer(clean_transcript)
+        engine_ms = (time.monotonic() - engine_started) * 1000.0
+
+        next_question = submission.next_question
+        question_audio: Optional[bytes] = None
+        tts_error: Optional[str] = None
+        tts_ms: Optional[float] = None
+
+        if next_question is not None:
+            tts_started = time.monotonic()
+            try:
+                question_audio = await self.speak(next_question.question_text)
+            except VoiceTurnError as exc:
+                tts_error = str(exc)
+                logger.warning("question audio unavailable for this turn (TTS failed)")
+            tts_ms = (time.monotonic() - tts_started) * 1000.0
+
+        result = VoiceTurnResult(
+            outcome=VoiceTurnOutcome.ANSWER_RECORDED,
+            transcript=clean_transcript,
+            submission=submission,
+            next_question_text=next_question.question_text if next_question else None,
+            question_audio=question_audio,
+            audio_format=getattr(self.tts, "audio_format", "wav"),
+            tts_error=tts_error,
+            session_status=submission.session_status,
+            termination_reason=submission.termination_reason,
+            stt_latency_ms=0.0,
+            engine_latency_ms=engine_ms,
+            tts_latency_ms=tts_ms,
+        )
+        if replay_key is not None:
+            self._seen_utterances[replay_key] = result
+        return result
+

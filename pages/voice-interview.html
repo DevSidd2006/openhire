@@ -313,11 +313,18 @@
 <main class="meet-container">
   
   <div class="meet-topbar">
-    <div style="display:flex; align-items:center; gap:0.75rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
       <div class="rec-badge"><span class="rec-dot"></span> P9 VOICE ENGINE</div>
       <div style="display:flex; gap:0.4rem; align-items:center;">
         <input id="sessionId" class="form-control" placeholder="Session UUID..." style="width:200px; padding:0.3rem 0.6rem; font-size:12px;">
         <button id="connect" class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;">Connect</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; background:var(--surface); padding:0.25rem 0.6rem; border-radius:8px; border:1px solid var(--surface-border);">
+        <label for="sttMode" style="font-size:11px; font-family:var(--font-mono); color:var(--text-muted);">STT:</label>
+        <select id="sttMode" style="background:transparent; border:none; color:var(--text-main); font-size:11.5px; outline:none; cursor:pointer;">
+          <option value="browser" style="background:#11141c;">⚡ Browser Native STT (Free & Fast)</option>
+          <option value="server" style="background:#11141c;">🎙️ Server Audio STT (WAV Upload)</option>
+        </select>
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:0.6rem;">
@@ -351,7 +358,7 @@
 
       <div style="margin-top: 1.5rem; text-align:center;">
         <h3 style="font-weight:600; font-size:1.1rem; margin-bottom:0.25rem;">OpenHire Adaptive Interviewer</h3>
-        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubStatus">Server-Side Runner Engine</p>
+        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubStatus">Microsoft Edge Neural Voice / Server Engine</p>
       </div>
 
       <div class="tile-tag">
@@ -447,6 +454,43 @@ const $ = (id) => document.getElementById(id);
 let ws = null, stream = null, audioCtx = null, node = null, source = null;
 let pcmChunks = [], capturing = false, sourceRate = 48000;
 const TARGET_RATE = 16000;
+
+// Browser Native Speech Recognition
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recognizedText = "";
+let nativeSttSupported = !!SpeechRecognition;
+
+if (nativeSttSupported) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-IN"; // Default to Indian English
+
+  recognition.onresult = (event) => {
+    let current = "";
+    for (let i = 0; i < event.results.length; i++) {
+      current += event.results[i][0].transcript;
+    }
+    recognizedText = current.trim();
+    if (recognizedText) {
+      const userTileStatus = document.getElementById("userTileStatus");
+      if (userTileStatus) userTileStatus.textContent = `"${recognizedText.slice(-30)}"`;
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e.error);
+  };
+} else {
+  // If not supported by browser, select server audio mode automatically
+  const sttSelect = $("sttMode");
+  if (sttSelect) {
+    sttSelect.value = "server";
+    const opt = sttSelect.querySelector('option[value="browser"]');
+    if (opt) opt.disabled = true;
+  }
+}
 
 function downsampleTo16k(input, inputRate) {
   if (inputRate === TARGET_RATE) return input;
@@ -583,6 +627,18 @@ $("connect").onclick = () => {
 
 async function startRecording() {
   if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
+  
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    recognizedText = "";
+    try {
+      recognition.start();
+    } catch (e) {
+      console.log("Recognition already active or restart:", e);
+    }
+  }
+
   try {
     stream = stream || await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -639,6 +695,29 @@ function stopRecording() {
   if (wave) wave.style.display = "none";
   try { source && source.disconnect(); node && node.disconnect(); } catch {}
 
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    try { recognition.stop(); } catch {}
+    const textToSend = recognizedText.trim();
+    if (!textToSend) {
+      // Fallback to server audio processing if browser returned empty transcript
+      sendAudioFallback();
+      return;
+    }
+    setStatus("thinking…", "on");
+    ws.send(JSON.stringify({
+      type: "answer_text",
+      transcript: textToSend,
+      utterance_id: crypto.randomUUID(),
+    }));
+    return;
+  }
+
+  sendAudioFallback();
+}
+
+function sendAudioFallback() {
   const total = pcmChunks.reduce((n, c) => n + c.length, 0);
   if (!total) { setStatus("connected", "on"); return; }
   const merged = new Float32Array(total);

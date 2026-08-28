@@ -304,6 +304,46 @@ async def voice_socket(websocket: WebSocket, session_id: str) -> None:
                 await websocket.send_json(_turn_payload(result, session_id=session_id))
                 continue
 
+            if kind == "answer_text":
+                transcript_text = message.get("transcript")
+                if not isinstance(transcript_text, str):
+                    await websocket.send_json(
+                        {"type": "error", "error": "invalid_request",
+                         "detail": "transcript (string) is required for answer_text"}
+                    )
+                    continue
+
+                try:
+                    result = await voice.submit_text_answer(
+                        runner,
+                        transcript_text,
+                        utterance_id=message.get("utterance_id"),
+                    )
+                except VoiceTurnError as exc:
+                    await websocket.send_json(
+                        {"type": "error", "error": "voice_error", "detail": str(exc)}
+                    )
+                    continue
+                except InterviewSessionError as exc:
+                    await websocket.send_json(
+                        {"type": "error", "error": "session_error", "detail": str(exc)}
+                    )
+                    continue
+
+                await service.record_turn_outcome(session_id, runner)
+                evaluation_job = await _trigger_evaluation_after_voice_turn(
+                    evaluations, service, session_id=session_id, runner=runner,
+                )
+
+                await websocket.send_json(
+                    _turn_payload(result, session_id=session_id, evaluation_job=evaluation_job)
+                )
+
+                if result.session_status is not None and result.session_status.value == "sealed":
+                    await websocket.close(code=1000)
+                    return
+                continue
+
             if kind == "answer":
                 raw = message.get("audio_base64")
                 if not isinstance(raw, str):

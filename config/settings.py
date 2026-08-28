@@ -99,12 +99,17 @@ AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", os.getenv("AUDIO_PROCESSOR", "mock"
 # exactly like LLM_PROVIDER=mock does for the agent layer.
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "mock").lower()
 
-# Azure Speech (P9): the first real STT/TTS implementation. Credentials are
+# Azure Speech (P9): STT/TTS implementation. Credentials are
 # read ONLY from the environment - never hard-coded, logged, echoed into a
 # transcript, or returned through the API.
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
 AZURE_SPEECH_VOICE = os.getenv("AZURE_SPEECH_VOICE", "en-US-JennyNeural")
+
+# Edge TTS Configuration (Free neural TTS via Microsoft Edge service)
+EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-IN-NeerjaNeural")
+EDGE_TTS_RATE = os.getenv("EDGE_TTS_RATE", "+0%")
+EDGE_TTS_PITCH = os.getenv("EDGE_TTS_PITCH", "+0Hz")
 
 # P9 voice-turn safety limits.
 MAX_UTTERANCE_BYTES = int(os.getenv("MAX_UTTERANCE_BYTES", str(10 * 1024 * 1024)))  # 10 MB
