@@ -46,6 +46,7 @@ for _var, _value in (
     ("AUDIO_PROCESSOR", "mock"),
     ("TTS_PROVIDER", "mock"),
     ("VECTOR_STORE_TYPE", "mock"),
+    ("DATABASE_URL", ""),
     ("ENVIRONMENT", "test"),
     ("DATABASE_URL", ""),
 ):
