@@ -9,151 +9,424 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .interview-box {
-    max-width: 740px;
-    margin: 1.5rem auto;
+  /* Google Meet Minimal Dark Canvas */
+  body {
+    background: #0d0f14;
+    overflow-x: hidden;
   }
-  .session-header {
+  
+  .meet-container {
+    max-width: 1200px;
+    margin: 1.2rem auto;
+    padding: 0 1.25rem 5rem;
+  }
+
+  .meet-topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.6rem 0.9rem;
-    background: var(--surface);
-    border: 1px solid var(--surface-border);
-    border-radius: var(--radius);
-    margin-bottom: 1.25rem;
-    font-family: var(--font-mono);
-    font-size: 11.5px;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
   }
-  .status-dot {
-    display: inline-block;
+
+  .meet-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .rec-dot {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--success);
-    margin-right: 6px;
+    background: var(--danger);
+    animation: pulse 1.2s infinite;
   }
-  .question-panel {
+
+  /* 50/50 Video Grid */
+  .meet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    min-height: 480px;
+  }
+
+  @media (max-width: 860px) {
+    .meet-grid {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+  }
+
+  /* Video Tiles */
+  .meet-tile {
     background: var(--surface);
     border: 1px solid var(--surface-border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    margin-bottom: 1.25rem;
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    min-height: 380px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .question-counter {
+
+  .meet-tile.speaking {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary), 0 8px 32px rgba(59, 130, 246, 0.25);
+  }
+
+  .meet-tile.user-speaking {
+    border-color: var(--success);
+    box-shadow: 0 0 0 2px var(--success), 0 8px 32px rgba(16, 185, 129, 0.25);
+  }
+
+  .tile-tag {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    background: rgba(15, 18, 26, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--surface-border);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-main);
+    z-index: 10;
+  }
+
+  .tile-top-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(15, 18, 26, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--surface-border);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
     font-family: var(--font-mono);
     font-size: 11px;
-    text-transform: uppercase;
-    color: var(--primary);
-    margin-bottom: 0.5rem;
+    color: var(--text-muted);
+    z-index: 10;
   }
-  .question-text {
-    font-size: 1.25rem;
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--text-main);
+
+  /* AI Glowing Orb Effect */
+  .ai-orb-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
-  .audio-stage {
-    text-align: center;
-    padding: 2.25rem 1.5rem;
-    background: var(--surface);
-    border: 1px solid var(--surface-border);
-    border-radius: var(--radius);
-    margin-bottom: 1.25rem;
-  }
-  .mic-button {
-    font-family: var(--font-sans);
-    font-size: 14px;
-    font-weight: 600;
-    padding: 0.85rem 2rem;
-    border-radius: var(--radius);
-    background: var(--primary);
+
+  .ai-orb {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #6366f1, #06b6d4);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
     color: #fff;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2;
   }
-  .mic-button:hover { background: var(--primary-hover); }
-  .mic-button.recording {
-    background: var(--danger);
-    animation: livePulse 1.2s infinite;
+
+  .ai-aura {
+    position: absolute;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: 2px solid rgba(59, 130, 246, 0.4);
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
-  @keyframes livePulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.75; }
+
+  .meet-tile.speaking .ai-orb {
+    transform: scale(1.08);
+    animation: orbPulse 1.2s infinite alternate;
   }
-  .transcript-area {
-    background: var(--bg);
-    border: 1px solid var(--surface-border);
-    border-radius: var(--radius);
-    padding: 0.9rem;
-    max-height: 180px;
-    overflow-y: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
+
+  .meet-tile.speaking .ai-aura {
+    opacity: 1;
+    animation: auraRipple 1.6s infinite;
+  }
+
+  @keyframes orbPulse {
+    0% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); }
+    100% { box-shadow: 0 0 55px rgba(99, 102, 241, 0.8), 0 0 20px rgba(6, 182, 212, 0.6); }
+  }
+
+  @keyframes auraRipple {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  /* Candidate Tile / Video Canvas */
+  #userVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 16px;
+  }
+
+  .user-avatar-fallback {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: #1e2433;
+    border: 2px solid var(--surface-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
     color: var(--text-muted);
   }
-  .log-line { padding: 0.25rem 0; }
-  .speaker-tag { font-weight: 600; }
-  .speaker-tag.ai { color: var(--primary); }
-  .speaker-tag.cand { color: var(--success); }
+
+  /* Question Overlay Subtitle Bar */
+  .question-subtitle-bar {
+    background: rgba(17, 20, 28, 0.95);
+    border: 1px solid var(--surface-border);
+    backdrop-filter: blur(16px);
+    border-radius: 12px;
+    padding: 1.1rem 1.5rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .q-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: uppercase;
+    background: var(--primary-subtle);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .q-live-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-main);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  /* Meet Bottom Control Dock */
+  .meet-dock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(17, 20, 28, 0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--surface-border);
+    padding: 0.75rem 1.5rem;
+    border-radius: 40px;
+    max-width: 620px;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  .dock-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: #1c2230;
+    border: 1px solid var(--surface-border);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+  }
+
+  .dock-btn:hover:not(:disabled) {
+    background: #273044;
+    border-color: var(--surface-border-light);
+    transform: translateY(-2px);
+  }
+
+  .dock-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
+  }
+
+  .dock-btn.speaking {
+    background: var(--danger) !important;
+    border-color: var(--danger) !important;
+    color: #fff !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+    animation: livePulse 1.2s infinite;
+  }
+
+  .dock-btn.btn-end {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    width: auto;
+    padding: 0 1.25rem;
+    border-radius: 24px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .dock-btn.btn-end:hover {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  /* Compact Transcript Drawer */
+  .meet-transcript-panel {
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
 </style>
 </head>
 <body>
 <div id="navbarContainer"></div>
 
-<main class="container">
-  <div class="interview-box">
+<main class="meet-container">
+  
+  <div class="meet-topbar">
+    <div class="meet-title-group">
+      <div class="rec-badge"><span class="rec-dot"></span> LIVE AI SESSION</div>
+      <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted);" id="sessionMetaText">SESSION: —</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span class="tag" id="statusBadge">Ready</span>
+      <button class="btn-outline" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="toggleTranscript()">Toggle Transcript</button>
+    </div>
+  </div>
+
+  <!-- Question Subtitle Overlay -->
+  <div class="question-subtitle-bar">
+    <span class="q-badge" id="qCounter">Q1 OF 3</span>
+    <div class="q-live-text" id="currentQText">Loading interview question...</div>
+    <button class="btn-outline" style="padding:0.35rem 0.75rem; font-size:12px;" onclick="repeatQuestion()">🔊 Replay</button>
+  </div>
+
+  <!-- Google Meet 50/50 Stage Grid -->
+  <div class="meet-grid">
     
-    <div class="session-header">
-      <div>
-        <span class="status-dot"></span>
-        <span style="color:var(--text-main);">LIVE EVALUATION</span>
-      </div>
-      <div id="sessionMetaText">SESSION: —</div>
-    </div>
-
-    <!-- Question View -->
-    <div class="question-panel">
-      <div class="question-counter" id="qCounter">QUESTION 1 OF 3 • ADAPTIVE PROBE</div>
-      <div class="question-text" id="currentQText">Loading prompt...</div>
-    </div>
-
-    <!-- Audio Interaction -->
-    <div class="audio-stage">
-      <div style="margin-bottom: 1.25rem;">
-        <span class="tag" id="statusBadge">Status: Ready</span>
+    <!-- AI Stage (Left 50%) -->
+    <div class="meet-tile" id="aiTile">
+      <div class="tile-top-status">
+        <span id="aiSpeechState">Listening</span>
       </div>
 
-      <div style="display:flex; justify-content:center; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-        <button class="mic-button" id="btnMic" 
-                onmousedown="startSpeech()" onmouseup="stopSpeech()"
-                ontouchstart="startSpeech()" ontouchend="stopSpeech()">
-          🎙️ Hold to Speak Answer
-        </button>
-        <button class="btn-secondary" onclick="repeatQuestion()">
-          🔊 Replay
-        </button>
+      <div class="ai-orb-wrap">
+        <div class="ai-aura"></div>
+        <div class="ai-orb" id="aiOrbIcon">🤖</div>
       </div>
 
-      <div style="max-width: 480px; margin: 1.25rem auto 0; display:flex; gap: 0.5rem;">
-        <input type="text" id="typeInput" class="form-control" placeholder="Or type your response...">
-        <button class="btn-secondary" onclick="submitText()">Send</button>
+      <div style="margin-top: 1.5rem; text-align:center;">
+        <h3 style="font-weight:600; font-size:1.1rem; margin-bottom:0.25rem;">OpenHire AI Interviewer</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubPrompt">Adaptive Technical Evaluator</p>
+      </div>
+
+      <div class="tile-tag">
+        <span class="dot on"></span> AI Evaluator (Adaptive)
       </div>
     </div>
 
-    <!-- Immutable Transcript -->
-    <div class="card">
-      <div class="card-header" style="margin-bottom:0.75rem;">
-        <span style="font-size:12px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted);">Immutable Transcript</span>
-        <button class="btn-danger" style="padding:0.3rem 0.7rem; font-size:11.5px;" onclick="finishSession()">Complete Interview</button>
+    <!-- Candidate Stage (Right 50%) -->
+    <div class="meet-tile" id="userTile">
+      <div class="tile-top-status">
+        <span id="userMicStatus">Mic Ready</span>
       </div>
-      <div class="transcript-area" id="transcriptLog">
-        <div class="log-line"><span class="speaker-tag" style="color:var(--text-faint);">[SYS]</span> Adaptive session started. Transcript sealed upon finish.</div>
+
+      <!-- Live Video stream or styled monogram avatar -->
+      <video id="userVideo" autoplay playsinline muted style="display:none;"></video>
+      <div class="user-avatar-fallback" id="userFallbackAvatar">AM</div>
+
+      <div style="margin-top: 1.25rem; text-align:center;" id="userMetaWrap">
+        <h3 style="font-weight:600; font-size:1.05rem; margin-bottom:0.25rem;" id="candidateDisplayName">Alex Morgan (You)</h3>
+        <div class="wave-bars" id="userWave" style="display:none; margin:0 auto;">
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="tile-tag">
+        <span class="dot on"></span> <span id="candidateTagText">Alex Morgan (Candidate)</span>
       </div>
     </div>
 
   </div>
+
+  <!-- Meet Bottom Action Dock -->
+  <div class="meet-dock">
+    <button class="dock-btn" id="btnMicHold" title="Hold or Click to Speak"
+            onmousedown="startSpeech()" onmouseup="stopSpeech()"
+            ontouchstart="startSpeech()" ontouchend="stopSpeech()">
+      🎤
+    </button>
+    <button class="dock-btn" id="btnCamToggle" title="Toggle Camera" onclick="toggleCamera()">
+      📹
+    </button>
+    <button class="dock-btn" title="Replay AI Speech" onclick="repeatQuestion()">
+      🔊
+    </button>
+    <button class="dock-btn btn-end" onclick="finishSession()">
+      End Call & Score →
+    </button>
+  </div>
+
+  <!-- Type Answer Fallback -->
+  <div style="max-width: 540px; margin: 0 auto 1.5rem; display:flex; gap:0.5rem;">
+    <input type="text" id="typeInput" class="form-control" placeholder="Type text response if microphone is unavailable...">
+    <button class="btn-secondary" onclick="submitText()">Send</button>
+  </div>
+
+  <!-- Sealed Transcript Container -->
+  <div class="meet-transcript-panel" id="transcriptContainer">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Real-Time Sealed Transcript</span>
+      <span class="tag">Audited</span>
+    </div>
+    <div class="transcript-area" id="transcriptLog" style="max-height: 160px;">
+      <div class="log-line"><span class="speaker-tag" style="color:var(--text-faint);">[SYS]</span> Connected to multi-agent interview evaluator. Audio stream active.</div>
+    </div>
+  </div>
+
 </main>
 
 <script src="js/app.js"></script>
@@ -166,46 +439,94 @@
 
   document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId}`;
 
+  const currentUser = getCurrentUser();
+  if (currentUser && currentUser.name) {
+    document.getElementById('candidateDisplayName').textContent = `${currentUser.name} (You)`;
+    document.getElementById('candidateTagText').textContent = `${currentUser.name} (Candidate)`;
+    const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    document.getElementById('userFallbackAvatar').textContent = initials || 'ME';
+  }
+
   const questions = [
-    "How do you design high-concurrency microservices and resolve caching race hazards?",
+    "How do you design high-concurrency microservices and resolve caching race hazards in distributed systems?",
     "What is your approach to performing zero-downtime database schema migrations in production?",
-    "Describe a technical trade-off where you had to balance latency vs data consistency."
+    "Describe a technical trade-off where you had to balance latency versus consistency."
   ];
   let currentIdx = 0;
+  let isSpeakingAI = false;
+  let videoStream = null;
 
   function loadQuestion() {
     if (currentIdx < questions.length) {
-      document.getElementById('qCounter').textContent = `QUESTION ${currentIdx + 1} OF ${questions.length} • ADAPTIVE PROBE`;
+      document.getElementById('qCounter').textContent = `Q${currentIdx + 1} OF ${questions.length}`;
       document.getElementById('currentQText').textContent = questions[currentIdx];
       addLog('Interviewer', questions[currentIdx]);
+      triggerAISpeaking(questions[currentIdx]);
     } else {
-      document.getElementById('currentQText').textContent = "Interview completed. Finalizing multi-agent evaluation score...";
-      document.getElementById('statusBadge').textContent = 'Status: Evaluating';
+      document.getElementById('currentQText').textContent = "Interview finished! Compiling agent scorecard...";
+      document.getElementById('statusBadge').textContent = 'Scoring';
       setTimeout(finishSession, 1200);
     }
   }
 
+  function triggerAISpeaking(text) {
+    const aiTile = document.getElementById('aiTile');
+    const aiState = document.getElementById('aiSpeechState');
+    const aiSub = document.getElementById('aiSubPrompt');
+    
+    isSpeakingAI = true;
+    aiTile.classList.add('speaking');
+    aiState.textContent = 'Speaking...';
+    aiState.style.color = 'var(--primary)';
+    aiSub.textContent = 'Asking question...';
+
+    // Simulate speaking duration based on length
+    const duration = Math.min(Math.max(text.length * 40, 2500), 5000);
+    setTimeout(() => {
+      aiTile.classList.remove('speaking');
+      aiState.textContent = 'Listening';
+      aiState.style.color = 'var(--text-muted)';
+      aiSub.textContent = 'Awaiting candidate response';
+      isSpeakingAI = false;
+    }, duration);
+  }
+
   function startSpeech() {
-    const btn = document.getElementById('btnMic');
+    if (isSpeakingAI) return;
+    const btn = document.getElementById('btnMicHold');
+    const userTile = document.getElementById('userTile');
+    const userMicStatus = document.getElementById('userMicStatus');
+    const userWave = document.getElementById('userWave');
     const badge = document.getElementById('statusBadge');
-    btn.classList.add('recording');
-    btn.innerHTML = '🔴 Recording... (Release to Send)';
-    badge.textContent = 'Status: Recording Audio';
+
+    btn.classList.add('speaking');
+    userTile.classList.add('user-speaking');
+    userMicStatus.textContent = 'Speaking...';
+    userMicStatus.style.color = 'var(--success)';
+    badge.textContent = 'Recording';
+    userWave.style.display = 'inline-flex';
   }
 
   function stopSpeech() {
-    const btn = document.getElementById('btnMic');
+    const btn = document.getElementById('btnMicHold');
+    const userTile = document.getElementById('userTile');
+    const userMicStatus = document.getElementById('userMicStatus');
+    const userWave = document.getElementById('userWave');
     const badge = document.getElementById('statusBadge');
-    btn.classList.remove('recording');
-    btn.innerHTML = '🎙️ Hold to Speak Answer';
-    badge.textContent = 'Status: Evaluating Response';
+
+    btn.classList.remove('speaking');
+    userTile.classList.remove('user-speaking');
+    userMicStatus.textContent = 'Mic Ready';
+    userMicStatus.style.color = 'var(--text-muted)';
+    userWave.style.display = 'none';
+    badge.textContent = 'Evaluating...';
 
     setTimeout(() => {
-      addLog('Candidate', 'Audio answer submitted and evaluated against competency rubric.');
+      addLog('Candidate', 'Audio answer recorded and verified against rubric.');
       currentIdx++;
       loadQuestion();
-      badge.textContent = 'Status: Ready';
-    }, 1000);
+      badge.textContent = 'Ready';
+    }, 900);
   }
 
   function submitText() {
@@ -219,7 +540,36 @@
   }
 
   function repeatQuestion() {
-    alert(`Interviewer: "${questions[currentIdx] || 'Completed.'}"`);
+    triggerAISpeaking(questions[currentIdx] || 'Completed.');
+  }
+
+  async function toggleCamera() {
+    const video = document.getElementById('userVideo');
+    const avatar = document.getElementById('userFallbackAvatar');
+    const btn = document.getElementById('btnCamToggle');
+
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      videoStream = null;
+      video.style.display = 'none';
+      avatar.style.display = 'flex';
+      btn.classList.remove('active');
+    } else {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = videoStream;
+        video.style.display = 'block';
+        avatar.style.display = 'none';
+        btn.classList.add('active');
+      } catch (err) {
+        alert('Camera permission denied or camera not found.');
+      }
+    }
+  }
+
+  function toggleTranscript() {
+    const panel = document.getElementById('transcriptContainer');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   }
 
   function addLog(speaker, text) {
@@ -240,7 +590,9 @@
   }
 
   function finishSession() {
-    alert('Interview transcript sealed! Multi-agent evaluation generated.');
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+    }
     window.location.href = `report.html?app_id=${encodeURIComponent(appId)}&session_id=${encodeURIComponent(sessionId)}`;
   }
 
