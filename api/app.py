@@ -119,8 +119,9 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(applications_router, prefix=settings.api_prefix)
     app.include_router(evaluations_router, prefix=settings.api_prefix)
 
-    @app.get(
+    @app.api_route(
         f"{settings.api_prefix}/health",
+        methods=["GET", "HEAD"],
         response_model=HealthResponse,
         tags=["health"],
     )
@@ -141,7 +142,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         """
         return HealthResponse(status="ok")
 
-    @app.get(f"{settings.api_prefix}/", include_in_schema=False)
+    @app.api_route(f"{settings.api_prefix}/", methods=["GET", "HEAD"], include_in_schema=False)
     async def root(container: ServiceContainer = Depends(get_container)) -> dict:
         """How this process is configured.
 

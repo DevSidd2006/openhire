@@ -588,8 +588,10 @@
 
     function connect() {
       if (!sessionId || ended) return;
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${encodeURIComponent(sessionId)}`);
+      const wsUrl = typeof getWebSocketUrl === 'function'
+        ? getWebSocketUrl(`/ws/sessions/${encodeURIComponent(sessionId)}`)
+        : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/sessions/${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         document.getElementById('btnMic').disabled = false;
