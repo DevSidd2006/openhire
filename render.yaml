@@ -23,4 +23,3 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: INFO
-
