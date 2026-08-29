@@ -41,6 +41,8 @@ env/
 .agent
 *.swp
 *.swo
+.superpowers
+.claude
 *~
 .DS_Store
 

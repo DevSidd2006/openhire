@@ -235,6 +235,170 @@
     flex: 1;
   }
 
+  /* STT Display */
+  .stt-display {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    font-style: italic;
+  }
+
+  .stt-display.listening {
+    color: var(--primary);
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+
+  .stt-interim {
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+
+  .stt-final {
+    color: var(--text-main);
+    opacity: 1;
+    font-style: normal;
+  }
+
+  /* Coaching Guidance Panel */
+  .coaching-panel {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .coaching-panel.active {
+    display: block;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .coaching-title {
+    font-weight: 600;
+    color: var(--success);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .coaching-text {
+    color: var(--text-main);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .coaching-suggestion {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+
+  /* Response Analysis */
+  .analysis-scores {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .score-item {
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+
+  .score-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .score-value {
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  /* Scoring Display */
+  .scoring-display {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .scoring-title {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .scoring-meter {
+    width: 100%;
+    height: 8px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  .scoring-meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+  }
+
+  .scoring-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .scoring-stat {
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .scoring-stat-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .scoring-stat-value {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
   /* Control Dock */
   .meet-dock {
     display: flex;
@@ -342,6 +506,32 @@
     <button class="btn-outline" id="replay" style="padding:0.35rem 0.75rem; font-size:12px;" disabled>🔊 Repeat</button>
   </div>
 
+  <!-- Real-time Scoring Display -->
+  <div class="scoring-display" id="scoringDisplay" style="display:none;">
+    <div class="scoring-title">📊 Interview Progress</div>
+    <div class="scoring-meter">
+      <div class="scoring-meter-fill" id="scoringMeter" style="width:0%"></div>
+    </div>
+    <div class="scoring-stats">
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Avg Score</div>
+        <div class="scoring-stat-value" id="avgScore">—</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Answers</div>
+        <div class="scoring-stat-value" id="totalAnswers">0</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Clarity</div>
+        <div class="scoring-stat-value" id="avgClarity">—</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Relevance</div>
+        <div class="scoring-stat-value" id="avgRelevance">—</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Google Meet 50/50 Video Grid -->
   <div class="meet-grid">
     
@@ -402,13 +592,47 @@
     </button>
   </div>
 
+  <!-- Real-time STT Display -->
+  <div class="card" style="margin-bottom: 1.25rem;">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Your Speech Recognition</span>
+      <span class="tag" id="sttStatus">Ready</span>
+    </div>
+    <div class="stt-display" id="sttDisplay">
+      <span id="sttText">Listening for your response...</span>
+    </div>
+
+    <!-- LLM-Generated Coaching Guidance -->
+    <div class="coaching-panel" id="coachingPanel">
+      <div class="coaching-title">💡 Guidance</div>
+      <div class="coaching-text" id="coachingText"></div>
+      <div class="coaching-suggestion" id="coachingSuggestion"></div>
+
+      <!-- Response Analysis Scores -->
+      <div class="analysis-scores" id="analysisScores" style="display:none; margin-top:1rem;">
+        <div class="score-item">
+          <div class="score-label">Clarity</div>
+          <div class="score-value" id="clarityScore">—</div>
+        </div>
+        <div class="score-item">
+          <div class="score-label">Completeness</div>
+          <div class="score-value" id="completenessScore">—</div>
+        </div>
+        <div class="score-item">
+          <div class="score-label">Relevance</div>
+          <div class="score-value" id="relevanceScore">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Sealed Transcript -->
   <div class="card">
     <div class="card-header" style="margin-bottom:0.5rem;">
-      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Real-Time Transcript</span>
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Interview Transcript</span>
       <span class="tag">Streaming</span>
     </div>
-    <div id="log"><div class="sys">Enter session ID above and click Connect to initialize voice stream.</div></div>
+    <div id="log"><div class="sys">Connect to initialize voice stream.</div></div>
   </div>
 
 </main>
@@ -580,19 +804,175 @@ function play(b64audio, format) {
   });
 }
 
-$("connect").onclick = () => {
-  const id = $("sessionId").value.trim();
+// Background Scoring Integration - Real-time score tracking
+let sessionScoring = null;
+let scoringInitialized = false;
+
+async function initializeScoring(sessionId, candidateId, jobId) {
+  try {
+    const response = await fetch(`${API_BASE}/scoring/initialize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        candidate_id: candidateId,
+        job_id: jobId,
+      }),
+    });
+    if (response.ok) {
+      scoringInitialized = true;
+      const display = document.getElementById("scoringDisplay");
+      if (display) display.style.display = "block";
+      log("Scoring initialized for real-time tracking", "sys");
+    }
+  } catch (err) {
+    console.error("Error initializing scoring:", err);
+  }
+}
+
+async function scoreAnswer(sessionId, questionId, questionText, answerText, competency, candidateName) {
+  if (!scoringInitialized) return null;
+
+  try {
+    const response = await fetch(`${API_BASE}/scoring/score-answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        question_id: questionId,
+        question_text: questionText,
+        answer_text: answerText,
+        competency: competency,
+        candidate_name: candidateName,
+      }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    updateScoringDisplay(sessionId);
+    return data.score;
+  } catch (err) {
+    console.error("Error scoring answer:", err);
+    return null;
+  }
+}
+
+async function updateScoringDisplay(sessionId) {
+  try {
+    const response = await fetch(`${API_BASE}/scoring/session/${sessionId}/summary`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    // Update display values
+    const avgScore = document.getElementById("avgScore");
+    const totalAnswers = document.getElementById("totalAnswers");
+    const avgClarity = document.getElementById("avgClarity");
+    const avgRelevance = document.getElementById("avgRelevance");
+    const meter = document.getElementById("scoringMeter");
+
+    if (avgScore) avgScore.textContent = `${data.average_score}%`;
+    if (totalAnswers) totalAnswers.textContent = data.total_answers;
+    if (avgClarity) avgClarity.textContent = data.total_answers > 0 ? "✓" : "—";
+    if (avgRelevance) avgRelevance.textContent = data.total_answers > 0 ? "✓" : "—";
+    if (meter) meter.style.width = `${Math.min(data.average_score, 100)}%`;
+  } catch (err) {
+    console.error("Error updating scoring display:", err);
+  }
+}
+
+// LLM Mediator Integration - Real-time coaching and guidance
+let lastQuestion = "";
+let currentCompetency = "";
+let lastQuestionId = "";
+
+async function getCoachingGuidance(candidateName, responseQuality, topic) {
+  try {
+    const response = await fetch(`${API_BASE}/mediator/coaching`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        candidate_name: candidateName,
+        response_quality: responseQuality,
+        topic: topic,
+        needs_improvement: responseQuality < 6,
+      }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.coaching;
+  } catch (err) {
+    console.error("Error getting coaching:", err);
+    return null;
+  }
+}
+
+async function analyzeResponseWithLLM(candidateName, question, answer, competency) {
+  try {
+    const response = await fetch(`${API_BASE}/mediator/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        candidate_name: candidateName,
+        question: question,
+        answer: answer,
+        competency: competency,
+      }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.analysis;
+  } catch (err) {
+    console.error("Error analyzing response:", err);
+    return null;
+  }
+}
+
+function displayCoachingGuidance(guidance, analysis = null) {
+  const panel = document.getElementById("coachingPanel");
+  const text = document.getElementById("coachingText");
+  const suggestion = document.getElementById("coachingSuggestion");
+  const scoresDiv = document.getElementById("analysisScores");
+
+  if (!guidance) return;
+
+  text.textContent = guidance.guidance_text || "Good job!";
+  if (guidance.suggestion) {
+    suggestion.textContent = `Tip: ${guidance.suggestion}`;
+    suggestion.style.display = "block";
+  } else {
+    suggestion.style.display = "none";
+  }
+
+  if (analysis) {
+    document.getElementById("clarityScore").textContent = analysis.clarity;
+    document.getElementById("completenessScore").textContent = analysis.completeness;
+    document.getElementById("relevanceScore").textContent = analysis.relevance;
+    scoresDiv.style.display = "grid";
+  }
+
+  panel.classList.add("active");
+  setTimeout(() => panel.classList.remove("active"), 8000); // Hide after 8 seconds
+}
+
+function connectToSession(id) {
   if (!id) return;
   const wsUrl = typeof getWebSocketUrl === 'function'
     ? getWebSocketUrl(`/ws/sessions/${encodeURIComponent(id)}`)
     : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/sessions/${encodeURIComponent(id)}`;
   ws = new WebSocket(wsUrl);
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
     setStatus("connected", "on");
     $("talk").disabled = false;
     $("replay").disabled = false;
     $("aiStateLabel").textContent = "Connected";
+    log("Connected to interview session. Listen to the question and click the microphone to respond.", "sys");
+
+    // Initialize scoring for real-time tracking
+    const user = getCurrentUser();
+    if (user && user.candidate_id && user.job_id) {
+      await initializeScoring(id, user.candidate_id, user.job_id);
+    }
+
     ws.send(JSON.stringify({ type: "speak_question" }));
   };
   ws.onclose = () => {
@@ -603,7 +983,7 @@ $("connect").onclick = () => {
   };
   ws.onerror = () => setStatus("connection error", "err");
 
-  ws.onmessage = (event) => {
+  ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === "error") {
       log(`error: ${msg.error}${msg.detail ? " — " + msg.detail : ""}`, "bad");
@@ -614,18 +994,142 @@ $("connect").onclick = () => {
       log("(no speech detected — please answer again)", "bad");
       return;
     }
-    if (msg.transcript) log(`You: ${msg.transcript}`, "you");
+
+    // Process transcribed answer
+    if (msg.transcript) {
+      log(`You: ${msg.transcript}`, "you");
+
+      // Get LLM coaching if we have the question and competency
+      if (lastQuestion && currentCompetency) {
+        const guidance = await getCoachingGuidance(
+          user?.name || "Candidate",
+          7, // Default quality score
+          currentCompetency
+        );
+        if (guidance) {
+          displayCoachingGuidance(guidance);
+        }
+      }
+    }
+
     if (msg.tts_error) log("(question audio unavailable — showing text only)", "bad");
+
+    // Score the previous answer and display new question
     if (msg.next_question) {
+      // Score the previous answer if we have it
+      if (lastQuestion && lastQuestionId && msg.transcript && currentCompetency) {
+        const sessionId = new URLSearchParams(window.location.search).get("session_id");
+        await scoreAnswer(
+          sessionId,
+          lastQuestionId,
+          lastQuestion,
+          msg.transcript,
+          currentCompetency,
+          user?.name || "Candidate"
+        );
+      }
+
+      // Update for next question
+      lastQuestion = msg.next_question.question_text;
+      lastQuestionId = msg.next_question.question_id || msg.next_question.question_text;
+      currentCompetency = msg.next_question.competency || "General";
       $("question").textContent = msg.next_question.question_text;
       log(`Interviewer: ${msg.next_question.question_text}`);
     } else if (msg.status === "sealed") {
+      // Finalize scoring when interview ends
+      const sessionId = new URLSearchParams(window.location.search).get("session_id");
+      if (sessionId) {
+        await fetch(`${API_BASE}/scoring/session/${sessionId}/finalize`, { method: "POST" });
+      }
       $("question").textContent = "Interview complete.";
       log(`Interview finished (${msg.termination_reason || "complete"}).`);
     }
+
     play(msg.question_audio_base64, msg.audio_format);
   };
+}
+
+$("connect").onclick = () => {
+  const id = $("sessionId").value.trim();
+  connectToSession(id);
 };
+
+// Auto-connect from URL parameter
+window.addEventListener("load", () => {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id");
+  if (sessionId) {
+    $("sessionId").value = sessionId;
+    connectToSession(sessionId);
+  }
+});
+
+// Web Speech API (STT - Speech-to-Text)
+let recognition = null;
+let sttInterimText = "";
+let sttFinalText = "";
+
+function initializeWebSpeechAPI() {
+  if (recognition) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    log("Web Speech API not supported in this browser", "bad");
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.onstart = () => {
+    sttInterimText = "";
+    sttFinalText = "";
+    const display = document.getElementById("sttDisplay");
+    if (display) display.classList.add("listening");
+    const status = document.getElementById("sttStatus");
+    if (status) status.textContent = "Listening...";
+  };
+
+  recognition.onresult = (event) => {
+    sttInterimText = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        sttFinalText += transcript + " ";
+      } else {
+        sttInterimText += transcript;
+      }
+    }
+    updateSTTDisplay();
+  };
+
+  recognition.onerror = (event) => {
+    log(`Speech recognition error: ${event.error}`, "bad");
+    const display = document.getElementById("sttDisplay");
+    if (display) {
+      display.classList.remove("listening");
+      document.getElementById("sttText").textContent = `Error: ${event.error}`;
+    }
+  };
+
+  recognition.onend = () => {
+    const display = document.getElementById("sttDisplay");
+    if (display) display.classList.remove("listening");
+    const status = document.getElementById("sttStatus");
+    if (status) status.textContent = "Ready";
+  };
+}
+
+function updateSTTDisplay() {
+  const display = document.getElementById("sttDisplay");
+  if (!display) return;
+  let text = sttFinalText;
+  if (sttInterimText) {
+    text += `<span class="stt-interim">${sttInterimText}</span>`;
+  }
+  if (!text) text = "Listening...";
+  display.innerHTML = text;
+}
 
 async function startRecording() {
   if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
@@ -669,6 +1173,12 @@ async function startRecording() {
   node.connect(mute);
   mute.connect(audioCtx.destination);
 
+  // Start Web Speech API
+  initializeWebSpeechAPI();
+  if (recognition) {
+    recognition.start();
+  }
+
   setStatus("recording…", "rec");
   $("talk").classList.add("speaking");
   const userTile = document.getElementById("userTile");
@@ -685,6 +1195,12 @@ async function startRecording() {
 function stopRecording() {
   if (!capturing) return;
   capturing = false;
+
+  // Stop Web Speech API
+  if (recognition) {
+    recognition.stop();
+  }
+
   $("talk").classList.remove("speaking");
   const userTile = document.getElementById("userTile");
   if (userTile) userTile.classList.remove("user-speaking");
@@ -728,11 +1244,18 @@ function sendAudioFallback() {
 
   const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
   setStatus("thinking…", "on");
+
+  // Log the STT result
+  if (sttFinalText) {
+    log(`STT Result: ${sttFinalText.trim()}`, "you");
+  }
+
   ws.send(JSON.stringify({
     type: "answer",
     audio_base64: b64(wav),
     audio_format: "wav",
     utterance_id: crypto.randomUUID(),
+    stt_transcript: sttFinalText.trim() || undefined, // Include STT result for LLM coordination
   }));
 }
 

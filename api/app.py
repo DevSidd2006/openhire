@@ -41,7 +41,10 @@ from api.routes.applications import router as applications_router
 from api.routes.candidates import router as candidates_router
 from api.routes.evaluations import router as evaluations_router
 from api.routes.interview import router as interview_router
+from api.routes.interview_mediator import router as interview_mediator_router
 from api.routes.jobs import router as jobs_router
+from api.routes.reports import router as reports_router
+from api.routes.scoring import router as scoring_router
 from api.routes.voice import router as voice_router
 from core.config import AppSettings, get_settings
 from core.container import ServiceContainer
@@ -114,6 +117,9 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     app.include_router(interview_router, prefix=settings.api_prefix)
     app.include_router(voice_router, prefix=settings.api_prefix)
+    app.include_router(interview_mediator_router, prefix=settings.api_prefix)
+    app.include_router(scoring_router, prefix=settings.api_prefix)
+    app.include_router(reports_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
     app.include_router(candidates_router, prefix=settings.api_prefix)
     app.include_router(applications_router, prefix=settings.api_prefix)
