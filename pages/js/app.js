@@ -1,11 +1,29 @@
 /**
  * Minimal & fast navigation and state handler
  */
-// The backend (api/app.py) serves these pages itself under /app/ and
-// registers every route with no path prefix (AppSettings.api_prefix
-// defaults to "") - so API calls are same-origin, root-relative paths
-// like "/jobs", not "/api/jobs".
-const API_BASE = '';
+// The backend URL. When hosted on Vercel or locally, connects to the deployed Render backend
+// unless running on the same origin (e.g. backend serving /app).
+const DEFAULT_RENDER_BACKEND = 'https://openhire-xc9c.onrender.com';
+const API_BASE = window.OPENHIRE_API_URL || (
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1' ||
+  location.hostname === 'onrender.com' ||
+  location.hostname.endsWith('.onrender.com')
+    ? ''
+    : DEFAULT_RENDER_BACKEND
+);
+
+/** Helper to construct WebSocket URL for the session, resolving against API_BASE or location.host */
+function getWebSocketUrl(path) {
+  if (API_BASE && API_BASE.startsWith('http')) {
+    const wsProto = API_BASE.startsWith('https') ? 'wss:' : 'ws:';
+    const host = API_BASE.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return `${wsProto}//${host}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 
 /**
  * Thin fetch wrapper shared by every real backend call in this frontend.

@@ -583,8 +583,10 @@ function play(b64audio, format) {
 $("connect").onclick = () => {
   const id = $("sessionId").value.trim();
   if (!id) return;
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${encodeURIComponent(id)}`);
+  const wsUrl = typeof getWebSocketUrl === 'function'
+    ? getWebSocketUrl(`/ws/sessions/${encodeURIComponent(id)}`)
+    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/sessions/${encodeURIComponent(id)}`;
+  ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     setStatus("connected", "on");
