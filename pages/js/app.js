@@ -14,7 +14,7 @@ const API_BASE = window.OPENHIRE_API_URL || (
 function getWebSocketUrl(path) {
   if (API_BASE && API_BASE.startsWith('http')) {
     const wsProto = API_BASE.startsWith('https') ? 'wss:' : 'ws:';
-    const host = API_BASE.replace(/^https?:\/\//, '');
+    const host = API_BASE.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     return `${wsProto}//${host}${path.startsWith('/') ? '' : '/'}${path}`;
   }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
