@@ -5,7 +5,10 @@
 // unless running on the same origin (e.g. backend serving /app).
 const DEFAULT_RENDER_BACKEND = 'https://openhire-xc9c.onrender.com';
 const API_BASE = window.OPENHIRE_API_URL || (
-  location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.origin.includes('onrender.com')
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1' ||
+  location.hostname === 'onrender.com' ||
+  location.hostname.endsWith('.onrender.com')
     ? ''
     : DEFAULT_RENDER_BACKEND
 );
