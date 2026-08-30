@@ -93,9 +93,12 @@ before re-raising it unchanged.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from api.registry import SessionNotFoundError, SessionRegistry
+from api.exceptions import SessionNotFoundError
+
+if TYPE_CHECKING:
+    from api.registry import SessionRegistry
 from core.errors import NotFoundError
 from core.logging import get_logger, log_context
 from repositories.interfaces import (

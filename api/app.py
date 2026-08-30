@@ -36,7 +36,6 @@ from fastapi.staticfiles import StaticFiles
 
 from api.errors import register_exception_handlers
 from api.models import HealthResponse
-from api.registry import SessionRegistry
 from api.routes.applications import router as applications_router
 from api.routes.auth import router as auth_router
 from api.routes.candidates import router as candidates_router
@@ -76,6 +75,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app (production mode, CORS enabled, auth enabled) without mutating the
     environment for every other test in the session.
     """
+    from api.registry import SessionRegistry
+
     settings = settings or get_settings()
 
     app = FastAPI(

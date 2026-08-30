@@ -73,7 +73,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,11 +82,9 @@ from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
-from utils.interview_session import (
-    InterviewSessionError,
-    InterviewSessionRunner,
-    SessionStatus,
-)
+
+if TYPE_CHECKING:
+    from utils.interview_session import InterviewSessionError, InterviewSessionRunner, SessionStatus
 
 
 class RepositoryError(Exception):
@@ -182,6 +180,8 @@ class SessionRecord(BaseModel):
         caller to attach via `model_copy(update={"application_id": ...})`,
         exactly as services/interview_service.py's `_persist_record` does.
         """
+        from utils.interview_session import InterviewSessionError
+
         try:
             state = runner.get_state()
         except InterviewSessionError:
