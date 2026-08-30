@@ -1,314 +1,380 @@
 # OpenHire
 
-> An AI-powered interview platform for employer-side, high-volume candidate screening — built for the India campus hiring context (Tier 2/3 connectivity, multilingual candidates, high applicant volume).
+> An AI-powered interview platform for high-volume candidate screening with structured, voice-based interviews and multi-agent evaluation.
 
-OpenHire runs structured, voice-based interviews at scale, evaluates candidates against configurable rubrics using a specialized multi-agent pipeline, and gives recruiters an explainable, evidence-backed shortlist instead of a black-box score.
+OpenHire automates campus hiring at scale by running structured voice interviews, parsing resumes, matching candidates to job descriptions, and providing explainable, evidence-backed evaluation reports through a specialized multi-agent pipeline.
 
 ## 📋 Table of Contents
 
 - [Key Features](#key-features)
 - [Project Status](#project-status)
 - [Development Stages](#development-stages)
-- [Architecture](#architecture)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
 - [Development](#development)
+- [Architecture](#architecture)
 - [Documentation](#documentation)
-- [Team](#team)
 
 ## ✨ Key Features
 
-- **Voice-based Interviews at Scale** — Structured, multilingual interview delivery via voice with fallback support for low-connectivity regions
-- **Multi-Agent Evaluation Pipeline** — Specialized agents for orchestration, technical/skill evaluation, integrity probing, scoring, and report generation
-- **Configurable Rubrics** — Role-aware, competency-based evaluation with weighted scoring
-- **Explainable Results** — Evidence-backed candidate rankings with audit trails and human review gates
-- **India-Ready** — Built for campus hiring: multilingual support, connectivity fallbacks, data residency compliance
+**Current (Stage 1):**
+- **Voice-Based Interviews** — Structured interview delivery via voice transcription
+- **Candidate Management** — Upload resumes, create applications, track interview status
+- **Job Configuration** — Recruiters define jobs and fixed interview question sets
+- **LLM-Powered Evaluation** — Automatic scoring of interview transcripts against job requirements
+- **Explainable Reports** — Candidate rankings with scoring breakdown and evidence
+- **Multi-Provider Support** — Works with Groq, OpenAI, or Google Gemini as LLM backends
+
+**Planned (Stage 2+):**
+- Adaptive follow-up questions based on candidate responses
+- Per-competency scoring with configurable rubrics
+- Resume screening and JD matching
+- Multi-interview type support (technical, behavioral, aptitude)
+- Recruiter and candidate dashboards
 
 ## 📊 Project Status
 
-**Current Stage: 1 (Basic Prototype)** — Single-candidate linear interview loop with voice transcription and LLM scoring.
+**Current Stage: 1 (Basic Prototype)** — Single-candidate linear interview loop with resume parsing, job configuration, and LLM-based evaluation.
 
-### Live Progress Tracker
+**Features Implemented:**
+- ✅ User authentication (signup/login with JWT)
+- ✅ Resume upload and parsing
+- ✅ Job creation and management
+- ✅ Interview session creation and voice/text input
+- ✅ LLM-based interview evaluation and scoring
+- ✅ Candidate and evaluation tracking
+- ✅ PostgreSQL data persistence
+- ✅ Multi-agent system foundation
 
-📊 Open [`pages/roadmap.html`](pages/roadmap.html) in your browser (or visit `/app/roadmap.html` when running the server) for interactive, real-time checklist tracking across all roles and stages.
+**In Progress:**
+- 🔄 Interview mediator and session management
+- 🔄 Voice interview UI components
+- 🔄 Candidate dashboard
+
+**Roadmap:** See [`pages/roadmap.html`](pages/roadmap.html) for interactive progress tracker.
 
 ## 🎯 Development Stages
 
-Development is staged so every milestone is a working, demoable system — not a partial build. Stage 1 ships before Stage 2 begins, and so on.
+Development is staged so every milestone is a working, demoable system — not a partial build.
 
-### Stage 1 — Basic Prototype ✅
+### Stage 1 — Basic Prototype (Current) ✅
 
-A single, linear, single-candidate interview loop: a recruiter creates a job with a fixed question list, a candidate completes a voice interview via link, speech-to-text transcribes the answers, one LLM call scores the transcript against the job, and the recruiter sees a score and report.
+**Scope:** Single-candidate linear interview loop. Recruiter creates a job with fixed questions, candidate completes interview via link, transcript is scored by LLM, recruiter sees results.
 
-**Scope:** One interview type, one language (English), no resume screening, no adaptive follow-up questions, no fallback ladder, one candidate at a time.
+- One interview type (scripted questions)
+- One language (English)
+- Basic resume parsing
+- Fixed question sets
+- Single-pass LLM evaluation
+- No adaptive follow-ups
+- One candidate at a time
 
-**Stack:** React web app, Node/Python API layer, cloud STT (e.g. Whisper API), single LLM call for question delivery + scoring, Postgres for persistent data, single deployment environment.
+**Stack:** Python FastAPI backend, React frontend, PostgreSQL database, LLM providers (Groq/OpenAI/Google), voice support via edge-tts.
 
-**Goal:** Prove the loop works end to end.  
-**Difficulty:** Low–Medium
+**Goal:** Prove the interview-to-evaluation loop works end to end.
 
-### Stage 2 — Advanced 🔄
+### Stage 2 — Advanced Features 🔄
 
-The scripted flow becomes adaptive: the AI asks conversational follow-up questions based on what the candidate actually said, evaluation moves to a rubric per competency instead of one number, recruiters can configure multiple interview types (technical / HR / aptitude) with role-configurable scoring weights, and both dashboards become functional — recruiters get a filterable, ranked shortlist, candidates get status tracking.
+Adaptive questioning based on responses, per-competency scoring with configurable rubrics, multiple interview types, role-specific scoring weights, functional dashboards.
 
-**Additions:** Conversation-state management, JSON-configurable rubric builder, per-competency scoring output, filterable dashboards, recruiter/candidate auth and roles.
+**Key Additions:** State management, rubric builder, competency-based scoring, filterable dashboards, recruiter/candidate role management.
 
-**Goal:** An adaptive, role-aware, multi-competency system with dashboards recruiters can actually use to make decisions.  
-**Difficulty:** Medium–High
+### Stage 3 — Multi-Agent System 🔮
 
-### Stage 3 — Complete Multi-Agent System 🔮
+Split into specialized agents: Orchestrator, Technical Evaluator, Integrity Agent, Scoring Agent, Report Generator. Async evaluation on sealed transcripts. Vector DB for context and question-bank lookup.
 
-The single do-everything agent splits into specialized agents:
-- **Orchestrator** — runs the live conversation
-- **Technical/Skill Evaluator** — domain expertise assessment
-- **Integrity Agent** — conversational-probing analysis on sealed transcripts (not a detection classifier)
-- **Scoring Agent** — aggregates weighted rubric results
-- **Report Generation Agent** — explainable reports + leaderboards
+**Key Additions:** Async task queue, vector embeddings, agent audit logging, evidence tracking.
 
-Evaluation agents run asynchronously on sealed transcripts after the interview ends — not live — keeping the candidate-facing interview fast and cost per interview manageable at volume.
+### Stage 4 — Production Scale 🚀
 
-**Additions:** Async task queue (e.g. Celery/BullMQ), vector DB for JD–resume context and rubric/question-bank lookup, defined agent I/O contracts, per-agent audit logging.
-
-**Goal:** A modular, auditable, specialized pipeline. Recruiters get rich, evidence-backed reports per candidate; integrity flags are surfaced for human review and never auto-reject.  
-**Difficulty:** High–Very High
-
-### Stage 4 — Production 🚀
-
-Everything needed to run this on a real Indian campus drive at volume: multilingual and code-mixed interviews, connectivity fallback ladder (video → audio → async → phone call), bias testing across language/accent slices, explainability tied to transcript evidence, mandatory human review gates before hiring decisions, India-only data residency with encryption and access control, monitoring/observability, and scalable architecture for burst loads (thousands of interviews in a single week) — plus Naukri/ATS sync, WhatsApp/SMS delivery, and per-interview INR credits billing model.
-
-**Goal:** A hardened, compliant, India-ready product that can be sold and operated at scale.  
-**Difficulty:** Very High
-
-## 🏗️ Architecture
-
-### Difficulty by Domain & Stage
-
-| Domain | Stage 1 | Stage 2 | Stage 3 | Stage 4 |
-|---|---|---|---|---|
-| **Frontend** | Medium | Medium | Medium | Medium–High |
-| **Backend** | Medium | Medium–High | High | Very High |
-| **Database** | Low | Medium | Medium–High | High |
-| **Multi-Agent System** | Medium | High | Very High | Very High |
-| **Fullstack** | Medium | Medium–High | High | High |
-
-**Note:** Multi-Agent System is the steepest curve on the team — plan pairing or backup coverage there from Stage 2 onward. Backend and Fullstack ramp hardest in Stage 4, when integrations, scale, and security all land at once.
-
-### Database Schema
-
-```mermaid
-erDiagram
-    ORGANIZATIONS ||--o{ ORGANIZATION_MEMBERS : has
-    ORGANIZATIONS ||--o{ CREDIT_TRANSACTIONS : records
-    ORGANIZATIONS ||--o{ JOBS : owns
-
-    JOBS ||--o{ APPLICATIONS : receives
-    JOBS ||--o{ JOB_RUBRICS : defines
-    JOBS ||--o| JOB_LEADERBOARDS : ranks
-    JOBS ||--o{ PIPELINE_RUNS : executes
-
-    CANDIDATES ||--o{ APPLICATIONS : submits
-    CANDIDATES ||--o{ INTERVIEWS : attends
-    CANDIDATES ||--o{ TRANSCRIPTS : provides
-
-    APPLICATIONS ||--o| INTERVIEWS : initiates
-    APPLICATIONS ||--o| EVALUATIONS : results_in
-
-    INTERVIEWS ||--o{ TRANSCRIPTS : records
-    INTERVIEWS ||--o| EVALUATIONS : generates
-    INTERVIEWS ||--o| INTERVIEW_CONNECTIVITY_TELEMETRY : logs
-
-    EVALUATIONS ||--o{ CANDIDATE_COMPETENCY_SCORES : breaks_down
-    EVALUATIONS ||--o| HUMAN_REVIEW_DECISIONS : reviewed_by
-    EVALUATIONS ||--o{ ASYNC_AGENT_TASKS : dispatches
-
-    PIPELINE_RUNS ||--o{ AGENT_AUDIT_LOGS : tracks
-
-    JOBS {
-        varchar id PK
-        varchar title
-        jsonb questions
-        boolean is_active
-        jsonb job_data
-        timestamptz created_at
-    }
-
-    CANDIDATES {
-        varchar id PK
-        varchar name
-        varchar email
-        jsonb resume
-        boolean used_fallback
-        timestamptz created_at
-    }
-
-    APPLICATIONS {
-        varchar id PK
-        varchar job_id FK
-        varchar candidate_id FK
-        varchar status
-        jsonb matching_score
-        varchar session_id
-    }
-
-    INTERVIEWS {
-        varchar id PK
-        varchar session_id UK
-        varchar job_id FK
-        varchar candidate_id FK
-        varchar status
-        jsonb state
-    }
-
-    TRANSCRIPTS {
-        varchar id PK
-        varchar interview_id
-        varchar candidate_id FK
-        varchar job_id FK
-        text answer_text
-        boolean is_sealed
-    }
-
-    EVALUATIONS {
-        varchar id PK
-        varchar session_id UK
-        varchar interview_id
-        varchar candidate_id FK
-        varchar job_id FK
-        numeric overall_score
-        jsonb result
-    }
-
-    JOB_RUBRICS {
-        varchar id PK
-        varchar job_id FK
-        varchar interview_type
-        jsonb competencies
-        numeric pass_threshold
-    }
-
-    CANDIDATE_COMPETENCY_SCORES {
-        varchar id PK
-        varchar evaluation_id FK
-        varchar competency
-        numeric score
-        numeric weight
-    }
-
-    JOB_LEADERBOARDS {
-        varchar id PK
-        varchar job_id UK,FK
-        jsonb ranked_entries
-        jsonb summary
-    }
-
-    DOCUMENT_EMBEDDINGS {
-        varchar id PK
-        varchar doc_id
-        varchar doc_type
-        text content
-        vector embedding
-    }
-
-    PIPELINE_RUNS {
-        varchar run_id PK
-        varchar job_id FK
-        varchar stage
-        varchar status
-        numeric duration_seconds
-    }
-
-    AGENT_AUDIT_LOGS {
-        varchar log_id PK
-        varchar run_id FK
-        varchar agent_name
-        varchar status
-        jsonb evidence_ids
-    }
-```
+Full-featured production system with multilingual support, reliability improvements, bias testing, security hardening, monitoring/observability, and scalable architecture for burst loads.
 
 ## 🚀 Getting Started
 
-> TODO: Add installation, setup, and quick-start instructions
+### Prerequisites
+
+- Python 3.13+
+- PostgreSQL 13+
+- Node.js 18+ (for frontend development)
+- LLM API key (Groq recommended, or OpenAI/Google Gemini)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/DevSidd2006/OpenHire.git
+   cd OpenHire
+   ```
+
+2. **Create environment file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Configure your LLM provider:**
+   ```bash
+   # In .env, set one of:
+   GROQ_API_KEY=your_groq_key
+   # OR
+   OPENAI_API_KEY=your_openai_key
+   # OR
+   GEMINI_API_KEY=your_gemini_key
+   ```
+
+4. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. **Set up database:**
+   ```bash
+   # Start PostgreSQL (Docker)
+   docker-compose -f docker-compose.postgres.yml up -d
+   
+   # Run migrations
+   python -m alembic upgrade head
+   ```
+
+6. **Run the server:**
+   ```bash
+   python -m uvicorn api.app:app --reload
+   ```
+
+   Server runs at `http://localhost:8000`
+   API docs at `http://localhost:8000/docs`
+
+### Running Tests
+
+```bash
+pytest tests/ -v
+```
 
 ## 📁 Project Structure
 
 ```
 OpenHire/
-├── pages/                      # Frontend web app (React)
-│   ├── js/                     # React components & UI logic
+├── api/                        # FastAPI REST API
+│   ├── routes/                 # API endpoints (auth, jobs, interviews, etc.)
+│   ├── models/                 # Pydantic request/response models
+│   ├── errors.py               # Error handling & exceptions
+│   └── app.py                  # FastAPI app initialization
+│
+├── agents/                     # Multi-agent system (Stage 3+)
+│   ├── base.py                 # Base agent class
+│   ├── orchestrator/           # Interview orchestration
+│   ├── interviewer/            # Conversational interviewer
+│   ├── resume_parser/          # Resume text extraction
+│   ├── resume_matcher/         # Resume-JD matching
+│   ├── jd_analyzer/            # Job description analysis
+│   ├── technical_evaluator/    # Technical skills evaluation
+│   ├── behavioral_evaluator/   # Behavioral assessment
+│   ├── scoring/                # Score aggregation
+│   ├── report_generator/       # Report generation
+│   └── ...                     # Other specialized agents
+│
+├── core/                       # Core business logic
+│   ├── config.py               # AppSettings configuration
+│   ├── container.py            # Dependency injection container
+│   ├── security.py             # Auth and security utilities
+│   ├── errors.py               # Custom exceptions
+│   └── dependencies.py         # Request dependencies
+│
+├── services/                   # Business logic services
+│   ├── auth_service.py         # User authentication & JWT
+│   └── ...                     # Other services
+│
+├── repositories/               # Data access layer
+│   ├── interfaces.py           # Repository interfaces
+│   ├── memory/                 # In-memory implementations (testing)
+│   └── postgres/               # PostgreSQL implementations
+│
+├── providers/                  # External service integrations
+│   ├── llm/                    # LLM providers (Groq, OpenAI, Gemini)
+│   ├── audio/                  # Speech synthesis (edge-tts)
+│   ├── embeddings/             # Embedding generation (local/remote)
+│   └── vector_store/           # Vector database (FAISS, mock)
+│
+├── schemas/                    # Data models & validation
+│   ├── llm_outputs.py          # LLM response schemas
+│   ├── audit.py                # Audit log schemas
+│   └── ...                     # Other data schemas
+│
+├── utils/                      # Utility functions
+│   ├── resume_documents.py     # Resume parsing utilities
+│   ├── logging.py              # Custom logging
+│   └── ...                     # Other utilities
+│
+├── db/                         # Database
+│   ├── migrations/             # Alembic migrations
+│   └── schema.sql              # Database schema
+│
+├── config/                     # Configuration
+│   └── settings.py             # Global settings & env vars
+│
+├── tests/                      # Test suite
+│   └── fixtures/               # Test data & fixtures
+│
+├── pages/                      # Frontend (React)
+│   ├── js/                     # React components
 │   ├── css/                    # Stylesheets
 │   └── roadmap.html            # Interactive progress tracker
 │
-├── agents/                     # Multi-agent system components
-│   ├── orchestrator/           # Interview orchestrator agent
-│   ├── interviewer/            # Conversational interview agent
-│   ├── technical_evaluator/    # Technical skills evaluation
-│   ├── behavioral_evaluator/   # Behavioral assessment
-│   ├── integrity/              # Integrity & authenticity probing
-│   ├── scoring/                # Score aggregation
-│   ├── report_generator/       # Report generation
-│   ├── resume_parser/          # Resume parsing
-│   ├── resume_matcher/         # Resume-JD matching
-│   ├── jd_analyzer/            # Job description analysis
-│   └── ...                     # Other specialized agents
-│
-├── api/                        # REST API layer
-│   └── routes/                 # API endpoints
-│
-├── core/                       # Core business logic
-├── providers/                  # External service providers
-│   ├── llm/                    # LLM provider interfaces
-│   ├── audio/                  # Audio/speech providers
-│   ├── embeddings/             # Embedding providers
-│   └── vector_store/           # Vector database providers
-│
-├── repositories/               # Data access layer
-│   └── postgres/               # PostgreSQL repository
-│
-├── db/                         # Database migrations & schemas
-├── schemas/                    # Data models & validation schemas
-├── services/                   # Business logic services
-│
-├── evaluation/                 # Evaluation test cases & reports
-│   ├── cases/                  # Test scenarios
-│   └── reports/                # Evaluation results
-│
-├── orchestration/              # Pipeline orchestration logic
 ├── prompts/                    # LLM prompt templates
-├── design-system/              # UI design system components
-├── config/                     # Configuration files
-├── deploy/                     # Deployment scripts & configs
-├── data/                       # Sample data & fixtures
-├── utils/                      # Utility functions
-├── tests/                      # Test suite
-│   └── fixtures/               # Test fixtures
+├── design-system/              # UI design system
+├── deploy/                     # Deployment configs
+├── data/                       # Sample data
 │
-├── main.py                     # Application entry point
-├── .env.example                # Environment variables template
-├── docker-compose.postgres.yml # Docker compose for Postgres
+├── main.py                     # Legacy entry point
+├── requirements.txt            # Python dependencies
+├── .env.example                # Environment template
+├── docker-compose.postgres.yml # Postgres Docker setup
 └── README.md                   # This file
 ```
 
+## 🏗️ Architecture
+
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Frontend (React)                         │
+│              Job Creation, Interview, Dashboard              │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP/WebSocket
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   FastAPI REST API                           │
+│  Auth · Jobs · Candidates · Interviews · Evaluations · Users │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+   ┌─────────┐     ┌──────────┐    ┌──────────────┐
+   │PostgreSQL│    │ LLM API  │    │ Speech TTS   │
+   │Database  │    │ (Groq)   │    │ (edge-tts)   │
+   └─────────┘    │ (OpenAI) │    └──────────────┘
+                  │ (Gemini) │
+                  └──────────┘
+```
+
+### Database Schema
+
+Key tables:
+- **ORGANIZATIONS** — Employer organizations
+- **USERS** — Recruiters and candidates
+- **JOBS** — Job postings with questions
+- **CANDIDATES** — Candidate profiles
+- **APPLICATIONS** — Job applications
+- **INTERVIEWS** — Interview sessions
+- **TRANSCRIPTS** — Interview transcripts
+- **EVALUATIONS** — Evaluation results and scores
+
+See [`api/models.py`](api/models.py) for detailed schema.
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18, TypeScript, CSS3 |
+| **Backend** | Python 3.13, FastAPI |
+| **Database** | PostgreSQL 13+ |
+| **Auth** | JWT tokens, bcrypt hashing |
+| **LLM** | Groq, OpenAI, Google Gemini |
+| **Speech** | edge-tts (TTS), WebRTC (audio) |
+| **Agents** | LangGraph, Pydantic |
+| **Deployment** | Docker, Render (staging) |
+
 ## 🛠️ Development
 
-### Prerequisites
+### Running Locally
 
-> TODO: Add Node, Python, Postgres, and other dependency requirements
+1. **Start PostgreSQL:**
+   ```bash
+   docker-compose -f docker-compose.postgres.yml up -d
+   ```
 
-### Setup
+2. **Run migrations:**
+   ```bash
+   python -m alembic upgrade head
+   ```
 
-> TODO: Add local development setup instructions, environment variables, and database initialization
+3. **Start the server:**
+   ```bash
+   python -m uvicorn api.app:app --reload
+   ```
 
-### Running the App
+4. **Access the app:**
+   - API: http://localhost:8000
+   - Docs: http://localhost:8000/docs
 
-> TODO: Add commands to start the development server and run tests
+### Environment Variables
+
+Key variables in `.env`:
+
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@localhost/openhire
+
+# LLM Provider (choose one)
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_key
+GROQ_MODEL=openai/gpt-oss-20b
+
+# Auth
+JWT_SECRET_KEY=your_secret_key_here
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_MINUTES=30
+
+# Optional
+EMBEDDING_PROVIDER=local
+VECTOR_STORE_TYPE=faiss
+```
+
+### Running Tests
+
+```bash
+# All tests
+pytest tests/ -v
+
+# Specific test file
+pytest tests/test_auth.py -v
+
+# With coverage
+pytest --cov=. tests/
+```
+
+### Code Organization
+
+- **services/** — Business logic (auth, interview flow)
+- **repositories/** — Data access (PostgreSQL, in-memory)
+- **agents/** — Multi-agent system components
+- **providers/** — External service adapters (LLM, speech, embeddings)
+- **api/routes/** — REST endpoint handlers
+- **schemas/** — Pydantic data models
 
 ## 📚 Documentation
 
-- **[Interactive Roadmap & Progress Tracker](pages/roadmap.html)** — Live dashboard tracking milestone deliverables, role ownership, and completion percentages
-- **[Multi-Agent System Implementation](docs/multi-agent-system.md)** — The Stage 3-level agent pipeline (orchestrator, evaluators, scoring, reporting) built ahead of schedule as a working foundation
-- **[Stage 1 Project Flow](docs/roles/PROJECT_FLOW.md)** — The step-by-step interview path and role interface shapes
+- **[Interactive Roadmap](pages/roadmap.html)** — Live progress tracker and milestone checklist
+- **[Multi-Agent System](docs/multi-agent-system.md)** — Agent architecture and flow
+- **[API Reference](docs/api.md)** — REST endpoint documentation
+- **[Stage 1 Project Flow](docs/roles/PROJECT_FLOW.md)** — Interview workflow and role responsibilities
 
-## 👥 Team
+## 🤝 Contributing
 
-5-person team split across: **Frontend · Backend · Database · Multi-Agent System · Fullstack**
+Contributions welcome! Please:
+
+1. Create a feature branch
+2. Make your changes
+3. Write tests for new functionality
+4. Submit a pull request
+
+## 📝 License
+
+MIT License — See LICENSE file for details.
+
+## 👥 Team & Support
+
+Built by the OpenHire team. For questions or issues:
+- Open an issue on GitHub
+- Check existing documentation
+- Review test cases for usage examples

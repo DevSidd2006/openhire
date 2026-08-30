@@ -9,6 +9,7 @@ fastapi>=0.110
 uvicorn>=0.27
 httpx>=0.27  # also used by FastAPI's TestClient, and by the P9 Azure Speech provider
 bcrypt>=4.0.0  # password hashing for auth service
+PyJWT>=2.0.0  # JWT token generation and validation for auth
 
 # P9: voice layer. The WebSocket transport (api/routes/voice.py) needs
 # FastAPI's websocket extra. edge-tts provides free neural speech synthesis.
