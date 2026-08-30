@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
 
 # Python
 __pycache__/
@@ -36,6 +38,7 @@ env/
 
 # IDE
 .vscode/
+.agent
 .idea/
 .agent
 *.swp

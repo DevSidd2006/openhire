@@ -1,12 +1,29 @@
 /**
  * Minimal & fast navigation and state handler
  */
-// The backend (api/app.py) serves these pages itself under /app/ and
-// registers every route with no path prefix (AppSettings.api_prefix
-// defaults to "") - so API calls are same-origin, root-relative paths
-// like "/jobs", not "/api/jobs".
-// For production with frontend on Vercel and backend on Render, use environment variable
-const API_BASE = window.OPENHIRE_API_URL || '';
+// The backend URL. When hosted on Vercel or locally, connects to the deployed Render backend
+// unless running on the same origin (e.g. backend serving /app).
+const DEFAULT_RENDER_BACKEND = 'https://openhire-xc9c.onrender.com';
+const API_BASE = window.OPENHIRE_API_URL || (
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1' ||
+  location.hostname === 'onrender.com' ||
+  location.hostname.endsWith('.onrender.com')
+    ? ''
+    : DEFAULT_RENDER_BACKEND
+);
+
+/** Helper to construct WebSocket URL for the session, resolving against API_BASE or location.host */
+function getWebSocketUrl(path) {
+  if (API_BASE && API_BASE.startsWith('http')) {
+    const wsProto = API_BASE.startsWith('https') ? 'wss:' : 'ws:';
+    const host = API_BASE.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return `${wsProto}//${host}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 
 /**
  * Thin fetch wrapper shared by every real backend call in this frontend.
@@ -18,6 +35,9 @@ const API_BASE = window.OPENHIRE_API_URL || '';
  * to silently corrupt a multipart upload. Throws a plain Error with a
  * human-readable `.message` (never a raw stack trace) on any network or
  * HTTP failure, and returns the parsed JSON body on success.
+ *
+ * Includes Authorization header with Bearer token if available.
+ * Handles 401 responses by attempting to refresh the token and retrying.
  */
 async function apiRequest(path, options = {}) {
   const opts = Object.assign({}, options);
@@ -25,6 +45,16 @@ async function apiRequest(path, options = {}) {
   opts.headers = isFormData
     ? Object.assign({}, options.headers || {})
     : Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+
+  // Add Authorization header if we have an access token
+  // Skip for auth endpoints to avoid circular refresh attempts
+  if (typeof getAccessToken === 'function' && !path.startsWith('/auth')) {
+    const token = getAccessToken();
+    if (token) {
+      opts.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
   if (opts.body && !isFormData && typeof opts.body !== 'string') {
     opts.body = JSON.stringify(opts.body);
   }
@@ -40,6 +70,42 @@ async function apiRequest(path, options = {}) {
   let data = null;
   if (text) {
     try { data = JSON.parse(text); } catch (e) { /* non-JSON body */ }
+  }
+
+  // Handle 401 Unauthorized: try to refresh token and retry
+  if (res.status === 401 && !path.startsWith('/auth') && typeof refreshAccessToken === 'function') {
+    try {
+      const newToken = await refreshAccessToken();
+      // Retry the request with the new token
+      opts.headers['Authorization'] = `Bearer ${newToken}`;
+      try {
+        res = await fetch(API_BASE + path, opts);
+      } catch (err) {
+        throw new Error('Cannot reach the OpenHire backend. Please check that the server is running.');
+      }
+
+      const retryText = await res.text();
+      let retryData = null;
+      if (retryText) {
+        try { retryData = JSON.parse(retryText); } catch (e) { /* non-JSON body */ }
+      }
+
+      if (!res.ok) {
+        const detail = (retryData && (retryData.detail || retryData.error)) || `Request failed (HTTP ${res.status})`;
+        const error = new Error(detail);
+        error.status = res.status;
+        error.data = retryData;
+        throw error;
+      }
+
+      return retryData;
+    } catch (refreshError) {
+      // Refresh failed, logout and redirect
+      if (typeof logout === 'function') {
+        logout();
+      }
+      throw new Error('Your session has expired. Please sign in again.');
+    }
   }
 
   if (!res.ok) {
@@ -126,9 +192,11 @@ function setCurrentUser(user) {
   renderNavbar();
 }
 
-function logout() {
+function logoutUser() {
   localStorage.removeItem('openhire_user');
-  window.location.href = 'auth.html';
+  localStorage.removeItem('openhire_access_token');
+  localStorage.removeItem('openhire_refresh_token');
+  window.location.href = 'login.html';
 }
 
 function renderNavbar(activePage = '') {
@@ -158,9 +226,9 @@ function renderNavbar(activePage = '') {
             <span>${user.name}</span>
             <span class="role-tag">${user.role}</span>
           </div>
-          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11px;" onclick="logout()">Exit</button>
+          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11px;" onclick="logoutUser()">Exit</button>
         ` : `
-          <button class="btn-outline" onclick="window.location.href='auth.html'">Sign In</button>
+          <button class="btn-outline" onclick="window.location.href='login.html'">Sign In</button>
         `}
       </div>
     </header>

@@ -51,6 +51,8 @@ from repositories.interfaces import (
     SessionRecord,
     SessionRepository,
     TranscriptRepository,
+    UserRecord,
+    UserRepository,
 )
 from schemas.interview import InterviewTranscript
 
@@ -336,6 +338,41 @@ class InMemoryEvaluationRepository(EvaluationRepository):
         return result
 
 
+class InMemoryUserRepository(UserRepository):
+    """Dict-backed `UserRepository`. TEMPORARY - see module docstring.
+
+    Stores user accounts in memory with basic email/id lookups.
+    """
+
+    def __init__(self) -> None:
+        self._users: Dict[str, UserRecord] = {}
+        self._email_index: Dict[str, str] = {}  # email -> user_id
+        self._lock = asyncio.Lock()
+
+    async def save(self, record: UserRecord) -> UserRecord:
+        """Insert or update by user_id. Idempotent, preserves created_at."""
+        async with self._lock:
+            existing = self._users.get(record.user_id)
+            created_at = existing.created_at if existing else record.created_at
+            stored = record.model_copy(
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+            )
+            self._users[record.user_id] = stored
+            self._email_index[record.email] = record.user_id
+            return stored
+
+    async def get_by_email(self, email: str) -> Optional[UserRecord]:
+        """Fetch user by email. Returns None if not found."""
+        async with self._lock:
+            user_id = self._email_index.get(email)
+            return self._users.get(user_id) if user_id else None
+
+    async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
+        """Fetch user by user_id. Returns None if not found."""
+        async with self._lock:
+            return self._users.get(user_id)
+
+
 __all__ = [
     "EPHEMERAL_BACKEND_NAME",
     "InMemoryApplicationRepository",
@@ -344,4 +381,5 @@ __all__ = [
     "InMemoryJobRepository",
     "InMemorySessionRepository",
     "InMemoryTranscriptRepository",
+    "InMemoryUserRepository",
 ]

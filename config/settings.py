@@ -26,19 +26,29 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-# Groq (P8B.3): OpenHire's PRIMARY real LLM provider. gpt-oss-20b is the
-# model the agents are developed and benchmarked against; Gemini and OpenAI
-# remain supported but are no longer the target provider. The key is only
-# ever read from the environment - never hard-coded, logged, or reported.
+# NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
+# Supports Nemotron ultra-powerful model with extended thinking. Cloud-hosted at
+# integrate.api.nvidia.com. The key is only ever read from the environment - never
+# hard-coded, logged, or reported.
+NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
+NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+# Groq: Alternative LLM provider (openai/gpt-oss-20b model). Supported but no longer
+# the primary target. Kept for backward compatibility.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # Embedding Configuration
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
+# Production: use API-based (nvidia-nim) to avoid large local models
+# Uses nvidia/nemotron-3-embed-1b via free hosted API at integrate.api.nvidia.com
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/nemotron-3-embed-1b")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "nvidia-nim").lower()
 
 # Vector Store Configuration
-VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "faiss").lower()
+# Production: use mock (in-memory) for simplicity on Render
+# Development: can use faiss if needed
+VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "mock").lower()
 VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH", str(PROJECT_ROOT / "faiss_index"))
 
 # Interview Configuration
@@ -99,12 +109,17 @@ AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", os.getenv("AUDIO_PROCESSOR", "mock"
 # exactly like LLM_PROVIDER=mock does for the agent layer.
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "mock").lower()
 
-# Azure Speech (P9): the first real STT/TTS implementation. Credentials are
+# Azure Speech (P9): STT/TTS implementation. Credentials are
 # read ONLY from the environment - never hard-coded, logged, echoed into a
 # transcript, or returned through the API.
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
 AZURE_SPEECH_VOICE = os.getenv("AZURE_SPEECH_VOICE", "en-US-JennyNeural")
+
+# Edge TTS Configuration (Free neural TTS via Microsoft Edge service)
+EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-IN-NeerjaNeural")
+EDGE_TTS_RATE = os.getenv("EDGE_TTS_RATE", "+0%")
+EDGE_TTS_PITCH = os.getenv("EDGE_TTS_PITCH", "+0Hz")
 
 # P9 voice-turn safety limits.
 MAX_UTTERANCE_BYTES = int(os.getenv("MAX_UTTERANCE_BYTES", str(10 * 1024 * 1024)))  # 10 MB

@@ -73,7 +73,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,11 +82,10 @@ from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
-from utils.interview_session import (
-    InterviewSessionError,
-    InterviewSessionRunner,
-    SessionStatus,
-)
+from utils.interview_session import SessionStatus
+
+if TYPE_CHECKING:
+    from utils.interview_session import InterviewSessionError, InterviewSessionRunner
 
 
 class RepositoryError(Exception):
@@ -182,6 +181,8 @@ class SessionRecord(BaseModel):
         caller to attach via `model_copy(update={"application_id": ...})`,
         exactly as services/interview_service.py's `_persist_record` does.
         """
+        from utils.interview_session import InterviewSessionError
+
         try:
             state = runner.get_state()
         except InterviewSessionError:
@@ -429,6 +430,46 @@ class CandidateRepository(ABC):
         (Chunk 5's recruiter applications-for-a-job listing)."""
 
 
+class UserRecord(BaseModel):
+    """Durable storage record for one user account.
+
+    Stores authentication credentials and account metadata. The password_hash
+    field contains the output of a proper password hashing algorithm (e.g.
+    bcrypt, scrypt), never plaintext.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    user_id: str
+    email: str
+    password_hash: str
+    user_type: str  # 'candidate' or 'recruiter'
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+
+class UserRepository(ABC):
+    """Durable storage for user accounts.
+
+    Handles authentication and account lookup for both candidate and recruiter
+    users. The interface is minimal: just the operations required by the
+    authentication system, leaving schema/policy decisions to implementers.
+    """
+
+    @abstractmethod
+    async def save(self, record: UserRecord) -> UserRecord:
+        """Insert or update by user_id. Idempotent, preserves created_at."""
+
+    @abstractmethod
+    async def get_by_email(self, email: str) -> Optional[UserRecord]:
+        """Fetch user by email. Returns None if not found."""
+
+    @abstractmethod
+    async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
+        """Fetch user by user_id. Returns None if not found."""
+
+
 class ApplicationRepository(ABC):
     """Durable storage for `Application` (schemas/application.py).
 
@@ -626,4 +667,6 @@ __all__ = [
     "SessionRepository",
     "SessionRuntimeRegistry",
     "TranscriptRepository",
+    "UserRecord",
+    "UserRepository",
 ]

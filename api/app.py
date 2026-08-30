@@ -36,8 +36,8 @@ from fastapi.staticfiles import StaticFiles
 
 from api.errors import register_exception_handlers
 from api.models import HealthResponse
-from api.registry import SessionRegistry
 from api.routes.applications import router as applications_router
+from api.routes.auth import router as auth_router
 from api.routes.candidates import router as candidates_router
 from api.routes.evaluations import router as evaluations_router
 from api.routes.interview import router as interview_router
@@ -75,6 +75,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app (production mode, CORS enabled, auth enabled) without mutating the
     environment for every other test in the session.
     """
+    from api.registry import SessionRegistry
+
     settings = settings or get_settings()
 
     app = FastAPI(
@@ -115,6 +117,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     install_middleware(app, settings)
     register_exception_handlers(app)
 
+    app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(interview_router, prefix=settings.api_prefix)
     app.include_router(voice_router, prefix=settings.api_prefix)
     app.include_router(interview_mediator_router, prefix=settings.api_prefix)
@@ -125,8 +128,9 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(applications_router, prefix=settings.api_prefix)
     app.include_router(evaluations_router, prefix=settings.api_prefix)
 
-    @app.get(
+    @app.api_route(
         f"{settings.api_prefix}/health",
+        methods=["GET", "HEAD"],
         response_model=HealthResponse,
         tags=["health"],
     )
@@ -147,7 +151,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         """
         return HealthResponse(status="ok")
 
-    @app.get(f"{settings.api_prefix}/", include_in_schema=False)
+    @app.api_route(f"{settings.api_prefix}/", methods=["GET", "HEAD"], include_in_schema=False)
     async def root(container: ServiceContainer = Depends(get_container)) -> dict:
         """How this process is configured.
 

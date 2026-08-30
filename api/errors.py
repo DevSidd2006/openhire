@@ -27,11 +27,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 
-from api.registry import SessionNotFoundError
+from api.exceptions import InvalidRequestError, SessionNotFoundError
 from core.context import get_request_id
 from core.errors import AppError
 from core.logging import get_logger, log_context
-from utils.interview_session import InterviewSessionError, SessionStatus
 
 logger = get_logger("api.errors")
 
@@ -52,21 +51,7 @@ def _error_body(error: str, detail: str, request: Request, **extra) -> dict:
     return body
 
 
-class InvalidRequestError(Exception):
-    """A request was well-formed JSON matching the schema (so FastAPI's own
-    422 validation passed) but violates a business rule the schema can't
-    express - e.g. candidate_id not matching parsed_resume.candidate_id.
-    Maps to 400, distinct from schema-level 422.
-
-    Retained as its own class rather than folded into
-    `core.errors.BadRequestError`: it is raised from api/routes/*.py and
-    asserted on by tests, and both express the same thing. New code in the
-    service or repository layers should raise `BadRequestError` instead;
-    both produce an identical `invalid_request` 400.
-    """
-
-
-def session_error_to_http_status(exc: InterviewSessionError, runner) -> int:
+def _session_error_to_http_status(exc, runner) -> int:
     """An InterviewSessionError covers two different situations that
     deserve different status codes:
       - the caller asked for an operation the session's current lifecycle
@@ -79,6 +64,8 @@ def session_error_to_http_status(exc: InterviewSessionError, runner) -> int:
         distinction is made here, at the transport boundary, using the
         runner's own status rather than string-matching the message).
     """
+    from utils.interview_session import SessionStatus
+
     if runner is not None and getattr(runner, "status", None) == SessionStatus.FAILED:
         return 500
     return 409
@@ -107,6 +94,8 @@ def _sanitised_validation_errors(exc: RequestValidationError) -> list[dict]:
 
 
 def register_exception_handlers(app) -> None:
+    from utils.interview_session import InterviewSessionError
+
     @app.exception_handler(SessionNotFoundError)
     async def _not_found(request: Request, exc: SessionNotFoundError) -> JSONResponse:
         return JSONResponse(
@@ -145,7 +134,7 @@ def register_exception_handlers(app) -> None:
     @app.exception_handler(InterviewSessionError)
     async def _session_error(request: Request, exc: InterviewSessionError) -> JSONResponse:
         runner = getattr(request.state, "runner", None)
-        status_code = session_error_to_http_status(exc, runner)
+        status_code = _session_error_to_http_status(exc, runner)
         if status_code == 500:
             # Genuine session failure (P5 Phase 18: "log session failure") -
             # real cause logged server-side only, never returned to the client.

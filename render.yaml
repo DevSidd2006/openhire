@@ -1,4 +1,11 @@
 services:
+  - type: pgsql
+    name: openhire-db
+    ipAllowList: []
+    databaseName: openhire
+    user: openhire
+    region: oregon
+
   - type: web
     name: openhire-api
     runtime: python
@@ -6,11 +13,18 @@ services:
     startCommand: uvicorn api.app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
+    depends_on:
+      - openhire-db
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: ENVIRONMENT
-        value: development
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          type: pgsql
+          name: openhire-db
+          property: connectionString
       - key: LLM_PROVIDER
         value: groq
       - key: GROQ_MODEL
@@ -23,4 +37,3 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: INFO
-

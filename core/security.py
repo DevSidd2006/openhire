@@ -14,6 +14,7 @@ What is here instead is everything that does NOT depend on the schema:
   * `AuthProvider` - the one interface a real implementation must satisfy.
   * `AnonymousAuthProvider` - the default, which authenticates nobody and
     grants nothing.
+  * `JWTAuthProvider` - validates JWT access tokens and returns the Principal.
   * `get_principal` / `require_authenticated` / `require_scopes` - the
     FastAPI dependencies endpoints attach.
 
@@ -144,6 +145,46 @@ class AnonymousAuthProvider:
         return ANONYMOUS
 
 
+class JWTAuthProvider:
+    """Authentication provider using JWT access tokens.
+
+    Validates JWT tokens from the Authorization header and returns the
+    Principal they represent. Uses AuthService.verify_access_token() to
+    decode and validate tokens, which handles JWT verification, claims
+    extraction, and expiration checking.
+
+    Token format:
+      Authorization: Bearer <access_token>
+    """
+
+    def __init__(self, auth_service) -> None:
+        """Initialize with an AuthService instance."""
+        self._auth_service = auth_service
+
+    async def authenticate(self, request: Request) -> Principal:
+        """Extract and validate JWT token from Authorization header.
+
+        Returns the Principal if token is valid. Returns ANONYMOUS if no
+        token is presented. Raises UnauthorizedError if a token IS presented
+        but is invalid/expired.
+        """
+        # Read Authorization header
+        auth_header = request.headers.get("Authorization", "").strip()
+        if not auth_header:
+            return ANONYMOUS
+
+        # Parse "Bearer <token>" format
+        try:
+            scheme, _, token = auth_header.partition(" ")
+            if scheme.lower() != "bearer" or not token:
+                return ANONYMOUS
+        except ValueError:
+            return ANONYMOUS
+
+        # Validate token and return Principal
+        return await self._auth_service.verify_access_token(token)
+
+
 def get_auth_provider(request: Request) -> AuthProvider:
     """Resolve the installed provider from the application container.
 
@@ -232,6 +273,7 @@ __all__ = [
     "ANONYMOUS",
     "AnonymousAuthProvider",
     "AuthProvider",
+    "JWTAuthProvider",
     "Principal",
     "PrincipalType",
     "get_auth_provider",

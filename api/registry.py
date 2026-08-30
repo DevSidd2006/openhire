@@ -25,19 +25,10 @@ import asyncio
 import uuid
 from typing import Dict
 
+from api.exceptions import SessionNotFoundError
 from utils.interview_session import InterviewSessionRunner
 
-
-class SessionNotFoundError(Exception):
-    """No session exists for the given session_id - either it was never
-    created or was already removed. Distinct from InterviewSessionError
-    (utils/interview_session.py), which is about an EXISTING session being
-    in the wrong lifecycle state - this is about the session not existing
-    in the registry at all (maps to HTTP 404, not 409)."""
-
-    def __init__(self, session_id: str):
-        self.session_id = session_id
-        super().__init__(f"No session found for session_id={session_id!r}")
+__all__ = ["SessionNotFoundError", "SessionRegistry"]
 
 
 class SessionRegistry:

@@ -7,6 +7,9 @@ from config.settings import (
     GROQ_API_KEY,
     GROQ_MODEL,
     LLM_PROVIDER,
+    NVIDIA_NIM_API_KEY,
+    NVIDIA_NIM_BASE_URL,
+    NVIDIA_NIM_MODEL,
     OPENAI_API_KEY,
     OPENAI_MODEL,
 )
@@ -14,15 +17,25 @@ from providers.base import LLMProvider
 from providers.llm.gemini import GeminiProvider
 from providers.llm.groq import GroqProvider
 from providers.llm.mock import MockLLMProvider
+from providers.llm.nvidia_nim import NvidiaNimProvider
 from providers.llm.openai import OpenAIProvider
 
 
 def get_llm_provider() -> LLMProvider:
     """Factory function to get LLM provider based on configuration."""
-    # Groq first: as of P8B.3 it is the PRIMARY real provider OpenHire is
-    # developed and benchmarked against (model openai/gpt-oss-20b). Gemini
-    # and OpenAI remain fully supported, just no longer the default target.
-    if LLM_PROVIDER == "groq":
+    # NVIDIA NIM is the primary provider (Nemotron ultra-powerful with extended thinking).
+    # Groq, OpenAI, and Gemini remain fully supported alternatives.
+    if LLM_PROVIDER == "nvidia_nim" or LLM_PROVIDER == "nvidia-nim":
+        if not NVIDIA_NIM_API_KEY:
+            raise ValueError(
+                "NVIDIA_NIM_API_KEY environment variable is required for NVIDIA NIM provider"
+            )
+        return NvidiaNimProvider(
+            api_key=NVIDIA_NIM_API_KEY,
+            model=NVIDIA_NIM_MODEL,
+            base_url=NVIDIA_NIM_BASE_URL
+        )
+    elif LLM_PROVIDER == "groq":
         if not GROQ_API_KEY:
             raise ValueError(
                 "GROQ_API_KEY environment variable is required for Groq provider"

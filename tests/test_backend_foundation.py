@@ -53,6 +53,7 @@ from repositories.memory import (
     InMemoryJobRepository,
     InMemorySessionRepository,
     InMemoryTranscriptRepository,
+    InMemoryUserRepository,
 )
 from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
 from schemas.interview import InterviewTranscript
@@ -192,6 +193,7 @@ class TestStartupValidation:
             candidate_repository=InMemoryCandidateRepository(),
             application_repository=InMemoryApplicationRepository(),
             evaluation_repository=InMemoryEvaluationRepository(),
+            user_repository=InMemoryUserRepository(),
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
             auth_provider=AnonymousAuthProvider(),
             persistence_is_ephemeral=True,
