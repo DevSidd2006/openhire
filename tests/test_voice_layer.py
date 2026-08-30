@@ -671,7 +671,7 @@ class TestVoiceProviderConfiguration:
         emitting WebM/Opus that we never verified Azure can decode."""
         from pathlib import Path
 
-        client = Path("pages/voice-interview.html").read_text(encoding="utf-8")
+        client = Path("pages/interview.html").read_text(encoding="utf-8")
         assert 'audio_format: "wav"' in client
         assert "encodeWav" in client
         # MediaRecorder (the WebM/Opus path) must not be reintroduced.

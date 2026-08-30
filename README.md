@@ -23,7 +23,7 @@ OpenHire automates campus hiring at scale by running structured voice interviews
 - **Job Configuration** — Recruiters define jobs and fixed interview question sets
 - **LLM-Powered Evaluation** — Automatic scoring of interview transcripts against job requirements
 - **Explainable Reports** — Candidate rankings with scoring breakdown and evidence
-- **Multi-Provider Support** — Works with Groq, OpenAI, or Google Gemini as LLM backends
+- **Multi-Provider Support** — Works with NVIDIA NIM, OpenAI, Groq, or Google Gemini as LLM backends
 
 **Planned (Stage 2+):**
 - Adaptive follow-up questions based on candidate responses
@@ -69,7 +69,7 @@ Development is staged so every milestone is a working, demoable system — not a
 - No adaptive follow-ups
 - One candidate at a time
 
-**Stack:** Python FastAPI backend, React frontend, PostgreSQL database, LLM providers (Groq/OpenAI/Google), voice support via edge-tts.
+**Stack:** Python FastAPI backend, React frontend, PostgreSQL database, LLM providers (NVIDIA NIM/OpenAI/Groq/Google), voice support via edge-tts.
 
 **Goal:** Prove the interview-to-evaluation loop works end to end.
 
@@ -96,7 +96,7 @@ Full-featured production system with multilingual support, reliability improveme
 - Python 3.13+
 - PostgreSQL 13+
 - Node.js 18+ (for frontend development)
-- LLM API key (Groq recommended, or OpenAI/Google Gemini)
+- LLM API key (NVIDIA NIM recommended, or OpenAI/Groq/Google Gemini)
 
 ### Installation
 
@@ -114,6 +114,9 @@ Full-featured production system with multilingual support, reliability improveme
 3. **Configure your LLM provider:**
    ```bash
    # In .env, set one of:
+   NVIDIA_NIM_API_KEY=your_nvidia_key
+   NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+   # OR
    GROQ_API_KEY=your_groq_key
    # OR
    OPENAI_API_KEY=your_openai_key
@@ -189,7 +192,7 @@ OpenHire/
 │   └── postgres/               # PostgreSQL implementations
 │
 ├── providers/                  # External service integrations
-│   ├── llm/                    # LLM providers (Groq, OpenAI, Gemini)
+│   ├── llm/                    # LLM providers (NVIDIA NIM, OpenAI, Groq, Gemini)
 │   ├── audio/                  # Speech synthesis (edge-tts)
 │   ├── embeddings/             # Embedding generation (local/remote)
 │   └── vector_store/           # Vector database (FAISS, mock)
@@ -249,12 +252,13 @@ OpenHire/
                          │
         ┌────────────────┼────────────────┐
         ▼                ▼                ▼
-   ┌─────────┐     ┌──────────┐    ┌──────────────┐
-   │PostgreSQL│    │ LLM API  │    │ Speech TTS   │
-   │Database  │    │ (Groq)   │    │ (edge-tts)   │
-   └─────────┘    │ (OpenAI) │    └──────────────┘
-                  │ (Gemini) │
-                  └──────────┘
+   ┌─────────┐     ┌──────────────┐    ┌──────────────┐
+   │PostgreSQL│    │   LLM API    │    │ Speech TTS   │
+   │Database  │    │ (NVIDIA NIM) │    │ (edge-tts)   │
+   └─────────┘    │ (OpenAI)     │    └──────────────┘
+                  │ (Groq)       │
+                  │ (Gemini)     │
+                  └──────────────┘
 ```
 
 ### Database Schema
@@ -279,7 +283,7 @@ See [`api/models.py`](api/models.py) for detailed schema.
 | **Backend** | Python 3.13, FastAPI |
 | **Database** | PostgreSQL 13+ |
 | **Auth** | JWT tokens, bcrypt hashing |
-| **LLM** | Groq, OpenAI, Google Gemini |
+| **LLM** | NVIDIA NIM, OpenAI, Groq, Google Gemini |
 | **Speech** | edge-tts (TTS), WebRTC (audio) |
 | **Agents** | LangGraph, Pydantic |
 | **Deployment** | Docker, Render (staging) |
@@ -316,9 +320,9 @@ Key variables in `.env`:
 DATABASE_URL=postgresql://user:pass@localhost/openhire
 
 # LLM Provider (choose one)
-LLM_PROVIDER=groq
-GROQ_API_KEY=your_key
-GROQ_MODEL=openai/gpt-oss-20b
+LLM_PROVIDER=nvidia-nim
+NVIDIA_NIM_API_KEY=your_key
+NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
 
 # Auth
 JWT_SECRET_KEY=your_secret_key_here
