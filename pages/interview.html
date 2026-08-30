@@ -9,7 +9,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  /* Google Meet Minimal Dark Canvas */
   body {
     background: #0d0f14;
     overflow-x: hidden;
@@ -27,12 +26,6 @@
     align-items: center;
     margin-bottom: 1rem;
     padding: 0.5rem 0;
-  }
-
-  .meet-title-group {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
   }
 
   .rec-badge {
@@ -63,7 +56,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
     margin-bottom: 1.25rem;
-    min-height: 480px;
+    min-height: 440px;
   }
 
   @media (max-width: 860px) {
@@ -73,7 +66,6 @@
     }
   }
 
-  /* Video Tiles */
   .meet-tile {
     background: var(--surface);
     border: 1px solid var(--surface-border);
@@ -95,8 +87,8 @@
   }
 
   .meet-tile.user-speaking {
-    border-color: var(--success);
-    box-shadow: 0 0 0 2px var(--success), 0 8px 32px rgba(16, 185, 129, 0.25);
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger), 0 8px 32px rgba(239, 68, 68, 0.25);
   }
 
   .tile-tag {
@@ -132,7 +124,7 @@
     z-index: 10;
   }
 
-  /* AI Glowing Orb Effect */
+  /* AI Glowing Orb */
   .ai-orb-wrap {
     position: relative;
     width: 140px;
@@ -187,7 +179,6 @@
     100% { transform: scale(1.4); opacity: 0; }
   }
 
-  /* Candidate Tile / Video Canvas */
   #userVideo {
     width: 100%;
     height: 100%;
@@ -244,7 +235,171 @@
     flex: 1;
   }
 
-  /* Meet Bottom Control Dock */
+  /* STT Display */
+  .stt-display {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    font-style: italic;
+  }
+
+  .stt-display.listening {
+    color: var(--primary);
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+
+  .stt-interim {
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+
+  .stt-final {
+    color: var(--text-main);
+    opacity: 1;
+    font-style: normal;
+  }
+
+  /* Coaching Guidance Panel */
+  .coaching-panel {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .coaching-panel.active {
+    display: block;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .coaching-title {
+    font-weight: 600;
+    color: var(--success);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .coaching-text {
+    color: var(--text-main);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .coaching-suggestion {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+
+  /* Response Analysis */
+  .analysis-scores {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .score-item {
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+
+  .score-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .score-value {
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  /* Scoring Display */
+  .scoring-display {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .scoring-title {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .scoring-meter {
+    width: 100%;
+    height: 8px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  .scoring-meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+  }
+
+  .scoring-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .scoring-stat {
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .scoring-stat-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .scoring-stat-value {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* Control Dock */
   .meet-dock {
     display: flex;
     justify-content: center;
@@ -282,19 +437,18 @@
     transform: translateY(-2px);
   }
 
-  .dock-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: #fff;
-    box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
-  }
-
   .dock-btn.speaking {
     background: var(--danger) !important;
     border-color: var(--danger) !important;
     color: #fff !important;
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
     animation: livePulse 1.2s infinite;
+  }
+
+  .dock-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
   }
 
   .dock-btn.btn-end {
@@ -307,18 +461,14 @@
     font-size: 12.5px;
     font-weight: 600;
   }
-  .dock-btn.btn-end:hover {
-    background: var(--danger);
-    color: #fff;
-  }
+  .dock-btn.btn-end:hover { background: var(--danger); color: #fff; }
 
-  /* Compact Transcript Drawer */
-  .meet-transcript-panel {
-    background: var(--surface);
-    border: 1px solid var(--surface-border);
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-  }
+  #log { font-size: 13px; max-height: 200px; overflow-y: auto; font-family: var(--font-sans); }
+  #log div { padding: 0.4rem 0; border-bottom: 1px solid var(--surface-border); }
+  #log div:last-child { border-bottom: none; }
+  .you { color: var(--primary); font-weight: 500; }
+  .sys { color: var(--text-muted); }
+  .bad { color: #f87171; }
 </style>
 </head>
 <body>
@@ -327,460 +477,795 @@
 <main class="meet-container">
   
   <div class="meet-topbar">
-    <div class="meet-title-group">
-      <div class="rec-badge"><span class="rec-dot"></span> LIVE AI SESSION</div>
-      <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted);" id="sessionMetaText">SESSION: —</div>
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <div class="rec-badge"><span class="rec-dot"></span> P9 VOICE ENGINE</div>
+      <div style="display:flex; gap:0.4rem; align-items:center;">
+        <input id="sessionId" class="form-control" placeholder="Session UUID..." style="width:200px; padding:0.3rem 0.6rem; font-size:12px;">
+        <button id="connect" class="btn-primary" style="padding:0.3rem 0.75rem; font-size:12px;">Connect</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; background:var(--surface); padding:0.25rem 0.6rem; border-radius:8px; border:1px solid var(--surface-border);">
+        <label for="sttMode" style="font-size:11px; font-family:var(--font-mono); color:var(--text-muted);">STT:</label>
+        <select id="sttMode" style="background:transparent; border:none; color:var(--text-main); font-size:11.5px; outline:none; cursor:pointer;">
+          <option value="browser" style="background:#11141c;">⚡ Browser Native STT (Free & Fast)</option>
+          <option value="server" style="background:#11141c;">🎙️ Server Audio STT (WAV Upload)</option>
+        </select>
+      </div>
     </div>
     <div style="display:flex; align-items:center; gap:0.6rem;">
-      <span class="tag" id="statusBadge">Ready</span>
-      <button class="btn-outline" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="toggleTranscript()">Toggle Transcript</button>
+      <span id="status" style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted); display:inline-flex; align-items:center;">
+        <span class="dot" id="dot"></span>idle
+      </span>
+      <button class="btn-outline" style="padding:0.3rem 0.75rem; font-size:12px;" onclick="window.history.back()">Exit</button>
     </div>
   </div>
 
-  <!-- Question Subtitle Overlay -->
+  <!-- Live Question Bar -->
   <div class="question-subtitle-bar">
-    <span class="q-badge" id="qCounter">Q1 OF 3</span>
-    <div class="q-live-text" id="currentQText">Loading interview question...</div>
-    <button class="btn-outline" style="padding:0.35rem 0.75rem; font-size:12px;" onclick="repeatQuestion()">🔊 Replay</button>
+    <span class="q-badge">LIVE PROBE</span>
+    <div class="q-live-text" id="question">— connect to launch interview —</div>
+    <button class="btn-outline" id="replay" style="padding:0.35rem 0.75rem; font-size:12px;" disabled>🔊 Repeat</button>
   </div>
 
-  <!-- Google Meet 50/50 Stage Grid -->
+  <!-- Real-time Scoring Display -->
+  <div class="scoring-display" id="scoringDisplay" style="display:none;">
+    <div class="scoring-title">📊 Interview Progress</div>
+    <div class="scoring-meter">
+      <div class="scoring-meter-fill" id="scoringMeter" style="width:0%"></div>
+    </div>
+    <div class="scoring-stats">
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Avg Score</div>
+        <div class="scoring-stat-value" id="avgScore">—</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Answers</div>
+        <div class="scoring-stat-value" id="totalAnswers">0</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Clarity</div>
+        <div class="scoring-stat-value" id="avgClarity">—</div>
+      </div>
+      <div class="scoring-stat">
+        <div class="scoring-stat-label">Relevance</div>
+        <div class="scoring-stat-value" id="avgRelevance">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Meet 50/50 Video Grid -->
   <div class="meet-grid">
     
-    <!-- AI Stage (Left 50%) -->
+    <!-- AI Tile (50%) -->
     <div class="meet-tile" id="aiTile">
       <div class="tile-top-status">
-        <span id="aiSpeechState">Listening</span>
+        <span id="aiStateLabel">Waiting</span>
       </div>
 
       <div class="ai-orb-wrap">
         <div class="ai-aura"></div>
-        <div class="ai-orb" id="aiOrbIcon">🤖</div>
+        <div class="ai-orb">🤖</div>
       </div>
 
-      <div style="display:flex; justify-content:center; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-        <button class="mic-button" id="btnMic" disabled
-                onmousedown="startSpeech()" onmouseup="stopSpeech()" onmouseleave="stopSpeech()"
-                ontouchstart="startSpeech()" ontouchend="stopSpeech()">
-          🎙️ Hold to Speak Answer
-        </button>
-        <button class="btn-secondary" onclick="repeatQuestion()">
-          🔊 Replay
-        </button>
+      <div style="margin-top: 1.5rem; text-align:center;">
+        <h3 style="font-weight:600; font-size:1.1rem; margin-bottom:0.25rem;">OpenHire Adaptive Interviewer</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted);" id="aiSubStatus">Microsoft Edge Neural Voice / Server Engine</p>
       </div>
 
       <div class="tile-tag">
-        <span class="dot on"></span> AI Evaluator (Adaptive)
+        <span class="dot on"></span> AI Evaluator (Voice Stream)
       </div>
     </div>
 
-    <!-- Candidate Stage (Right 50%) -->
+    <!-- Candidate Tile (50%) -->
     <div class="meet-tile" id="userTile">
       <div class="tile-top-status">
-        <span id="userMicStatus">Mic Ready</span>
+        <span id="userTileStatus">Mic Inactive</span>
       </div>
 
-      <!-- Live Video stream or styled monogram avatar -->
       <video id="userVideo" autoplay playsinline muted style="display:none;"></video>
-      <div class="user-avatar-fallback" id="userFallbackAvatar">AM</div>
+      <div class="user-avatar-fallback" id="userFallbackAvatar">ME</div>
 
       <div style="margin-top: 1.25rem; text-align:center;" id="userMetaWrap">
-        <h3 style="font-weight:600; font-size:1.05rem; margin-bottom:0.25rem;" id="candidateDisplayName">Alex Morgan (You)</h3>
-        <div class="wave-bars" id="userWave" style="display:none; margin:0 auto;">
+        <h3 style="font-weight:600; font-size:1.05rem; margin-bottom:0.25rem;" id="userDisplayName">Candidate (You)</h3>
+        <div class="wave-bars" id="voiceWaveBox" style="display:none; margin:0 auto;">
           <span></span><span></span><span></span><span></span>
         </div>
       </div>
 
       <div class="tile-tag">
-        <span class="dot on"></span> <span id="candidateTagText">Alex Morgan (Candidate)</span>
+        <span class="dot on"></span> Candidate Feed
       </div>
     </div>
 
   </div>
 
-  <!-- Meet Bottom Action Dock -->
+  <!-- Bottom Meet Control Dock -->
   <div class="meet-dock">
-    <button class="dock-btn" id="btnMicHold" title="Hold or Click to Speak"
-            onmousedown="startSpeech()" onmouseup="stopSpeech()"
-            ontouchstart="startSpeech()" ontouchend="stopSpeech()">
+    <button class="dock-btn" id="talk" title="Hold to Answer" disabled>
       🎤
     </button>
     <button class="dock-btn" id="btnCamToggle" title="Toggle Camera" onclick="toggleCamera()">
       📹
     </button>
-    <button class="dock-btn" title="Replay AI Speech" onclick="repeatQuestion()">
-      🔊
-    </button>
-    <button class="dock-btn btn-end" onclick="finishSession()">
-      End Call & Score →
+    <button class="dock-btn btn-end" onclick="window.history.back()">
+      Leave Session
     </button>
   </div>
 
-  <!-- Type Answer Fallback -->
-  <div style="max-width: 540px; margin: 0 auto 1.5rem; display:flex; gap:0.5rem;">
-    <input type="text" id="typeInput" class="form-control" placeholder="Type text response if microphone is unavailable...">
-    <button class="btn-secondary" onclick="submitText()">Send</button>
-  </div>
-
-  <!-- Sealed Transcript Container -->
-  <div class="meet-transcript-panel" id="transcriptContainer">
+  <!-- Real-time STT Display -->
+  <div class="card" style="margin-bottom: 1.25rem;">
     <div class="card-header" style="margin-bottom:0.5rem;">
-      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Real-Time Sealed Transcript</span>
-      <span class="tag">Audited</span>
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Your Speech Recognition</span>
+      <span class="tag" id="sttStatus">Ready</span>
     </div>
-    <div class="transcript-area" id="transcriptLog" style="max-height: 160px;">
-      <div class="log-line"><span class="speaker-tag" style="color:var(--text-faint);">[SYS]</span> Connected to multi-agent interview evaluator. Audio stream active.</div>
+    <div class="stt-display" id="sttDisplay">
+      <span id="sttText">Listening for your response...</span>
     </div>
+
+    <!-- LLM-Generated Coaching Guidance -->
+    <div class="coaching-panel" id="coachingPanel">
+      <div class="coaching-title">💡 Guidance</div>
+      <div class="coaching-text" id="coachingText"></div>
+      <div class="coaching-suggestion" id="coachingSuggestion"></div>
+
+      <!-- Response Analysis Scores -->
+      <div class="analysis-scores" id="analysisScores" style="display:none; margin-top:1rem;">
+        <div class="score-item">
+          <div class="score-label">Clarity</div>
+          <div class="score-value" id="clarityScore">—</div>
+        </div>
+        <div class="score-item">
+          <div class="score-label">Completeness</div>
+          <div class="score-value" id="completenessScore">—</div>
+        </div>
+        <div class="score-item">
+          <div class="score-label">Relevance</div>
+          <div class="score-value" id="relevanceScore">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sealed Transcript -->
+  <div class="card">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <span style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Interview Transcript</span>
+      <span class="tag">Streaming</span>
+    </div>
+    <div id="log"><div class="sys">Connect to initialize voice stream.</div></div>
   </div>
 
 </main>
 
+<script src="js/auth.js"></script>
 <script src="js/app.js"></script>
 <script>
+  guardAuthenticatedPage();
   renderNavbar();
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const sessionId = urlParams.get('session_id');
-  const appId = urlParams.get('app_id') || '';
-
-  document.getElementById('sessionMetaText').textContent = `SESSION: ${sessionId || '—'}`;
-
-  let currentQuestion = null;
-  let maxQuestions = 0;
-  let ended = false;
-
-  function setStatus(text) {
-    document.getElementById('statusBadge').textContent = `Status: ${text}`;
+  const user = getCurrentUser();
+  if (user && user.name) {
+    document.getElementById('userDisplayName').textContent = `${user.name} (You)`;
+    const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    document.getElementById('userFallbackAvatar').textContent = initials || 'ME';
   }
 
-  function showQuestion(question, questionsAsked) {
-    if (!question) return;
-    // Both transports can report the SAME current question (a REST GET on
-    // load, then a WS "speak_question" reply) - only log it once.
-    const isSameQuestion = currentQuestion && currentQuestion.question_id === question.question_id;
-    currentQuestion = question;
-    document.getElementById('qCounter').textContent =
-      `QUESTION ${questionsAsked}${maxQuestions ? ' OF ' + maxQuestions : ''} • ADAPTIVE PROBE`;
-    document.getElementById('currentQText').textContent = question.question_text;
-    if (!isSameQuestion) {
-      addLog('Interviewer', question.question_text);
+  let videoStream = null;
+  async function toggleCamera() {
+    const video = document.getElementById('userVideo');
+    const avatar = document.getElementById('userFallbackAvatar');
+    const btn = document.getElementById('btnCamToggle');
+
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      videoStream = null;
+      video.style.display = 'none';
+      avatar.style.display = 'flex';
+      btn.classList.remove('active');
+    } else {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = videoStream;
+        video.style.display = 'block';
+        avatar.style.display = 'none';
+        btn.classList.add('active');
+      } catch (err) {
+        alert('Camera permission denied or not available.');
+      }
     }
   }
+</script>
+<script>
+const $ = (id) => document.getElementById(id);
+let ws = null, stream = null, audioCtx = null, node = null, source = null;
+let pcmChunks = [], capturing = false, sourceRate = 48000;
+const TARGET_RATE = 16000;
 
-  function endInterview(terminationReason) {
-    ended = true;
-    document.getElementById('currentQText').textContent =
-      'Interview completed. Finalizing multi-agent evaluation...';
-    setStatus('Evaluating');
-    document.getElementById('typeInput').disabled = true;
-    document.getElementById('btnMic').disabled = true;
-    if (voice.ws) {
-      voice.ws.close();
+// Browser Native Speech Recognition
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recognizedText = "";
+let nativeSttSupported = !!SpeechRecognition;
+
+if (nativeSttSupported) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-IN"; // Default to Indian English
+
+  recognition.onresult = (event) => {
+    let current = "";
+    for (let i = 0; i < event.results.length; i++) {
+      current += event.results[i][0].transcript;
     }
-    addLog('System', `Interview sealed${terminationReason ? ' (' + terminationReason + ')' : ''}. Transcript is now immutable.`);
-    setTimeout(() => {
-      window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
-    }, 1500);
+    recognizedText = current.trim();
+    if (recognizedText) {
+      const userTileStatus = document.getElementById("userTileStatus");
+      if (userTileStatus) userTileStatus.textContent = `"${recognizedText.slice(-30)}"`;
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e.error);
+  };
+} else {
+  // If not supported by browser, select server audio mode automatically
+  const sttSelect = $("sttMode");
+  if (sttSelect) {
+    sttSelect.value = "server";
+    const opt = sttSelect.querySelector('option[value="browser"]');
+    if (opt) opt.disabled = true;
+  }
+}
+
+function downsampleTo16k(input, inputRate) {
+  if (inputRate === TARGET_RATE) return input;
+  const ratio = inputRate / TARGET_RATE;
+  const outLength = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLength);
+  for (let i = 0; i < outLength; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+    let sum = 0, n = 0;
+    for (let j = start; j < end; j++) { sum += input[j]; n++; }
+    out[i] = n ? sum / n : 0;
+  }
+  return out;
+}
+
+function encodeWav(float32, sampleRate) {
+  const bytesPerSample = 2;
+  const dataSize = float32.length * bytesPerSample;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+  const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  w(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  w(8, "WAVE");
+  w(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  w(36, "data");
+  view.setUint32(40, dataSize, true);
+  let off = 44;
+  for (let i = 0; i < float32.length; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buf;
+}
+
+function setStatus(text, cls) {
+  $("status").innerHTML = `<span class="dot ${cls || ""}"></span>${text}`;
+}
+function log(text, cls) {
+  const el = document.createElement("div");
+  el.className = cls || "sys";
+  el.textContent = text;
+  $("log").prepend(el);
+}
+function b64(buf) {
+  let s = "", bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function play(b64audio, format) {
+  if (!b64audio) return;
+  const bin = atob(b64audio);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
+  
+  const aiTile = document.getElementById("aiTile");
+  const aiStateLabel = document.getElementById("aiStateLabel");
+  
+  if (aiTile) aiTile.classList.add("speaking");
+  if (aiStateLabel) {
+    aiStateLabel.textContent = "Speaking...";
+    aiStateLabel.style.color = "var(--primary)";
   }
 
-  async function loadSession() {
-    if (!sessionId) {
-      document.getElementById('currentQText').textContent = 'No interview session specified.';
-      setStatus('Error');
+  const audio = new Audio(URL.createObjectURL(blob));
+  audio.onended = () => {
+    if (aiTile) aiTile.classList.remove("speaking");
+    if (aiStateLabel) {
+      aiStateLabel.textContent = "Listening";
+      aiStateLabel.style.color = "var(--text-muted)";
+    }
+  };
+  audio.play().catch(() => {
+    if (aiTile) aiTile.classList.remove("speaking");
+    if (aiStateLabel) aiStateLabel.textContent = "Ready";
+    log("(browser blocked autoplay — click repeat to listen)", "sys");
+  });
+}
+
+// Background Scoring Integration - Real-time score tracking
+let sessionScoring = null;
+let scoringInitialized = false;
+
+async function initializeScoring(sessionId, candidateId, jobId) {
+  try {
+    const response = await apiRequest(`/scoring/initialize`, {
+      method: "POST",
+      body: {
+        session_id: sessionId,
+        candidate_id: candidateId,
+        job_id: jobId,
+      },
+    });
+    if (response.ok) {
+      scoringInitialized = true;
+      const display = document.getElementById("scoringDisplay");
+      if (display) display.style.display = "block";
+      log("Scoring initialized for real-time tracking", "sys");
+    }
+  } catch (err) {
+    console.error("Error initializing scoring:", err);
+  }
+}
+
+async function scoreAnswer(sessionId, questionId, questionText, answerText, competency, candidateName) {
+  if (!scoringInitialized) return null;
+
+  try {
+    const response = await apiRequest(`/scoring/score-answer`, {
+      method: "POST",
+      body: {
+        session_id: sessionId,
+        question_id: questionId,
+        question_text: questionText,
+        answer_text: answerText,
+        competency: competency,
+        candidate_name: candidateName,
+      },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    updateScoringDisplay(sessionId);
+    return data.score;
+  } catch (err) {
+    console.error("Error scoring answer:", err);
+    return null;
+  }
+}
+
+async function updateScoringDisplay(sessionId) {
+  try {
+    const response = await apiRequest(`/scoring/session/${encodeURIComponent(sessionId)}/summary`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    // Update display values
+    const avgScore = document.getElementById("avgScore");
+    const totalAnswers = document.getElementById("totalAnswers");
+    const avgClarity = document.getElementById("avgClarity");
+    const avgRelevance = document.getElementById("avgRelevance");
+    const meter = document.getElementById("scoringMeter");
+
+    if (avgScore) avgScore.textContent = `${data.average_score}%`;
+    if (totalAnswers) totalAnswers.textContent = data.total_answers;
+    if (avgClarity) avgClarity.textContent = data.total_answers > 0 ? "✓" : "—";
+    if (avgRelevance) avgRelevance.textContent = data.total_answers > 0 ? "✓" : "—";
+    if (meter) meter.style.width = `${Math.min(data.average_score, 100)}%`;
+  } catch (err) {
+    console.error("Error updating scoring display:", err);
+  }
+}
+
+// LLM Mediator Integration - Real-time coaching and guidance
+let lastQuestion = "";
+let currentCompetency = "";
+let lastQuestionId = "";
+
+async function getCoachingGuidance(candidateName, responseQuality, topic) {
+  try {
+    const response = await apiRequest(`/mediator/coaching`, {
+      method: "POST",
+      body: {
+        candidate_name: candidateName,
+        response_quality: responseQuality,
+        topic: topic,
+        needs_improvement: responseQuality < 6,
+      },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.coaching;
+  } catch (err) {
+    console.error("Error getting coaching:", err);
+    return null;
+  }
+}
+
+async function analyzeResponseWithLLM(candidateName, question, answer, competency) {
+  try {
+    const response = await apiRequest(`/mediator/analyze`, {
+      method: "POST",
+      body: {
+        candidate_name: candidateName,
+        question: question,
+        answer: answer,
+        competency: competency,
+      },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.analysis;
+  } catch (err) {
+    console.error("Error analyzing response:", err);
+    return null;
+  }
+}
+
+function displayCoachingGuidance(guidance, analysis = null) {
+  const panel = document.getElementById("coachingPanel");
+  const text = document.getElementById("coachingText");
+  const suggestion = document.getElementById("coachingSuggestion");
+  const scoresDiv = document.getElementById("analysisScores");
+
+  if (!guidance) return;
+
+  text.textContent = guidance.guidance_text || "Good job!";
+  if (guidance.suggestion) {
+    suggestion.textContent = `Tip: ${guidance.suggestion}`;
+    suggestion.style.display = "block";
+  } else {
+    suggestion.style.display = "none";
+  }
+
+  if (analysis) {
+    document.getElementById("clarityScore").textContent = analysis.clarity;
+    document.getElementById("completenessScore").textContent = analysis.completeness;
+    document.getElementById("relevanceScore").textContent = analysis.relevance;
+    scoresDiv.style.display = "grid";
+  }
+
+  panel.classList.add("active");
+  setTimeout(() => panel.classList.remove("active"), 8000); // Hide after 8 seconds
+}
+
+function connectToSession(id) {
+  if (!id) return;
+  const wsUrl = typeof getWebSocketUrl === 'function'
+    ? getWebSocketUrl(`/ws/sessions/${encodeURIComponent(id)}`)
+    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/sessions/${encodeURIComponent(id)}`;
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = async () => {
+    setStatus("connected", "on");
+    $("talk").disabled = false;
+    $("replay").disabled = false;
+    $("aiStateLabel").textContent = "Connected";
+    log("Connected to interview session. Listen to the question and click the microphone to respond.", "sys");
+
+    // Initialize scoring for real-time tracking
+    const user = getCurrentUser();
+    if (user && user.candidate_id && user.job_id) {
+      await initializeScoring(id, user.candidate_id, user.job_id);
+    }
+
+    ws.send(JSON.stringify({ type: "speak_question" }));
+  };
+  ws.onclose = () => {
+    setStatus("disconnected");
+    $("talk").disabled = true;
+    $("replay").disabled = true;
+    $("aiStateLabel").textContent = "Disconnected";
+  };
+  ws.onerror = () => setStatus("connection error", "err");
+
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "error") {
+      log(`error: ${msg.error}${msg.detail ? " — " + msg.detail : ""}`, "bad");
+      setStatus(msg.error, "err");
       return;
     }
+    if (msg.outcome === "no_speech_detected") {
+      log("(no speech detected — please answer again)", "bad");
+      return;
+    }
+
+    // Process transcribed answer
+    if (msg.transcript) {
+      log(`You: ${msg.transcript}`, "you");
+
+      // Get LLM coaching if we have the question and competency
+      if (lastQuestion && currentCompetency) {
+        const guidance = await getCoachingGuidance(
+          user?.name || "Candidate",
+          7, // Default quality score
+          currentCompetency
+        );
+        if (guidance) {
+          displayCoachingGuidance(guidance);
+        }
+      }
+    }
+
+    if (msg.tts_error) log("(question audio unavailable — showing text only)", "bad");
+
+    // Score the previous answer and display new question
+    if (msg.next_question) {
+      // Score the previous answer if we have it
+      if (lastQuestion && lastQuestionId && msg.transcript && currentCompetency) {
+        const sessionId = new URLSearchParams(window.location.search).get("session_id");
+        await scoreAnswer(
+          sessionId,
+          lastQuestionId,
+          lastQuestion,
+          msg.transcript,
+          currentCompetency,
+          user?.name || "Candidate"
+        );
+      }
+
+      // Update for next question
+      lastQuestion = msg.next_question.question_text;
+      lastQuestionId = msg.next_question.question_id || msg.next_question.question_text;
+      currentCompetency = msg.next_question.competency || "General";
+      $("question").textContent = msg.next_question.question_text;
+      log(`Interviewer: ${msg.next_question.question_text}`);
+    } else if (msg.status === "sealed") {
+      // Finalize scoring when interview ends
+      const sessionId = new URLSearchParams(window.location.search).get("session_id");
+      if (sessionId) {
+        await apiRequest(`/scoring/session/${encodeURIComponent(sessionId)}/finalize`, { method: "POST" });
+      }
+      $("question").textContent = "Interview complete.";
+      log(`Interview finished (${msg.termination_reason || "complete"}).`);
+    }
+
+    play(msg.question_audio_base64, msg.audio_format);
+  };
+}
+
+$("connect").onclick = () => {
+  const id = $("sessionId").value.trim();
+  connectToSession(id);
+};
+
+// Auto-connect from URL parameter
+window.addEventListener("load", () => {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id");
+  if (sessionId) {
+    $("sessionId").value = sessionId;
+    connectToSession(sessionId);
+  }
+});
+
+// Web Speech API (STT - Speech-to-Text)
+let recognition = null;
+let sttInterimText = "";
+let sttFinalText = "";
+
+function initializeWebSpeechAPI() {
+  if (recognition) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    log("Web Speech API not supported in this browser", "bad");
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.onstart = () => {
+    sttInterimText = "";
+    sttFinalText = "";
+    const display = document.getElementById("sttDisplay");
+    if (display) display.classList.add("listening");
+    const status = document.getElementById("sttStatus");
+    if (status) status.textContent = "Listening...";
+  };
+
+  recognition.onresult = (event) => {
+    sttInterimText = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        sttFinalText += transcript + " ";
+      } else {
+        sttInterimText += transcript;
+      }
+    }
+    updateSTTDisplay();
+  };
+
+  recognition.onerror = (event) => {
+    log(`Speech recognition error: ${event.error}`, "bad");
+    const display = document.getElementById("sttDisplay");
+    if (display) {
+      display.classList.remove("listening");
+      document.getElementById("sttText").textContent = `Error: ${event.error}`;
+    }
+  };
+
+  recognition.onend = () => {
+    const display = document.getElementById("sttDisplay");
+    if (display) display.classList.remove("listening");
+    const status = document.getElementById("sttStatus");
+    if (status) status.textContent = "Ready";
+  };
+}
+
+function updateSTTDisplay() {
+  const display = document.getElementById("sttDisplay");
+  if (!display) return;
+  let text = sttFinalText;
+  if (sttInterimText) {
+    text += `<span class="stt-interim">${sttInterimText}</span>`;
+  }
+  if (!text) text = "Listening...";
+  display.innerHTML = text;
+}
+
+async function startRecording() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
+  
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    recognizedText = "";
     try {
-      const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
-      maxQuestions = state.progress ? state.progress.max_questions : 0;
-      if (state.status === 'sealed' || state.status === 'failed') {
-        endInterview(state.termination_reason);
-        return;
-      }
-      showQuestion(state.current_question, state.progress ? state.progress.questions_asked : 0);
-      setStatus('Ready');
-      voice.connect();
-    } catch (err) {
-      document.getElementById('currentQText').textContent = `Could not load this interview: ${err.message}`;
-      setStatus('Error');
+      recognition.start();
+    } catch (e) {
+      console.log("Recognition already active or restart:", e);
     }
   }
 
-  async function refreshProgressAfter(nextQuestion) {
-    // Re-read the session for the authoritative questions_asked counter
-    // rather than tracking it by hand on the client - shared by the text
-    // and voice answer paths so the counter logic lives in one place.
-    const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
-    showQuestion(nextQuestion, state.progress ? state.progress.questions_asked : 0);
+  try {
+    stream = stream || await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+  } catch {
+    log("microphone permission denied", "bad");
+    setStatus("mic blocked", "err");
+    return;
   }
 
-  // ---------------------------------------------------------------------
-  // Voice: reuses the EXISTING WebSocket interview transport
-  // (api/routes/voice.py, WS /ws/sessions/{id}) and the EXISTING push-to-
-  // talk audio capture/encoding from pages/voice-interview.html - not a
-  // second implementation. That endpoint drives the SAME
-  // InterviewService/InterviewSessionRunner the text answers above call,
-  // so there is exactly one interview engine, one transcript, one
-  // evaluation regardless of which transport answered a given question.
-  // ---------------------------------------------------------------------
-  const voice = (() => {
-    const TARGET_RATE = 16000;
-    let ws = null, stream = null, audioCtx = null, node = null, source = null;
-    let pcmChunks = [], capturing = false, sourceRate = 48000;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  sourceRate = audioCtx.sampleRate;
 
-    function downsampleTo16k(input, inputRate) {
-      if (inputRate === TARGET_RATE) return input;
-      const ratio = inputRate / TARGET_RATE;
-      const outLength = Math.floor(input.length / ratio);
-      const out = new Float32Array(outLength);
-      for (let i = 0; i < outLength; i++) {
-        const start = Math.floor(i * ratio);
-        const end = Math.min(Math.floor((i + 1) * ratio), input.length);
-        let sum = 0, n = 0;
-        for (let j = start; j < end; j++) { sum += input[j]; n++; }
-        out[i] = n ? sum / n : 0;
-      }
-      return out;
-    }
+  pcmChunks = [];
+  capturing = true;
+  source = audioCtx.createMediaStreamSource(stream);
+  node = audioCtx.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = (e) => {
+    if (!capturing) return;
+    pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+  source.connect(node);
+  const mute = audioCtx.createGain();
+  mute.gain.value = 0;
+  node.connect(mute);
+  mute.connect(audioCtx.destination);
 
-    function encodeWav(float32, sampleRate) {
-      const bytesPerSample = 2;
-      const dataSize = float32.length * bytesPerSample;
-      const buf = new ArrayBuffer(44 + dataSize);
-      const view = new DataView(buf);
-      const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-      w(0, 'RIFF');
-      view.setUint32(4, 36 + dataSize, true);
-      w(8, 'WAVE');
-      w(12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * bytesPerSample, true);
-      view.setUint16(32, bytesPerSample, true);
-      view.setUint16(34, 16, true);
-      w(36, 'data');
-      view.setUint32(40, dataSize, true);
-      let off = 44;
-      for (let i = 0; i < float32.length; i++, off += 2) {
-        const s = Math.max(-1, Math.min(1, float32[i]));
-        view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      }
-      return buf;
-    }
-
-    function b64(buf) {
-      let s = '', bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-      return btoa(s);
-    }
-
-    function play(b64audio, format) {
-      if (!b64audio) return;
-      const bin = atob(b64audio);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      const blob = new Blob([arr], { type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
-      new Audio(URL.createObjectURL(blob)).play().catch(() => {
-        addLog('System', '(browser blocked autoplay for the question audio — click anywhere on the page, then Replay)');
-      });
-    }
-
-    function connect() {
-      if (!sessionId || ended) return;
-      const wsUrl = typeof getWebSocketUrl === 'function'
-        ? getWebSocketUrl(`/ws/sessions/${encodeURIComponent(sessionId)}`)
-        : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/sessions/${encodeURIComponent(sessionId)}`;
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        document.getElementById('btnMic').disabled = false;
-        ws.send(JSON.stringify({ type: 'speak_question' }));
-      };
-      ws.onclose = () => {
-        document.getElementById('btnMic').disabled = true;
-      };
-      ws.onerror = () => {
-        document.getElementById('btnMic').disabled = true;
-        if (!ended) {
-          addLog('System', 'Voice connection unavailable — you can still type your answers below.');
-        }
-      };
-      ws.onmessage = async (event) => {
-        let msg;
-        try {
-          msg = JSON.parse(event.data);
-        } catch (e) {
-          addLog('System', 'Received a malformed message from the voice channel — ignoring it.');
-          return;
-        }
-        if (msg.type === 'error') {
-          addLog('System', `Voice error: ${msg.error}${msg.detail ? ' — ' + msg.detail : ''}`);
-          setStatus('Ready');
-          return;
-        }
-        if (msg.outcome === 'no_speech_detected') {
-          addLog('System', '(no speech detected — please try answering again)');
-          setStatus('Ready');
-          return;
-        }
-        if (msg.transcript) {
-          addLog('Candidate', msg.transcript);
-        }
-        if (msg.tts_error) {
-          addLog('System', '(question audio unavailable — showing text only)');
-        }
-        if (msg.status === 'sealed') {
-          endInterview(msg.termination_reason);
-        } else if (msg.next_question) {
-          await refreshProgressAfter(msg.next_question);
-          setStatus('Ready');
-        }
-        play(msg.question_audio_base64, msg.audio_format);
-      };
-    }
-
-    async function startRecording() {
-      if (!ws || ws.readyState !== WebSocket.OPEN || capturing || ended) return;
-      try {
-        stream = stream || await navigator.mediaDevices.getUserMedia({
-          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-        });
-      } catch (e) {
-        addLog('System', 'Microphone permission denied — please type your answer below.');
-        return;
-      }
-
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      sourceRate = audioCtx.sampleRate;
-
-      pcmChunks = [];
-      capturing = true;
-      source = audioCtx.createMediaStreamSource(stream);
-      node = audioCtx.createScriptProcessor(4096, 1, 1);
-      node.onaudioprocess = (e) => {
-        if (!capturing) return;
-        pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      };
-      source.connect(node);
-      const mute = audioCtx.createGain();
-      mute.gain.value = 0;
-      node.connect(mute);
-      mute.connect(audioCtx.destination);
-
-      const btn = document.getElementById('btnMic');
-      btn.classList.add('recording');
-      btn.innerHTML = '🔴 Recording... (Release to Send)';
-      setStatus('Recording Audio');
-    }
-
-    function stopRecording() {
-      const btn = document.getElementById('btnMic');
-      btn.classList.remove('recording');
-      btn.innerHTML = '🎙️ Hold to Speak Answer';
-      if (!capturing) return;
-      capturing = false;
-      try { source && source.disconnect(); node && node.disconnect(); } catch (e) {}
-
-      const total = pcmChunks.reduce((n, c) => n + c.length, 0);
-      if (!total) { setStatus('Ready'); return; }
-      const merged = new Float32Array(total);
-      let off = 0;
-      for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
-
-      const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
-      addLog('System', '(processing your answer…)');
-      setStatus('Evaluating Response');
-      ws.send(JSON.stringify({
-        type: 'answer',
-        audio_base64: b64(wav),
-        audio_format: 'wav',
-        utterance_id: crypto.randomUUID(),
-      }));
-    }
-
-    function replay() {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'speak_question' }));
-        return true;
-      }
-      return false;
-    }
-
-    return { connect, startRecording, stopRecording, replay, get ws() { return ws; } };
-  })();
-
-  function startSpeech() {
-    voice.startRecording();
+  // Start Web Speech API
+  initializeWebSpeechAPI();
+  if (recognition) {
+    recognition.start();
   }
 
-  function stopSpeech() {
-    voice.stopRecording();
+  setStatus("recording…", "rec");
+  $("talk").classList.add("speaking");
+  const userTile = document.getElementById("userTile");
+  if (userTile) userTile.classList.add("user-speaking");
+  const userTileStatus = document.getElementById("userTileStatus");
+  if (userTileStatus) {
+    userTileStatus.textContent = "Speaking...";
+    userTileStatus.style.color = "var(--danger)";
+  }
+  const wave = document.getElementById("voiceWaveBox");
+  if (wave) wave.style.display = "inline-flex";
+}
+
+function stopRecording() {
+  if (!capturing) return;
+  capturing = false;
+
+  // Stop Web Speech API
+  if (recognition) {
+    recognition.stop();
   }
 
-  async function submitAnswer(answerText) {
-    if (ended || !sessionId) return;
-    addLog('Candidate', answerText);
-    setStatus('Evaluating Response');
-    try {
-      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/answers`, {
-        method: 'POST',
-        body: { answer_text: answerText },
-      });
-      if (result.status === 'sealed' || result.status === 'failed') {
-        endInterview(result.termination_reason);
-        return;
-      }
-      await refreshProgressAfter(result.next_question);
-      setStatus('Ready');
-    } catch (err) {
-      addLog('System', `Could not submit that answer: ${err.message}`);
-      setStatus('Ready');
+  $("talk").classList.remove("speaking");
+  const userTile = document.getElementById("userTile");
+  if (userTile) userTile.classList.remove("user-speaking");
+  const userTileStatus = document.getElementById("userTileStatus");
+  if (userTileStatus) {
+    userTileStatus.textContent = "Mic Inactive";
+    userTileStatus.style.color = "var(--text-muted)";
+  }
+  const wave = document.getElementById("voiceWaveBox");
+  if (wave) wave.style.display = "none";
+  try { source && source.disconnect(); node && node.disconnect(); } catch {}
+
+  const mode = $("sttMode") ? $("sttMode").value : "browser";
+
+  if (mode === "browser" && nativeSttSupported) {
+    try { recognition.stop(); } catch {}
+    const textToSend = recognizedText.trim();
+    if (!textToSend) {
+      // Fallback to server audio processing if browser returned empty transcript
+      sendAudioFallback();
+      return;
     }
+    setStatus("thinking…", "on");
+    ws.send(JSON.stringify({
+      type: "answer_text",
+      transcript: textToSend,
+      utterance_id: crypto.randomUUID(),
+    }));
+    return;
   }
 
-  function submitText() {
-    const input = document.getElementById('typeInput');
-    const val = input.value.trim();
-    if (!val) return;
-    input.value = '';
-    submitAnswer(val);
+  sendAudioFallback();
+}
+
+function sendAudioFallback() {
+  const total = pcmChunks.reduce((n, c) => n + c.length, 0);
+  if (!total) { setStatus("connected", "on"); return; }
+  const merged = new Float32Array(total);
+  let off = 0;
+  for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
+
+  const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
+  setStatus("thinking…", "on");
+
+  // Log the STT result
+  if (sttFinalText) {
+    log(`STT Result: ${sttFinalText.trim()}`, "you");
   }
 
-  function repeatQuestion() {
-    if (voice.replay()) return;
-    alert(`Interviewer: "${currentQuestion ? currentQuestion.question_text : 'Completed.'}"`);
-  }
+  ws.send(JSON.stringify({
+    type: "answer",
+    audio_base64: b64(wav),
+    audio_format: "wav",
+    utterance_id: crypto.randomUUID(),
+    stt_transcript: sttFinalText.trim() || undefined, // Include STT result for LLM coordination
+  }));
+}
 
-  function addLog(speaker, text) {
-    const log = document.getElementById('transcriptLog');
-    const line = document.createElement('div');
-    line.className = 'log-line';
-    const isAi = speaker === 'Interviewer';
+$("talk").addEventListener("mousedown", startSpeech = startRecording);
+$("talk").addEventListener("mouseup", stopSpeech = stopRecording);
+$("talk").addEventListener("mouseleave", stopRecording);
+$("talk").addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+$("talk").addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
 
-    const tag = document.createElement('span');
-    tag.className = `speaker-tag ${isAi ? 'ai' : 'cand'}`;
-    tag.textContent = `[${speaker.toUpperCase()}]`;
-
-    line.appendChild(tag);
-    line.appendChild(document.createTextNode(` ${text}`));
-
-    log.appendChild(line);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  async function finishSession() {
-    if (!sessionId || ended) return;
-    try {
-      const result = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
-      endInterview(result.termination_reason || 'manual_finish');
-    } catch (err) {
-      alert(`Could not finish the interview: ${err.message}`);
-    }
-  }
-
-  loadSession();
+$("replay").onclick = () => {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "speak_question" }));
+};
 </script>
 </body>
 </html>
