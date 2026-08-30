@@ -54,10 +54,11 @@ def _parse_sql_statements(sql_text: str) -> list[str]:
     """Parse SQL file into individual statements.
 
     Splits by semicolon, filters comments and empty statements, preserves
-    statement order. Handles single-line (--) comments.
+    statement order. Handles single-line (--) comments and DO $$ blocks.
     """
     statements = []
     current_stmt = []
+    in_do_block = False
 
     for line in sql_text.split('\n'):
         # Remove single-line comments
@@ -68,10 +69,23 @@ def _parse_sql_statements(sql_text: str) -> list[str]:
         if not line:
             continue
 
+        # Track if we're inside a DO $$ block
+        if line.startswith('DO $$'):
+            in_do_block = True
+
         current_stmt.append(line)
 
-        # Statement ends with semicolon
-        if line.endswith(';'):
+        # For DO blocks, only end on $$ delimiter, not on semicolon
+        if in_do_block:
+            if line.endswith('$$;'):
+                in_do_block = False
+                stmt = ' '.join(current_stmt).strip()
+                if stmt:
+                    stmt = stmt.rstrip(';').strip()
+                    statements.append(stmt)
+                current_stmt = []
+        # Normal statements end with semicolon
+        elif line.endswith(';'):
             stmt = ' '.join(current_stmt).strip()
             if stmt and stmt != ';':
                 # Remove trailing semicolon for execute()
@@ -88,6 +102,9 @@ async def _initialize_database_schema(container: ServiceContainer) -> None:
     This ensures database-backed deployments work without a separate
     migration step - the schema is created on first startup. Each SQL
     statement is executed separately for clarity and error visibility.
+
+    If connection fails, logs warning but continues (allows app to start in
+    development even if database is not available yet).
     """
     pool = container.database_pool
     if pool is None:
@@ -100,23 +117,31 @@ async def _initialize_database_schema(container: ServiceContainer) -> None:
 
         pg_pool = await pool.get()
         async with pg_pool.acquire() as conn:
-            for i, stmt in enumerate(statements, 1):
-                await conn.execute(stmt)
-                logger.debug(
-                    "executed schema statement %d/%d", i, len(statements),
-                    extra={"event": "schema_stmt", "stmt_num": i, "total": len(statements)},
-                )
+            # Start a transaction for all statements
+            async with conn.transaction():
+                for i, stmt in enumerate(statements, 1):
+                    # Skip empty statements
+                    if not stmt.strip():
+                        continue
+                    await conn.execute(stmt)
+                    logger.debug(
+                        "executed schema statement %d/%d", i, len(statements),
+                        extra={"event": "schema_stmt", "stmt_num": i, "total": len(statements)},
+                    )
 
         logger.info(
             "database schema initialized: %d statements", len(statements),
             extra={"event": "schema_init", "statement_count": len(statements)},
         )
     except Exception as exc:
-        logger.error(
-            "failed to initialize database schema: %s", exc, exc_info=True,
+        logger.warning(
+            "failed to initialize database schema (development will continue): %s", exc,
             extra={"event": "schema_init_failed"},
         )
-        raise
+        # In development, warn but don't fail - database may not be ready yet
+        # In production, this would be a critical error
+        if container.settings.is_production:
+            raise
 
 
 def validate_startup_configuration(
