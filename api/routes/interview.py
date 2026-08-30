@@ -23,7 +23,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 
 from api.errors import InvalidRequestError
-from core.errors import ConflictError
+from core.errors import ConflictError, NotFoundError
 from api.models import (
     CreateSessionRequest,
     CreateSessionResponse,
@@ -41,7 +41,7 @@ from core.dependencies import (
     get_interview_service,
 )
 from core.security import Principal, require_authenticated
-from repositories.interfaces import EvaluationJob
+from repositories.interfaces import EvaluationJob, EvaluationStatus
 from services.application_service import ApplicationService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
@@ -295,3 +295,39 @@ async def get_session_evaluation(
     await service.get_runner(session_id)  # 404s if the session itself is unknown
     evaluation_job = await evaluations.get_evaluation_for_session(session_id)
     return SessionEvaluationResponse(session_id=session_id, evaluation=evaluation_job)
+
+
+@router.get("/{session_id}/evaluation/report")
+async def get_evaluation_report(
+    session_id: str,
+    service: InterviewService = Depends(get_interview_service),
+    evaluations: EvaluationService = Depends(get_evaluation_service),
+    principal: Principal = Depends(require_authenticated),
+):
+    """GET /sessions/{session_id}/evaluation/report - Get the completed evaluation report for a session.
+
+    Returns the CandidateReport once evaluation is COMPLETED.
+    Returns 404 if session not found or evaluation not completed yet.
+    """
+    await service.get_runner(session_id)  # 404s if session unknown
+    evaluation_job = await evaluations.get_evaluation_for_session(session_id)
+
+    if not evaluation_job:
+        raise NotFoundError(
+            "No evaluation has been triggered for this session",
+            internal_detail=f"session_id={session_id!r}",
+        )
+
+    if evaluation_job.status != EvaluationStatus.COMPLETED:
+        raise ConflictError(
+            f"Evaluation is still {evaluation_job.status.value.lower()}; report will be available when complete",
+            internal_detail=f"evaluation_id={evaluation_job.evaluation_id!r} status={evaluation_job.status.value!r}",
+        )
+
+    if not evaluation_job.result:
+        raise NotFoundError(
+            "Evaluation completed but no report was generated",
+            internal_detail=f"evaluation_id={evaluation_job.evaluation_id!r}",
+        )
+
+    return evaluation_job.result
