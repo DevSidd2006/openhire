@@ -134,6 +134,18 @@
   </div>
 </main>
 
+<script>
+  (function() {
+    const hostname = window.location.hostname;
+    if (hostname.includes('openhire-sable.vercel.app')) {
+      window.OPENHIRE_API_URL = 'https://openhire-xc9c.onrender.com';
+      window.OPENHIRE_API_HOST = 'openhire-xc9c.onrender.com';
+    } else {
+      window.OPENHIRE_API_URL = '';
+      window.OPENHIRE_API_HOST = location.host;
+    }
+  })();
+</script>
 <script src="js/app.js"></script>
 <script>
   renderNavbar();

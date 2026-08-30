@@ -5,7 +5,8 @@
 // registers every route with no path prefix (AppSettings.api_prefix
 // defaults to "") - so API calls are same-origin, root-relative paths
 // like "/jobs", not "/api/jobs".
-const API_BASE = '';
+// For production with frontend on Vercel and backend on Render, use environment variable
+const API_BASE = window.OPENHIRE_API_URL || '';
 
 /**
  * Thin fetch wrapper shared by every real backend call in this frontend.
