@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 from api.registry import SessionRegistry
 from core.config import AppSettings
 from core.logging import get_logger
-from core.security import AnonymousAuthProvider, AuthProvider
+from core.security import AnonymousAuthProvider, AuthProvider, JWTAuthProvider
 from repositories.interfaces import (
     ApplicationRepository,
     CandidateRepository,
@@ -51,6 +51,7 @@ from repositories.interfaces import (
     JobRepository,
     SessionRepository,
     TranscriptRepository,
+    UserRepository,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
@@ -58,6 +59,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
     # not require asyncpg to be installed unless a database is actually
     # configured - see build_default_container below.
     from repositories.postgres import PostgresConnectionPool
+from services.auth_service import AuthService
 from services.evaluation_dispatcher import EvaluationDispatcher
 
 logger = get_logger("core.container")
@@ -90,6 +92,8 @@ class ServiceContainer:
     # would be recreated empty on every request.
     evaluation_repository: EvaluationRepository
     evaluation_dispatcher: EvaluationDispatcher
+    # Chunk 5: user repository for authentication
+    user_repository: UserRepository
     auth_provider: AuthProvider = field(default_factory=AnonymousAuthProvider)
 
     # True while any repository above is one of the temporary in-process
@@ -224,10 +228,16 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             PostgresJobRepository,
             PostgresSessionRepository,
             PostgresTranscriptRepository,
+            PostgresUserRepository,
         )
 
         logger.info("persistence backend: %s", POSTGRES_BACKEND_NAME)
         pool = PostgresConnectionPool(settings.database_url)
+        user_repo = PostgresUserRepository(pool)
+
+        # Create JWTAuthProvider with AuthService for database-backed deployments
+        auth_service = AuthService(user_repository=user_repo, settings=settings)
+        auth_provider = JWTAuthProvider(auth_service)
 
         return ServiceContainer(
             settings=settings,
@@ -237,8 +247,9 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             candidate_repository=PostgresCandidateRepository(pool),
             application_repository=PostgresApplicationRepository(pool),
             evaluation_repository=PostgresEvaluationRepository(pool),
+            user_repository=user_repo,
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
-            auth_provider=AnonymousAuthProvider(),
+            auth_provider=auth_provider,
             persistence_is_ephemeral=False,
             database_pool=pool,
         )
@@ -251,6 +262,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         InMemoryJobRepository,
         InMemorySessionRepository,
         InMemoryTranscriptRepository,
+        InMemoryUserRepository,
     )
 
     logger.warning(
@@ -269,6 +281,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         candidate_repository=InMemoryCandidateRepository(),
         application_repository=InMemoryApplicationRepository(),
         evaluation_repository=InMemoryEvaluationRepository(),
+        user_repository=InMemoryUserRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
         auth_provider=AnonymousAuthProvider(),
         persistence_is_ephemeral=True,
