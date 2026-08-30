@@ -98,7 +98,7 @@ class ResumeMatcherAgent(BaseAgent):
 
         # Job description semantic similarity
         resume_summary = f"{parsed_resume.summary or ''} {' '.join(parsed_resume.skills)}"
-        job_summary = f"{job_description.job_description or ''} {' '.join(job_description.required_skills)}"
+        job_summary = f"{job_description.description or ''} {' '.join(job_description.required_skills)}"
         jd_similarity = await self.semantic_matcher.calculate_job_description_similarity(
             resume_summary, job_summary
         )
