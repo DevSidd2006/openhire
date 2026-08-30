@@ -64,9 +64,9 @@ Alternatives:
 
 ---
 
-## Step 2: Set Up PostgreSQL Database
+## Step 2: Set Up PostgreSQL Database (Optional - Currently In-Memory)
 
-The application requires PostgreSQL for persistent data storage in production.
+**Note:** The application currently uses in-memory persistence. PostgreSQL is recommended for production to persist data across restarts. This step is optional for now but should be completed before full production deployment.
 
 ### Option A: Render PostgreSQL (Current Host)
 If already using Render for backend hosting:
@@ -219,7 +219,6 @@ AUDIO_PROVIDER=azure
 AZURE_SPEECH_KEY=<your-key>
 AZURE_SPEECH_REGION=eastus
 TTS_PROVIDER=edge
-DATABASE_URL=<your-postgres-url>
 AUTH_ENABLED=true
 JWT_SECRET_KEY=<your-secure-key>
 CORS_ALLOW_ORIGINS=https://yourdomain.com

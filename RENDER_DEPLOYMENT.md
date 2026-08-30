@@ -11,17 +11,6 @@ Region:    singapore-postgres.render.com
 
 ## Step 1: Verify Database Connection
 
-Test the PostgreSQL connection is working:
-
-```bash
-# From your local machine, test the connection
-psql postgresql://openhire_r9gz_user:WuEGZ5zwCZ8QNlCmDIJp62O5EUQ2yf0A@dpg-da9ahkcs728c73d6srqg-a.singapore-postgres.render.com/openhire_r9gz -c "SELECT version();"
-```
-
-If successful, you should see PostgreSQL version info.
-
----
-
 ## Step 2: Get Required API Keys
 
 You need to obtain these keys for production:
