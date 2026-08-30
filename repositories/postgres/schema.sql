@@ -52,6 +52,38 @@ CREATE INDEX IF NOT EXISTS idx_jobs_is_active_created_at
     ON jobs (is_active, created_at DESC);
 
 -- ---------------------------------------------------------------------
+-- users — User authentication and profile information for candidates
+-- and recruiters. Core table for the authentication system.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    user_id text PRIMARY KEY,
+    email text NOT NULL UNIQUE,
+    password_hash text NOT NULL,
+    user_type text NOT NULL CHECK (user_type IN ('candidate', 'recruiter')),
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz
+);
+
+-- Backs user lookups by email (login).
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- ---------------------------------------------------------------------
+-- refresh_tokens — Refresh token storage for JWT-based authentication.
+-- Tracks token validity and expiration for session management.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    token_id text PRIMARY KEY,
+    user_id text NOT NULL REFERENCES users(user_id),
+    token_hash text NOT NULL,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Backs token lookups by user (session invalidation, token rotation).
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+
+-- ---------------------------------------------------------------------
 -- candidates — CandidateRecord wrapping ParsedResume (schemas/resume.py).
 -- Same JSONB reasoning as `jobs.job`: education/work_experience/projects/
 -- certifications are never queried by an individual entry anywhere in the

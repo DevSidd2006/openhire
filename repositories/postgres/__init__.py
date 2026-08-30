@@ -29,6 +29,7 @@ from repositories.postgres.repository import (
     PostgresSessionRepository,
     PostgresTranscriptRepository,
 )
+from repositories.postgres.user_repository import PostgresUserRepository
 
 # Named so it can be asserted on and logged, the same way
 # repositories/memory.py's EPHEMERAL_BACKEND_NAME is.
@@ -43,4 +44,5 @@ __all__ = [
     "PostgresJobRepository",
     "PostgresSessionRepository",
     "PostgresTranscriptRepository",
+    "PostgresUserRepository",
 ]

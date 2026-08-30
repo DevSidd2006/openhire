@@ -26,8 +26,10 @@ from repositories.interfaces import (
     JobRepository,
     SessionRepository,
     TranscriptRepository,
+    UserRepository,
 )
 from services.application_service import ApplicationService
+from services.auth_service import AuthService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
@@ -94,6 +96,19 @@ def get_application_repository(request: Request) -> ApplicationRepository:
 
 def get_evaluation_repository(request: Request) -> EvaluationRepository:
     return _container_from_app(request.app).evaluation_repository
+
+
+def get_user_repository(request: Request) -> UserRepository:
+    return _container_from_app(request.app).user_repository
+
+
+def get_auth_service(request: Request) -> AuthService:
+    """Assemble an `AuthService` for one request."""
+    container = _container_from_app(request.app)
+    return AuthService(
+        user_repository=container.user_repository,
+        settings=container.settings,
+    )
 
 
 def build_interview_service(app) -> InterviewService:
@@ -213,6 +228,7 @@ __all__ = [
     "get_app_settings",
     "get_application_repository",
     "get_application_service",
+    "get_auth_service",
     "get_candidate_repository",
     "get_candidate_service",
     "get_container",
@@ -228,4 +244,5 @@ __all__ = [
     "get_registry",
     "get_session_repository",
     "get_transcript_repository",
+    "get_user_repository",
 ]

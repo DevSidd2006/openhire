@@ -30,6 +30,7 @@ start at all, and burns paid API quota on every deploy. The existing
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
@@ -47,6 +48,75 @@ logger = get_logger("core.lifespan")
 # provider factory it belongs to; this only catches the config-level cases
 # that are cheap and unambiguous to check here.
 _CREDENTIAL_FREE_PROVIDERS = {"mock"}
+
+
+def _parse_sql_statements(sql_text: str) -> list[str]:
+    """Parse SQL file into individual statements.
+
+    Splits by semicolon, filters comments and empty statements, preserves
+    statement order. Handles single-line (--) comments.
+    """
+    statements = []
+    current_stmt = []
+
+    for line in sql_text.split('\n'):
+        # Remove single-line comments
+        if '--' in line:
+            line = line[:line.index('--')]
+
+        line = line.strip()
+        if not line:
+            continue
+
+        current_stmt.append(line)
+
+        # Statement ends with semicolon
+        if line.endswith(';'):
+            stmt = ' '.join(current_stmt).strip()
+            if stmt and stmt != ';':
+                # Remove trailing semicolon for execute()
+                stmt = stmt.rstrip(';').strip()
+                statements.append(stmt)
+            current_stmt = []
+
+    return statements
+
+
+async def _initialize_database_schema(container: ServiceContainer) -> None:
+    """Execute schema.sql to create tables if they don't exist.
+
+    This ensures database-backed deployments work without a separate
+    migration step - the schema is created on first startup. Each SQL
+    statement is executed separately for clarity and error visibility.
+    """
+    pool = container.database_pool
+    if pool is None:
+        return
+
+    try:
+        schema_path = Path(__file__).parent.parent / "repositories" / "postgres" / "schema.sql"
+        schema_sql = schema_path.read_text()
+        statements = _parse_sql_statements(schema_sql)
+
+        pg_pool = await pool.get()
+        async with pg_pool.acquire() as conn:
+            for i, stmt in enumerate(statements, 1):
+                await conn.execute(stmt)
+                logger.debug(
+                    "executed schema statement %d/%d", i, len(statements),
+                    extra={"event": "schema_stmt", "stmt_num": i, "total": len(statements)},
+                )
+
+        logger.info(
+            "database schema initialized: %d statements", len(statements),
+            extra={"event": "schema_init", "statement_count": len(statements)},
+        )
+    except Exception as exc:
+        logger.error(
+            "failed to initialize database schema: %s", exc, exc_info=True,
+            extra={"event": "schema_init_failed"},
+        )
+        raise
 
 
 def validate_startup_configuration(
@@ -112,6 +182,9 @@ def build_lifespan(settings: AppSettings):
         container = build_default_container(settings)
         validate_startup_configuration(settings, container)
         app.state.container = container
+
+        if settings.database_url:
+            await _initialize_database_schema(container)
 
         logger.info(
             "startup complete: %s",

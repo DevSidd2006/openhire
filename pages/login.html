@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div style="max-width: 420px; margin: 3.5rem auto;" class="card">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <h2 class="card-title">Sign In</h2>
+    </div>
+    <p class="card-sub" style="margin-bottom:1.25rem;">Enter your credentials to access your account.</p>
+    
+    <div id="errorMessage" class="alert alert-danger" style="display:none; margin-bottom:1rem;"></div>
+    
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="email" class="form-control" placeholder="e.g. user@example.com">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" id="password" class="form-control" placeholder="Enter your password">
+    </div>
+
+    <button id="submitBtn" class="btn-primary" style="width:100%; margin-top:0.75rem;" onclick="handleLoginSubmit()">Sign In</button>
+    
+    <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem;">
+      Don't have an account? <a href="signup.html" style="color: #0070f3; text-decoration: none;">Sign up</a>
+    </p>
+  </div>
+</main>
+
+<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  renderNavbar();
+
+  async function handleLoginSubmit() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('errorMessage');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Validation
+    if (!email || !password) {
+      errorDiv.textContent = 'Please enter both email and password.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if (!email.includes('@')) {
+      errorDiv.textContent = 'Please enter a valid email address.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Signing in...';
+    errorDiv.style.display = 'none';
+
+    try {
+      const response = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: {
+          email,
+          password,
+        },
+      });
+
+      // Store tokens and user info
+      setTokens(response.access_token, response.refresh_token);
+      setCurrentUser({
+        name: response.email,
+        role: response.user_type,
+        user_id: response.user_id,
+      });
+
+      // Redirect to appropriate dashboard
+      const dashboard = response.user_type === 'recruiter' ? 'recruiter.html' : 'candidate.html';
+      window.location.href = dashboard;
+    } catch (error) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign In';
+      errorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+      errorDiv.style.display = 'block';
+    }
+  }
+</script>
+</body>
+</html>

@@ -29,6 +29,15 @@ Settings are read from the process environment (with `.env` already loaded
 by config/settings.py) and validated once, at startup, by
 `AppSettings.from_env()`. Invalid configuration fails loudly there rather
 than surfacing as a confusing error on the first request.
+
+JWT / Authentication Configuration
+-----------------------------------
+The following settings control JWT token generation and validation:
+
+- jwt_secret_key: Secret key used to sign and verify JWT tokens. Must be
+  changed in production environments.
+- access_token_expire_minutes: Lifetime of access tokens in minutes (default: 15).
+- refresh_token_expire_days: Lifetime of refresh tokens in days (default: 7).
 """
 from __future__ import annotations
 
@@ -139,6 +148,11 @@ class AppSettings(BaseModel):
 
     # -- limits ----------------------------------------------------------
     max_request_body_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
+
+    # -- JWT / Authentication -----------------------------------------------
+    jwt_secret_key: str = Field(default="dev-secret-key-change-in-production")
+    access_token_expire_minutes: int = Field(default=15, ge=1)
+    refresh_token_expire_days: int = Field(default=7, ge=1)
 
     # -- persistence -------------------------------------------------------
     # Database chunk: a PostgreSQL DSN (e.g.
@@ -277,6 +291,9 @@ class AppSettings(BaseModel):
             auth_enabled=_env_bool("AUTH_ENABLED", False),
             auth_required_by_default=_env_bool("AUTH_REQUIRED_BY_DEFAULT", False),
             max_request_body_bytes=_env_int("MAX_REQUEST_BODY_BYTES", 12 * 1024 * 1024),
+            jwt_secret_key=_env("JWT_SECRET_KEY", "dev-secret-key-change-in-production"),
+            access_token_expire_minutes=_env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 15),
+            refresh_token_expire_days=_env_int("REFRESH_TOKEN_EXPIRE_DAYS", 7),
             database_url=_env("DATABASE_URL", ""),
         )
 

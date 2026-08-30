@@ -38,6 +38,7 @@ from api.errors import register_exception_handlers
 from api.models import HealthResponse
 from api.registry import SessionRegistry
 from api.routes.applications import router as applications_router
+from api.routes.auth import router as auth_router
 from api.routes.candidates import router as candidates_router
 from api.routes.evaluations import router as evaluations_router
 from api.routes.interview import router as interview_router
@@ -115,6 +116,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     install_middleware(app, settings)
     register_exception_handlers(app)
 
+    app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(interview_router, prefix=settings.api_prefix)
     app.include_router(voice_router, prefix=settings.api_prefix)
     app.include_router(interview_mediator_router, prefix=settings.api_prefix)
