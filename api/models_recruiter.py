@@ -27,7 +27,7 @@ not a removal of anything the candidate-facing or restoration paths depend
 on - those paths are untouched and keep reading the full records directly.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import BaseModel
 
@@ -39,7 +39,9 @@ from repositories.interfaces import (
     SessionRecord,
 )
 from schemas.scoring import CandidateLeaderboard
-from utils.interview_session import SessionStatus
+
+if TYPE_CHECKING:
+    from utils.interview_session import SessionStatus
 
 
 class CandidateSummaryView(BaseModel):
@@ -69,7 +71,7 @@ class InterviewStatusView(BaseModel):
     already use (Chunk 1/3), not a second state machine."""
 
     session_id: str
-    status: SessionStatus
+    status: "SessionStatus"
     questions_asked: int
     questions_answered: int
     termination_reason: Optional[str] = None

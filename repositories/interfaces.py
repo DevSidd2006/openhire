@@ -82,10 +82,9 @@ from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
-from utils.interview_session import SessionStatus
 
 if TYPE_CHECKING:
-    from utils.interview_session import InterviewSessionError, InterviewSessionRunner
+    from utils.interview_session import InterviewSessionError, InterviewSessionRunner, SessionStatus
 
 
 class RepositoryError(Exception):
@@ -120,7 +119,7 @@ class SessionRecord(BaseModel):
     session_id: str
     candidate_id: str
     job_id: str
-    status: SessionStatus
+    status: "SessionStatus"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
     termination_reason: Optional[str] = None

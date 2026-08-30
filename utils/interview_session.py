@@ -33,12 +33,14 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from agents.interviewer.agent import InterviewerAgent
 from schemas.evaluation import EvidenceItem
+
+if TYPE_CHECKING:
+    from agents.interviewer.agent import InterviewerAgent
 from schemas.interview import (
     InterviewAnswer,
     InterviewQuestion,
@@ -126,13 +128,16 @@ class InterviewSessionRunner:
         parsed_resume: ParsedResume,
         *,
         candidate_id: Optional[str] = None,
-        interviewer: Optional[InterviewerAgent] = None,
+        interviewer: Optional["InterviewerAgent"] = None,
         interview_id: Optional[str] = None,
         max_questions: Optional[int] = None,
     ):
         self.job_description = job_description
         self.parsed_resume = parsed_resume
-        self.interviewer = interviewer or InterviewerAgent()
+        if interviewer is None:
+            from agents.interviewer.agent import InterviewerAgent
+            interviewer = InterviewerAgent()
+        self.interviewer = interviewer
         self._candidate_id = candidate_id or parsed_resume.candidate_id
         self._interview_id = interview_id or f"int_{uuid.uuid4().hex[:8]}"
         self._max_questions = max_questions
@@ -405,7 +410,7 @@ class InterviewSessionRunner:
         status: SessionStatus,
         candidate_id: str,
         interview_id: str,
-        interviewer: Optional[InterviewerAgent] = None,
+        interviewer: Optional["InterviewerAgent"] = None,
     ) -> "InterviewSessionRunner":
         """Reconstruct a runner from PERSISTED state, WITHOUT calling
         `start()` again.
