@@ -82,9 +82,10 @@ from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
+from utils.interview_session import SessionStatus
 
 if TYPE_CHECKING:
-    from utils.interview_session import InterviewSessionError, InterviewSessionRunner, SessionStatus
+    from utils.interview_session import InterviewSessionError, InterviewSessionRunner
 
 
 class RepositoryError(Exception):
