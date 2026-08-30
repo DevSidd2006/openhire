@@ -114,13 +114,13 @@
       // Store tokens and user info
       setTokens(response.access_token, response.refresh_token);
       setCurrentUser({
-        name: response.email,
-        role: response.user_type,
-        user_id: response.user_id,
+        name: response.user.email,
+        role: response.user.user_type,
+        user_id: response.user.user_id,
       });
 
       // Redirect to appropriate dashboard
-      const dashboard = response.user_type === 'recruiter' ? 'recruiter.html' : 'candidate.html';
+      const dashboard = response.user.user_type === 'recruiter' ? 'recruiter.html' : 'candidate.html';
       window.location.href = dashboard;
     } catch (error) {
       submitBtn.disabled = false;
