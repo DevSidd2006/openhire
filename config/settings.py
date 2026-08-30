@@ -26,26 +26,29 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-# Groq (P8B.3): OpenHire's PRIMARY real LLM provider. gpt-oss-20b is the
-# model the agents are developed and benchmarked against; Gemini and OpenAI
-# remain supported but are no longer the target provider. The key is only
-# ever read from the environment - never hard-coded, logged, or reported.
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-
-# NVIDIA NIM (Inference Microservices): Alternative LLM provider with
-# OpenAI-compatible API. Supports Nemotron (ultra-powerful with extended thinking),
-# Llama, and other models. Cloud-hosted at integrate.api.nvidia.com.
+# NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
+# Supports Nemotron ultra-powerful model with extended thinking. Cloud-hosted at
+# integrate.api.nvidia.com. The key is only ever read from the environment - never
+# hard-coded, logged, or reported.
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
 NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
+# Groq: Alternative LLM provider (openai/gpt-oss-20b model). Supported but no longer
+# the primary target. Kept for backward compatibility.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+
 # Embedding Configuration
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
+# Production: use API-based (nvidia-nim) to avoid large local models
+# Uses nvidia/nemotron-3-embed-1b via free hosted API at integrate.api.nvidia.com
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/nemotron-3-embed-1b")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "nvidia-nim").lower()
 
 # Vector Store Configuration
-VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "faiss").lower()
+# Production: use mock (in-memory) for simplicity on Render
+# Development: can use faiss if needed
+VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "mock").lower()
 VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH", str(PROJECT_ROOT / "faiss_index"))
 
 # Interview Configuration

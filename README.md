@@ -284,6 +284,8 @@ See [`api/models.py`](api/models.py) for detailed schema.
 | **Database** | PostgreSQL 13+ |
 | **Auth** | JWT tokens, bcrypt hashing |
 | **LLM** | NVIDIA NIM, OpenAI, Groq, Google Gemini |
+| **Embeddings** | NVIDIA NIM (nv-embed-v2), Local (sentence-transformers) |
+| **Vector Store** | FAISS (semantic search) |
 | **Speech** | edge-tts (TTS), WebRTC (audio) |
 | **Agents** | LangGraph, Pydantic |
 | **Deployment** | Docker, Render (staging) |

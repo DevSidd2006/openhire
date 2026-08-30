@@ -7,6 +7,9 @@ from config.settings import (
     GROQ_API_KEY,
     GROQ_MODEL,
     LLM_PROVIDER,
+    NVIDIA_NIM_API_KEY,
+    NVIDIA_NIM_BASE_URL,
+    NVIDIA_NIM_MODEL,
     OPENAI_API_KEY,
     OPENAI_MODEL,
 )
@@ -23,15 +26,15 @@ def get_llm_provider() -> LLMProvider:
     # NVIDIA NIM is the primary provider (Nemotron ultra-powerful with extended thinking).
     # Groq, OpenAI, and Gemini remain fully supported alternatives.
     if LLM_PROVIDER == "nvidia_nim" or LLM_PROVIDER == "nvidia-nim":
-        import os
-        api_key = os.getenv("NVIDIA_NIM_API_KEY", "")
-        if not api_key:
+        if not NVIDIA_NIM_API_KEY:
             raise ValueError(
                 "NVIDIA_NIM_API_KEY environment variable is required for NVIDIA NIM provider"
             )
-        model = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
-        base_url = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-        return NvidiaNimProvider(api_key=api_key, model=model, base_url=base_url)
+        return NvidiaNimProvider(
+            api_key=NVIDIA_NIM_API_KEY,
+            model=NVIDIA_NIM_MODEL,
+            base_url=NVIDIA_NIM_BASE_URL
+        )
     elif LLM_PROVIDER == "groq":
         if not GROQ_API_KEY:
             raise ValueError(
