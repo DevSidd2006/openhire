@@ -19,9 +19,10 @@ from repositories.interfaces import EvaluationStatus
 from schemas.interview import InterviewQuestion, InterviewState
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
+from utils.interview_session import SessionStatus
 
 if TYPE_CHECKING:
-    from utils.interview_session import AnswerSubmissionResult, SessionStatus
+    from utils.interview_session import AnswerSubmissionResult
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ class CreateSessionRequest(BaseModel):
 
 class CreateSessionResponse(BaseModel):
     session_id: str
-    status: "SessionStatus"
+    status: SessionStatus
     current_question: Optional[QuestionView] = None
     # Echoes CreateSessionRequest.application_id when one was supplied and
     # successfully linked; None otherwise (including when no application_id
@@ -142,7 +143,7 @@ class CreateSessionResponse(BaseModel):
 
 class SessionStateResponse(BaseModel):
     session_id: str
-    status: "SessionStatus"
+    status: SessionStatus
     current_question: Optional[QuestionView] = None
     progress: ProgressView
     termination_reason: Optional[str] = None
@@ -174,7 +175,7 @@ class SubmitAnswerResponse(BaseModel):
     answer_id: str
     evidence: EvidenceView
     next_question: Optional[QuestionView] = None
-    status: "SessionStatus"
+    status: SessionStatus
     termination_reason: Optional[str] = None
     # See SessionStateResponse.transcript_persisted. Populated by the route
     # handler (not by from_domain below) because the persistence outcome is
@@ -202,7 +203,7 @@ class SubmitAnswerResponse(BaseModel):
 
 class FinishSessionResponse(BaseModel):
     session_id: str
-    status: "SessionStatus"
+    status: SessionStatus
     termination_reason: Optional[str] = None
     # See SessionStateResponse.transcript_persisted.
     transcript_persisted: Optional[bool] = None
