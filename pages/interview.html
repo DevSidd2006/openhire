@@ -21,7 +21,7 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     padding: 2rem 1rem;
     position: relative;
@@ -133,10 +133,15 @@
   }
 
   .controls {
+    position: fixed;
+    bottom: 6.5rem;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     justify-content: center;
     gap: 1rem;
     flex-wrap: wrap;
+    z-index: 10;
   }
 
   .btn-end {
@@ -276,8 +281,6 @@
 </script>
 <script src="js/app.js"></script>
 <script>
-const API_BASE = window.OPENHIRE_API_URL || '';
-
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session_id');
 let ws = null, stream = null, audioCtx = null, node = null, source = null;

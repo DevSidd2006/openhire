@@ -31,7 +31,12 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 # integrate.api.nvidia.com. The key is only ever read from the environment - never
 # hard-coded, logged, or reported.
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
-NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+# P8B.5: nemotron-3-ultra-550b-a55b (the previous default) never returned
+# within the 45s RESUME_PARSER_TIMEOUT_SECONDS in production - verified
+# locally to hang past 50s with no response at all, then eventually 503 from
+# NVIDIA's hosted infra. nemotron-3-nano-30b-a3b responded in ~0.4-0.5s for
+# both plain and JSON-mode calls against the same account/key.
+NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
 # Groq: Alternative LLM provider (openai/gpt-oss-20b model). Supported but no longer

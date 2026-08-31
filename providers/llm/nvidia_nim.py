@@ -13,12 +13,14 @@ from providers.base import LLMProvider, LLMTransientError, LLMPermanentError
 class NvidiaNimProvider(LLMProvider):
     """NVIDIA NIM LLM provider using OpenAI-compatible API."""
 
-    def __init__(self, api_key: str, model: str = "nvidia/nemotron-3-ultra-550b-a55b", base_url: str = "https://integrate.api.nvidia.com/v1"):
+    def __init__(self, api_key: str, model: str = "nvidia/nemotron-3-nano-30b-a3b", base_url: str = "https://integrate.api.nvidia.com/v1"):
         """Initialize NVIDIA NIM provider.
 
         Args:
             api_key: NVIDIA API key (from https://build.nvidia.com)
-            model: Model name (default: "nvidia/nemotron-3-ultra-550b-a55b" - ultra-powerful with extended thinking)
+            model: Model name (default: "nvidia/nemotron-3-nano-30b-a3b" - responds in
+                under a second; the previous "ultra-550b" default routinely hung past
+                45s and returned 503 under NVIDIA's hosted load, see config/settings.py)
             base_url: Base URL for NIM endpoint (default: https://integrate.api.nvidia.com/v1)
         """
         self.api_key = api_key
