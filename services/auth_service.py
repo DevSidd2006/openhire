@@ -265,11 +265,12 @@ class AuthService:
 
         # Map user_type to PrincipalType
         principal_type = self._map_user_type_to_principal_type(user_type)
+        scopes = self._get_scopes_for_user_type(user_type)
 
         return Principal(
             principal_type=principal_type,
             subject_id=user_id,
-            scopes=frozenset(),  # Scopes can be populated based on user_type or other logic
+            scopes=scopes
         )
 
     # -----------------------------------------------------------------------
@@ -376,6 +377,23 @@ class AuthService:
         else:
             # Default to ANONYMOUS for unknown types
             return PrincipalType.ANONYMOUS
+
+    @staticmethod
+    def _get_scopes_for_user_type(user_type: str) -> frozenset[str]:
+        """Get OAuth scopes for a user type.
+
+        Args:
+            user_type: User type string ('candidate' or 'recruiter').
+
+        Returns:
+            Frozenset of scopes appropriate for the user type.
+        """
+        if user_type == "recruiter":
+            return frozenset(["recruiter:read", "recruiter:write"])
+        elif user_type == "candidate":
+            return frozenset(["candidate:read"])
+        else:
+            return frozenset()
 
 
 __all__ = ["AuthService"]
