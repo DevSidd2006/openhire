@@ -1,1196 +1,1513 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenHire — Evidence-backed interviews at campus-drive scale</title>
-<meta name="description" content="OpenHire runs structured, voice-based interviews at volume, evaluates candidates against your rubric with a specialized multi-agent pipeline, and gives recruiters an explainable, evidence-backed shortlist — not a black-box score.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --paper:#EDEAE0;
-    --paper-raised:#F5F3EB;
-    --ink:#1B2A33;
-    --ink-soft:#4B5A63;
-    --ink-faint:#7C8790;
-    --rule:#C9C2AE;
-    --rule-strong:#A79F87;
-    --seal:#B23A2E;
-    --seal-ink:#7C2A21;
-    --verified:#2F6E4F;
-    --font-display:'Fraunces', 'Iowan Old Style', 'Georgia', serif;
-    --font-body:'Public Sans', -apple-system, 'Segoe UI', sans-serif;
-    --font-mono:'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
-    --max:1180px;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenHire — AI-Powered Interview Platform</title>
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-300-normal.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-400-normal.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-500-normal.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-600-normal.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-700-normal.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/fontsource/fonts/jetbrains-mono@latest/latin-400-normal.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{
-    margin:0;
-    background:var(--paper);
-    color:var(--ink);
-    font-family:var(--font-body);
-    font-size:16px;
-    line-height:1.6;
-    -webkit-font-smoothing:antialiased;
-  }
-  img,svg{display:block;max-width:100%;}
-  a{color:inherit;}
+        :root {
+            --bg: #050505;
+            --bg-subtle: #0a0a0a;
+            --bg-card: #0f0f0f;
+            --bg-elevated: #141414;
+            --border: rgba(255,255,255,0.06);
+            --border-hover: rgba(255,255,255,0.12);
+            --text: #f5f5f5;
+            --text-secondary: rgba(255,255,255,0.55);
+            --text-muted: rgba(255,255,255,0.3);
+            --accent: #7c6aef;
+            --accent-light: #9b8df5;
+            --accent-subtle: rgba(124,106,239,0.08);
+            --green: #34d399;
+            --cyan: #22d3ee;
+            --amber: #fbbf24;
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
 
-  ::selection{background:var(--seal);color:var(--paper-raised);}
+        html {
+            scroll-behavior: smooth;
+        }
 
-  :focus-visible{
-    outline:2px solid var(--seal);
-    outline-offset:3px;
-  }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
 
-  .wrap{
-    max-width:var(--max);
-    margin:0 auto;
-    padding:0 clamp(20px, 4vw, 56px);
-  }
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+        }
 
-  .hairline{border:none;border-top:1px solid var(--rule);margin:0;}
+        /* ─── NAV ─── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0 2rem;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(5,5,5,0.7);
+            backdrop-filter: blur(24px) saturate(1.2);
+            border-bottom: 1px solid var(--border);
+        }
 
-  /* ---------- Letterhead ---------- */
-  .letterhead{
-    padding:18px 0;
-    border-bottom:1px solid var(--rule);
-  }
-  .letterhead .wrap{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:16px;
-  }
-  .brand{
-    font-family:var(--font-mono);
-    font-size:13px;
-    letter-spacing:.14em;
-    font-weight:600;
-    text-transform:uppercase;
-    display:flex;
-    align-items:center;
-    gap:10px;
-  }
-  .brand-mark{
-    width:9px;height:9px;
-    border:1.5px solid var(--ink);
-    transform:rotate(45deg);
-    flex:none;
-  }
-  .letterhead nav{
-    display:flex;
-    gap:clamp(14px,2.4vw,28px);
-    font-family:var(--font-mono);
-    font-size:12.5px;
-    letter-spacing:.06em;
-    text-transform:uppercase;
-    color:var(--ink-soft);
-  }
-  .letterhead nav a{
-    text-decoration:none;
-    position:relative;
-    padding-bottom:2px;
-    transition:color .2s ease;
-  }
-  .letterhead nav a::after{
-    content:'';
-    position:absolute;
-    left:0;right:0;bottom:0;
-    height:1px;
-    background:var(--ink);
-    transform:scaleX(0);
-    transform-origin:left;
-    transition:transform .25s ease;
-  }
-  .letterhead nav a:hover{color:var(--ink);}
-  .letterhead nav a:hover::after{transform:scaleX(1);}
-  .letterhead .cta-mini{
-    border:1px solid var(--ink);
-    padding:6px 14px;
-    color:var(--ink);
-  }
-  .letterhead .cta-mini:hover{background:var(--ink);color:var(--paper);}
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            font-weight: 600;
+            font-size: 1rem;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            text-decoration: none;
+        }
 
-  /* ---------- Hero ---------- */
-  .hero{
-    position:relative;
-    padding:clamp(48px,9vw,104px) 0 clamp(56px,8vw,96px);
-    overflow:hidden;
-  }
-  .hero .wrap{
-    display:grid;
-    grid-template-columns:1.15fr .85fr;
-    gap:clamp(28px,5vw,64px);
-    align-items:start;
-  }
-  .eyebrow{
-    font-family:var(--font-mono);
-    font-size:12.5px;
-    letter-spacing:.12em;
-    text-transform:uppercase;
-    color:var(--seal-ink);
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin:0 0 22px;
-  }
-  .eyebrow::before{
-    content:'';
-    width:20px;height:1px;
-    background:var(--seal);
-  }
-  h1{
-    font-family:var(--font-display);
-    font-weight:600;
-    font-size:clamp(2.5rem, 5vw, 4rem);
-    line-height:1.1;
-    letter-spacing:-.01em;
-    margin:0 0 26px;
-  }
-  h1 em{
-    font-style:italic;
-    font-weight:500;
-    color:var(--seal-ink);
-  }
-  h1 .ln{
-    display:block;
-    opacity:0;
-    transform:translateY(16px);
-    animation:lineUp .65s cubic-bezier(.2,.7,.2,1) both;
-  }
-  h1 .ln:nth-child(1){animation-delay:.05s;}
-  h1 .ln:nth-child(2){animation-delay:.2s;}
-  @keyframes lineUp{
-    to{opacity:1;transform:translateY(0);}
-  }
-  @media (prefers-reduced-motion:reduce){
-    h1 .ln{animation:none;opacity:1;transform:none;}
-  }
-  .hero-lede{
-    font-size:clamp(1.02rem,1.4vw,1.18rem);
-    color:var(--ink-soft);
-    max-width:46ch;
-    margin:0 0 34px;
-    opacity:0;
-    animation:fadeUp .6s ease .32s both;
-  }
-  .hero-actions{
-    display:flex;
-    align-items:center;
-    gap:22px;
-    flex-wrap:wrap;
-    margin-bottom:48px;
-    opacity:0;
-    animation:fadeUp .6s ease .42s both;
-  }
-  .register{opacity:0;animation:fadeUp .6s ease .5s both;}
-  @keyframes fadeUp{
-    from{opacity:0;transform:translateY(10px);}
-    to{opacity:1;transform:translateY(0);}
-  }
-  @media (prefers-reduced-motion:reduce){
-    .hero-lede,.hero-actions,.register{animation:none;opacity:1;}
-  }
-  .btn-primary{
-    font-family:var(--font-mono);
-    font-size:13px;
-    letter-spacing:.05em;
-    text-transform:uppercase;
-    font-weight:600;
-    background:var(--ink);
-    color:var(--paper);
-    border:1px solid var(--ink);
-    padding:14px 26px;
-    text-decoration:none;
-    display:inline-block;
-    transition:transform .15s ease, box-shadow .15s ease;
-  }
-  .btn-primary:hover{transform:translateY(1px);box-shadow:0 0 0 1px var(--ink) inset;}
-  .btn-primary:active{transform:translateY(2px) scale(.99);}
-  .btn-ghost{
-    font-family:var(--font-mono);
-    font-size:13px;
-    letter-spacing:.05em;
-    text-transform:uppercase;
-    color:var(--ink);
-    text-decoration:none;
-    border-bottom:1px solid var(--rule-strong);
-    padding-bottom:2px;
-  }
-  .btn-ghost:hover{border-color:var(--ink);}
+        .logo-mark {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-  .register{
-    border-top:1px solid var(--rule);
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:20px;
-  }
-  .register div{
-    padding:22px 0 0;
-  }
-  .register dt{
-    font-family:var(--font-mono);
-    font-size:10.5px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    color:var(--ink-faint);
-    margin-bottom:6px;
-  }
-  .register dd{
-    margin:0;
-    font-family:var(--font-display);
-    font-size:1.5rem;
-    font-weight:600;
-  }
-  .register dd small{
-    display:block;
-    font-family:var(--font-body);
-    font-size:.72rem;
-    font-weight:400;
-    color:var(--ink-soft);
-    margin-top:2px;
-  }
+        .logo-mark svg { width: 14px; height: 14px; }
 
-  /* ---------- Stamp signature ---------- */
-  .stamp-frame{
-    display:flex;
-    justify-content:center;
-    align-items:flex-start;
-    padding-top:8px;
-  }
-  .stamp{
-    width:clamp(190px,20vw,236px);
-    aspect-ratio:1;
-    border-radius:50%;
-    border:3px solid var(--seal);
-    color:var(--seal);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    position:relative;
-    transform:rotate(-9deg);
-    opacity:.94;
-    filter:url(#inkTexture);
-    animation:stampIn .55s cubic-bezier(.2,1.6,.4,1) both;
-    animation-delay:.15s;
-  }
-  .stamp::before{
-    content:'';
-    position:absolute;
-    inset:10px;
-    border-radius:50%;
-    border:1px solid var(--seal);
-  }
-  .stamp-text{
-    font-family:var(--font-mono);
-    text-align:center;
-    line-height:1.5;
-  }
-  .stamp-text .line1{
-    font-size:11px;
-    letter-spacing:.16em;
-    display:block;
-  }
-  .stamp-text .line2{
-    font-size:15px;
-    font-weight:600;
-    letter-spacing:.05em;
-    display:block;
-    margin:2px 0;
-  }
-  .stamp-text .line3{
-    font-size:10px;
-    letter-spacing:.14em;
-    display:block;
-  }
+        .nav-center {
+            display: flex;
+            gap: 0.25rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 3px;
+        }
 
-  @keyframes stampIn{
-    0%{opacity:0;transform:rotate(-9deg) scale(2.1);}
-    60%{opacity:.94;}
-    100%{opacity:.94;transform:rotate(-9deg) scale(1);}
-  }
-  @media (prefers-reduced-motion:reduce){
-    .stamp{animation:none;opacity:.94;}
-  }
+        .nav-center a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding: 0.4rem 0.9rem;
+            border-radius: 7px;
+            transition: all 0.2s;
+        }
 
-  /* ---------- Section scaffolding ---------- */
-  section{padding:clamp(64px,9.5vw,120px) 0;}
-  .section-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-end;
-    gap:24px;
-    border-bottom:1px solid var(--rule);
-    padding-bottom:22px;
-    margin-bottom:52px;
-    flex-wrap:nowrap;
-  }
-  .section-head-main{
-    min-width:0;
-    flex:1 1 auto;
-  }
-  .section-note{
-    flex:0 0 auto;
-  }
-  @media (max-width:760px){
-    .section-head{flex-wrap:wrap;}
-  }
-  .section-tag{
-    font-family:var(--font-mono);
-    font-size:12px;
-    letter-spacing:.12em;
-    text-transform:uppercase;
-    color:var(--ink-faint);
-  }
-  h2{
-    font-family:var(--font-display);
-    font-size:clamp(1.7rem,3vw,2.4rem);
-    font-weight:600;
-    margin:6px 0 0;
-    letter-spacing:-.005em;
-  }
-  .section-note{
-    max-width:34ch;
-    color:var(--ink-soft);
-    font-size:.94rem;
-    text-align:right;
-  }
-  @media (max-width:760px){
-    .section-note{text-align:left;max-width:none;}
-  }
+        .nav-center a:hover {
+            color: var(--text-secondary);
+            background: rgba(255,255,255,0.04);
+        }
 
-  .reveal{
-    opacity:0;
-    transform:translateY(14px);
-    transition:opacity .5s ease, transform .5s ease;
-  }
-  .reveal.is-in{opacity:1;transform:none;}
-  @media (prefers-reduced-motion:reduce){
-    .reveal{opacity:1;transform:none;transition:none;}
-  }
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
 
-  /* ---------- Problem: two sheets ---------- */
-  .sheets{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:28px;
-  }
-  @media (max-width:800px){.sheets{grid-template-columns:1fr;}}
-  .sheet{
-    background:var(--paper-raised);
-    border-top:2px solid var(--rule-strong);
-    padding:28px 26px;
-    transition:transform .25s ease, box-shadow .25s ease;
-  }
-  .sheet.bad{border-top-color:var(--seal);}
-  .sheet.good{border-top-color:var(--verified);}
-  .sheet:hover{transform:translateY(-4px);box-shadow:0 14px 28px -18px rgba(27,42,51,.35);}
-  .sheet-label{
-    font-family:var(--font-mono);
-    font-size:11px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    display:flex;
-    justify-content:space-between;
-    padding-bottom:14px;
-    margin-bottom:16px;
-    border-bottom:1px dashed var(--rule-strong);
-  }
-  .sheet.bad .sheet-label{color:var(--seal-ink);}
-  .sheet.good .sheet-label{color:var(--verified);}
-  .row-item{
-    display:flex;
-    justify-content:space-between;
-    gap:14px;
-    padding:11px 0;
-    border-bottom:1px solid var(--rule);
-    font-size:.93rem;
-    opacity:0;
-    transform:translateX(-6px);
-    transition:opacity .45s ease, transform .45s ease;
-  }
-  .sheet.is-in .row-item{opacity:1;transform:none;}
-  .row-item:last-child{border-bottom:none;}
-  .row-item:nth-child(2){transition-delay:80ms;}
-  .row-item:nth-child(3){transition-delay:160ms;}
-  .row-item:nth-child(4){transition-delay:240ms;}
-  .row-item:nth-child(5){transition-delay:320ms;}
-  .row-item .k{color:var(--ink-soft);}
-  .row-item .v{
-    font-family:var(--font-mono);
-    font-size:.86rem;
-    text-align:right;
-  }
-  .sheet.bad .v{color:var(--seal-ink);}
-  .sheet.good .v{color:var(--verified);}
-  .sheet-foot{
-    margin-top:16px;
-    padding-top:14px;
-    border-top:1px dashed var(--rule-strong);
-    font-size:.88rem;
-    color:var(--ink-soft);
-    font-style:italic;
-  }
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
 
-  /* ---------- Pipeline / routing slip ---------- */
-  .routing{
-    display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:28px;
-  }
-  @media (max-width:900px){
-    .routing{grid-template-columns:1fr;gap:0;}
-  }
-  .stop{
-    padding:20px 0 0;
-    border-top:1px solid var(--rule);
-    position:relative;
-    opacity:0;
-    transform:translateY(10px);
-    transition:opacity .5s ease, transform .5s ease, border-color .2s ease;
-  }
-  .routing.is-in .stop{opacity:1;transform:none;}
-  .stop:hover{border-color:var(--seal);}
-  @media (max-width:900px){
-    .stop{padding:20px 0;}
-  }
-  .stop-index{
-    font-family:var(--font-mono);
-    font-size:11px;
-    color:var(--ink-faint);
-    letter-spacing:.08em;
-  }
-  .stop h3{
-    font-family:var(--font-body);
-    font-weight:600;
-    font-size:.98rem;
-    margin:8px 0 8px;
-  }
-  .stop p{
-    font-size:.84rem;
-    color:var(--ink-soft);
-    margin:0;
-  }
-  .stop-check{
-    position:absolute;
-    top:20px;right:0;
-    width:16px;height:16px;
-    border:1.5px solid var(--verified);
-    border-radius:50%;
-    display:flex;align-items:center;justify-content:center;
-  }
-  .stop-check::after{
-    content:'';
-    width:6px;height:3px;
-    border-left:1.5px solid var(--verified);
-    border-bottom:1.5px solid var(--verified);
-    transform:rotate(-45deg) translate(0,-1px);
-  }
-  @media (max-width:900px){.stop-check{display:none;}}
-  .stop:nth-child(1){transition-delay:0ms;}
-  .stop:nth-child(2){transition-delay:70ms;}
-  .stop:nth-child(3){transition-delay:140ms;}
-  .stop:nth-child(4){transition-delay:210ms;}
-  .stop:nth-child(5){transition-delay:280ms;}
+        .nav-link:hover { color: var(--text-secondary); }
 
-  /* ---------- Evidence scorecard ---------- */
-  .scorecard{
-    background:var(--paper-raised);
-    border-top:2px solid var(--rule-strong);
-    display:grid;
-    grid-template-columns:1.1fr 1fr;
-  }
-  @media (max-width:820px){.scorecard{grid-template-columns:1fr;}}
-  .sc-left, .sc-right{padding:32px clamp(20px,3vw,36px);}
-  .sc-left{border-right:1px solid var(--rule);}
-  @media (max-width:820px){.sc-left{border-right:none;border-bottom:1px solid var(--rule);}}
-  .sc-id{
-    font-family:var(--font-mono);
-    font-size:11.5px;
-    color:var(--ink-faint);
-    letter-spacing:.08em;
-    display:flex;
-    justify-content:space-between;
-    margin-bottom:22px;
-  }
-  .competency{margin-bottom:18px;}
-  .competency:last-child{margin-bottom:0;}
-  .competency-head{
-    display:flex;
-    justify-content:space-between;
-    font-size:.88rem;
-    margin-bottom:7px;
-  }
-  .competency-head .score{font-family:var(--font-mono);color:var(--ink-soft);}
-  .bar{
-    height:6px;
-    background:var(--rule);
-    position:relative;
-    overflow:hidden;
-  }
-  .bar span{
-    position:absolute;inset:0 auto 0 0;
-    background:var(--ink);
-    width:0;
-    transition:width 1s cubic-bezier(.2,.8,.2,1);
-  }
-  .scorecard.is-in .bar span{width:var(--pct);}
-  .competency:nth-child(1) .bar span{transition-delay:.1s;}
-  .competency:nth-child(2) .bar span{transition-delay:.24s;}
-  .competency:nth-child(3) .bar span{transition-delay:.38s;}
-  .evidence{
-    font-family:var(--font-mono);
-    font-size:.82rem;
-    line-height:1.7;
-    color:var(--ink-soft);
-    border-left:2px solid var(--rule-strong);
-    padding-left:14px;
-    margin:24px 0 0;
-  }
-  .evidence-label{
-    display:block;
-    font-size:.72rem;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-    color:var(--ink-faint);
-    margin-bottom:6px;
-  }
-  .flag-row{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-top:24px;
-    padding-top:18px;
-    border-top:1px dashed var(--rule-strong);
-    font-size:.84rem;
-  }
-  .flag-badge{
-    font-family:var(--font-mono);
-    font-size:10px;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-    border:1px solid var(--seal);
-    color:var(--seal-ink);
-    padding:3px 8px;
-    flex:none;
-  }
-  .verdict-line{
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
-    margin-bottom:6px;
-  }
-  .verdict-label{
-    font-family:var(--font-mono);
-    font-size:11.5px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    color:var(--ink-faint);
-  }
-  .verdict-value{
-    font-family:var(--font-display);
-    font-size:2.6rem;
-    font-weight:600;
-  }
-  .verdict-value sup{
-    font-family:var(--font-mono);
-    font-size:.9rem;
-    font-weight:400;
-    color:var(--ink-soft);
-  }
-  .verdict-desc{
-    color:var(--ink-soft);
-    font-size:.92rem;
-    margin:10px 0 0;
-  }
-  .human-note{
-    margin-top:28px;
-    padding-top:18px;
-    border-top:1px solid var(--rule);
-    font-size:.82rem;
-    color:var(--ink-faint);
-    font-style:italic;
-  }
+        .nav-btn {
+            padding: 0.45rem 1.1rem;
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-  /* ---------- Ledger (built for India) ---------- */
-  .ledger{border-top:1px solid var(--rule);}
-  .ledger-row{
-    display:grid;
-    grid-template-columns:28px 1fr 1.6fr;
-    gap:18px;
-    padding:20px 4px;
-    border-bottom:1px solid var(--rule);
-    align-items:baseline;
-    opacity:0;
-    transform:translateX(-8px);
-    transition:opacity .5s ease, transform .5s ease, background .2s ease;
-  }
-  .ledger.is-in .ledger-row{opacity:1;transform:none;}
-  .ledger-row:hover{background:var(--paper-raised);}
-  .ledger-row:nth-child(1){transition-delay:0ms;}
-  .ledger-row:nth-child(2){transition-delay:60ms;}
-  .ledger-row:nth-child(3){transition-delay:120ms;}
-  .ledger-row:nth-child(4){transition-delay:180ms;}
-  .ledger-row:nth-child(5){transition-delay:240ms;}
-  @media (max-width:700px){
-    .ledger-row{grid-template-columns:20px 1fr;}
-    .ledger-row .ld-desc{grid-column:1/-1;padding-left:38px;}
-  }
-  .ld-check{
-    width:14px;height:14px;
-    border:1.5px solid var(--verified);
-    transform:rotate(45deg);
-    margin-top:3px;
-  }
-  .ld-title{
-    font-weight:600;
-    font-size:.98rem;
-  }
-  .ld-desc{
-    color:var(--ink-soft);
-    font-size:.9rem;
-  }
+        .nav-btn:hover { opacity: 0.88; }
 
-  /* ---------- Roadmap ---------- */
-  .roadmap{
-    border-top:1px solid var(--rule);
-  }
-  .stage{
-    display:grid;
-    grid-template-columns:120px 1fr 200px;
-    border-bottom:1px solid var(--rule);
-    transition:background .2s ease, opacity .5s ease, transform .5s ease;
-    opacity:0;
-    transform:translateY(10px);
-  }
-  .roadmap.is-in .stage{opacity:1;transform:none;}
-  .stage:hover{background:var(--paper-raised);}
-  .stage:nth-child(1){transition-delay:0ms;}
-  .stage:nth-child(2){transition-delay:80ms;}
-  .stage:nth-child(3){transition-delay:160ms;}
-  .stage:nth-child(4){transition-delay:240ms;}
-  @media (max-width:820px){
-    .stage{grid-template-columns:1fr;}
-  }
-  .stage-num{
-    font-family:var(--font-mono);
-    padding:26px 20px 26px 0;
-    color:var(--ink-faint);
-    font-size:.85rem;
-  }
-  .stage-num b{
-    display:block;
-    font-family:var(--font-display);
-    font-size:2rem;
-    color:var(--ink);
-    font-weight:600;
-  }
-  @media (max-width:820px){.stage-num{padding:20px 0 0;display:flex;align-items:baseline;gap:10px;}}
-  .stage-body{
-    padding:26px 22px;
-  }
-  @media (max-width:820px){.stage-body{padding:12px 0 20px;}}
-  .stage-body h3{
-    font-family:var(--font-body);
-    font-size:1.05rem;
-    margin:0 0 8px;
-  }
-  .stage-body p{
-    margin:0;
-    color:var(--ink-soft);
-    font-size:.9rem;
-  }
-  .stage-diff{
-    padding:26px 20px;
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-    justify-content:center;
-  }
-  .diff-row{
-    display:flex;
-    justify-content:space-between;
-    font-family:var(--font-mono);
-    font-size:.72rem;
-    letter-spacing:.03em;
-    color:var(--ink-faint);
-  }
-  .dots{display:flex;gap:3px;}
-  .dot{width:5px;height:5px;border-radius:50%;background:var(--rule-strong);}
-  .dot.on{background:var(--seal);}
+        /* ─── HERO ─── */
+        .hero {
+            padding: 10rem 2rem 6rem;
+            text-align: center;
+            position: relative;
+        }
 
-  /* ---------- Team strip ---------- */
-  .roles{
-    display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:24px;
-    border-top:1px solid var(--rule);
-  }
-  @media (max-width:820px){.roles{grid-template-columns:repeat(2,1fr);}}
-  @media (max-width:480px){.roles{grid-template-columns:1fr;}}
-  .role{
-    padding:20px 0 0;
-    border-top:1px solid var(--rule);
-    margin-top:-1px;
-    opacity:0;
-    transform:translateY(10px);
-    transition:opacity .5s ease, transform .5s ease, border-color .2s ease;
-  }
-  .roles.is-in .role{opacity:1;transform:none;}
-  .role:hover{border-color:var(--seal);}
-  .role:nth-child(1){transition-delay:0ms;}
-  .role:nth-child(2){transition-delay:60ms;}
-  .role:nth-child(3){transition-delay:120ms;}
-  .role:nth-child(4){transition-delay:180ms;}
-  .role:nth-child(5){transition-delay:240ms;}
-  .role-tag{
-    font-family:var(--font-mono);
-    font-size:10px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    color:var(--ink-faint);
-    margin-bottom:6px;
-  }
-  .role-name{font-weight:600;font-size:.92rem;}
+        .hero-bg {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
 
-  /* ---------- CTA / footer ---------- */
-  .close{
-    background:var(--ink);
-    color:var(--paper);
-  }
-  .close .section-head{border-color:rgba(237,234,224,.22);}
-  .close .section-tag{color:rgba(237,234,224,.5);}
-  .close h2{color:var(--paper);}
-  .close-grid{
-    display:grid;
-    grid-template-columns:1.2fr .8fr;
-    gap:40px;
-    align-items:end;
-  }
-  @media (max-width:800px){.close-grid{grid-template-columns:1fr;}}
-  .close p{color:rgba(237,234,224,.72);max-width:52ch;font-size:1.02rem;}
-  .sign-block{
-    border-top:1px solid rgba(237,234,224,.3);
-    padding-top:18px;
-  }
-  .sign-line{
-    font-family:var(--font-mono);
-    font-size:11px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    color:rgba(237,234,224,.5);
-    margin-bottom:14px;
-  }
-  .close .btn-primary{
-    background:var(--seal);
-    border-color:var(--seal);
-    color:#fff;
-  }
-  .close .btn-primary:hover{box-shadow:0 0 0 1px var(--seal) inset;background:var(--seal-ink);border-color:var(--seal-ink);}
+        .hero-bg .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.15;
+        }
 
-  footer{
-    background:var(--ink);
-    color:rgba(237,234,224,.45);
-    font-family:var(--font-mono);
-    font-size:11.5px;
-    letter-spacing:.03em;
-    padding:22px 0 30px;
-  }
-  footer .wrap{
-    display:flex;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    gap:10px;
-    border-top:1px solid rgba(237,234,224,.16);
-    padding-top:18px;
-  }
-</style>
+        .hero-bg .orb-1 {
+            width: 500px; height: 500px;
+            background: var(--accent);
+            top: -15%; left: 30%;
+        }
+
+        .hero-bg .orb-2 {
+            width: 400px; height: 400px;
+            background: #a78bfa;
+            top: 5%; right: 20%;
+            opacity: 0.08;
+        }
+
+        .hero-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.5rem 0.35rem 0.35rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            cursor: default;
+            transition: border-color 0.3s;
+        }
+
+        .hero-badge:hover { border-color: var(--border-hover); }
+
+        .badge-tag {
+            padding: 0.15rem 0.55rem;
+            background: var(--accent-subtle);
+            border-radius: 100px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--accent-light);
+        }
+
+        .hero h1 {
+            font-size: clamp(2.75rem, 6vw, 4.5rem);
+            font-weight: 600;
+            letter-spacing: -0.04em;
+            line-height: 1.05;
+            margin-bottom: 1.5rem;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero h1 .shimmer {
+            background: linear-gradient(135deg, var(--accent-light) 0%, #c4b5fd 40%, var(--accent) 80%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-desc {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            max-width: 480px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.65;
+            font-weight: 400;
+        }
+
+        .hero-ctas {
+            display: flex;
+            gap: 0.6rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.7rem 1.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 550;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-dark {
+            background: var(--text);
+            color: var(--bg);
+        }
+
+        .btn-dark:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(255,255,255,0.1);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--border-hover);
+            color: var(--text);
+            transform: translateY(-1px);
+        }
+
+        .btn svg { width: 14px; height: 14px; }
+
+        .hero-proof {
+            margin-top: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .proof-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .proof-chip svg { width: 13px; height: 13px; color: var(--green); flex-shrink: 0; }
+
+        /* ─── PRODUCT MOCKUP ─── */
+        .mockup-section {
+            padding: 0 2rem 6rem;
+        }
+
+        .mockup-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .mockup-frame {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .mockup-frame::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 17px;
+            padding: 1px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent 40%);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .mockup-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .mockup-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .mockup-url {
+            flex: 1;
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .mockup-body {
+            padding: 2rem;
+            min-height: 320px;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 1.5rem;
+        }
+
+        .mockup-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .mockup-sidebar-item {
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mockup-sidebar-item.active {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-secondary);
+        }
+
+        .mockup-sidebar-item .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .mockup-sidebar-item.active .dot {
+            background: var(--accent);
+        }
+
+        .mockup-main {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .mockup-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .mockup-candidate {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .mockup-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-subtle), rgba(167,139,250,0.15));
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .mockup-name {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .mockup-role {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 0.1rem;
+        }
+
+        .mockup-score {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .score-bar {
+            width: 80px;
+            height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .score-val {
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            min-width: 28px;
+            text-align: right;
+        }
+
+        .mockup-glow {
+            position: absolute;
+            bottom: -60%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 300px;
+            background: radial-gradient(ellipse, var(--accent-subtle), transparent 70%);
+            pointer-events: none;
+        }
+
+        /* ─── SECTION COMMON ─── */
+        .section {
+            padding: 6rem 2rem;
+            position: relative;
+        }
+
+        .section-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .section-eyebrow {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--accent-light);
+            margin-bottom: 0.75rem;
+            text-align: center;
+        }
+
+        .section-heading {
+            font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+            font-weight: 600;
+            letter-spacing: -0.035em;
+            text-align: center;
+            margin-bottom: 0.75rem;
+            line-height: 1.15;
+        }
+
+        .section-sub {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            max-width: 460px;
+            margin: 0 auto 3.5rem;
+            line-height: 1.6;
+        }
+
+        .divider {
+            max-width: 1000px;
+            margin: 0 auto;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ─── PIPELINE ─── */
+        .pipeline-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 2.5rem 2rem 2rem;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .pipeline-box:hover {
+            border-color: var(--border-hover);
+        }
+
+        .pipeline-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(124,106,239,0.3), transparent);
+        }
+
+        .pipeline-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .pipeline-title {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pipeline-title .live-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.3); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(52,211,153,0); }
+        }
+
+        .pipeline-hint {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pipeline-track {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            position: relative;
+            padding: 0.5rem 0;
+        }
+
+        .p-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.6rem;
+            position: relative;
+            z-index: 2;
+            flex: 0 0 auto;
+            width: 100px;
+        }
+
+        .p-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+
+        .p-step-num {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            font-size: 0.55rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.4s;
+        }
+
+        .p-step.active .p-icon {
+            border-color: var(--step-color);
+            box-shadow: 0 0 20px var(--step-glow);
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .p-step.active .p-step-num {
+            background: var(--step-color);
+            border-color: var(--step-color);
+            color: white;
+        }
+
+        .p-step.done .p-icon {
+            border-color: rgba(52,211,153,0.3);
+            background: rgba(52,211,153,0.05);
+        }
+
+        .p-step.done .p-step-num {
+            background: var(--green);
+            border-color: var(--green);
+            color: var(--bg);
+        }
+
+        .p-label {
+            font-size: 0.68rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.3;
+            transition: color 0.3s;
+        }
+
+        .p-step.active .p-label,
+        .p-step.done .p-label {
+            color: var(--text-secondary);
+        }
+
+        /* Connector */
+        .p-conn {
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+            position: relative;
+            margin-bottom: 22px;
+            min-width: 20px;
+        }
+
+        .p-conn-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--green), var(--accent-light));
+            transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 1px;
+        }
+
+        .p-conn-fill.done { width: 100%; }
+
+        .p-conn-particle {
+            position: absolute;
+            top: -2.5px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-light);
+            box-shadow: 0 0 8px var(--accent);
+            opacity: 0;
+        }
+
+        .p-conn-particle.go {
+            animation: particleSlide 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes particleSlide {
+            0% { left: 0; opacity: 1; }
+            100% { left: calc(100% - 6px); opacity: 0; }
+        }
+
+        /* Pipeline status footer */
+        .pipeline-footer {
+            margin-top: 1.75rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pf-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .pf-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--amber);
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        .pf-dot.done {
+            background: var(--green);
+            animation: none;
+        }
+
+        .pf-text {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .pf-text strong { color: var(--text); font-weight: 600; }
+
+        .pf-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ─── FEATURES GRID ─── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .feature {
+            background: var(--bg-card);
+            padding: 2.25rem 1.75rem;
+            transition: background 0.3s;
+            position: relative;
+        }
+
+        .feature:hover {
+            background: var(--bg-elevated);
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 1.15rem;
+        }
+
+        .feature h3 {
+            font-size: 0.92rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 0.4rem;
+        }
+
+        .feature p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .feature-stat {
+            margin-top: 1.15rem;
+            display: flex;
+            align-items: baseline;
+            gap: 0.35rem;
+        }
+
+        .feature-stat-val {
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.02em;
+        }
+
+        .feature-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* ─── HOW IT WORKS DETAIL ─── */
+        .steps-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .step-row {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            gap: 1.5rem;
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border);
+            align-items: start;
+            opacity: 0;
+            transform: translateY(16px);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .step-row.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .step-row:last-child { border-bottom: none; }
+
+        .step-row-num {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            padding-top: 0.2rem;
+        }
+
+        .step-row-content h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.4rem;
+        }
+
+        .step-row-content p {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.65;
+            max-width: 500px;
+        }
+
+        .step-row-tag {
+            display: inline-block;
+            margin-top: 0.65rem;
+            padding: 0.2rem 0.6rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ─── TESTIMONIAL ─── */
+        .testimonial-card {
+            max-width: 640px;
+            margin: 0 auto;
+            text-align: center;
+            padding: 3rem 2.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            position: relative;
+        }
+
+        .testimonial-card::before {
+            content: '"';
+            position: absolute;
+            top: 1.25rem;
+            left: 1.75rem;
+            font-size: 3.5rem;
+            color: rgba(255,255,255,0.04);
+            font-family: Georgia, serif;
+            line-height: 1;
+        }
+
+        .testimonial-text {
+            font-size: 1.05rem;
+            line-height: 1.75;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-weight: 400;
+        }
+
+        .testimonial-author {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .testimonial-role {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.15rem;
+        }
+
+        /* ─── CTA ─── */
+        .cta-card {
+            max-width: 580px;
+            margin: 0 auto;
+            text-align: center;
+            padding: 3.5rem 2.5rem;
+            background: linear-gradient(180deg, rgba(124,106,239,0.06), rgba(124,106,239,0.02));
+            border: 1px solid rgba(124,106,239,0.12);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(124,106,239,0.3), transparent);
+        }
+
+        .cta-card h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.6rem;
+        }
+
+        .cta-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        /* ─── FOOTER ─── */
+        footer {
+            text-align: center;
+            padding: 2.5rem 2rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ─── ANIMATIONS ─── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-delay-1 { transition-delay: 0.1s; }
+        .reveal-delay-2 { transition-delay: 0.2s; }
+        .reveal-delay-3 { transition-delay: 0.3s; }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            .nav-center { display: none; }
+            .features-grid { grid-template-columns: 1fr; }
+            .mockup-body { grid-template-columns: 1fr; }
+            .mockup-sidebar { display: none; }
+            .pipeline-track { flex-wrap: wrap; justify-content: center; gap: 0.25rem; }
+            .p-conn { display: none; }
+            .p-step { width: 80px; }
+            .hero { padding: 8rem 1.5rem 4rem; }
+            .section { padding: 4rem 1.5rem; }
+        }
+
+        @media (max-width: 480px) {
+            .p-step { width: 60px; }
+            .p-icon { width: 40px; height: 40px; font-size: 1rem; }
+            .p-label { font-size: 0.6rem; }
+            nav { padding: 0 1rem; }
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+    </style>
 </head>
 <body>
 
-<svg width="0" height="0" style="position:absolute">
-  <filter id="inkTexture">
-    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="noise"/>
-    <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2"/>
-  </filter>
-</svg>
-
-<header class="letterhead">
-  <div class="wrap">
-    <div class="brand"><span class="brand-mark"></span>OpenHire</div>
     <nav>
-      <a href="#problem">The Problem</a>
-      <a href="#pipeline">How It Works</a>
-      <a href="#evidence">The Report</a>
-      <a href="#roadmap">Roadmap</a>
-      <a href="roadmap.html" style="color:var(--seal);font-weight:600;">Live Tracker ⚡</a>
-      <a href="app.html" style="color:var(--verified);font-weight:700;">🚀 Launch App</a>
+        <a href="#" class="logo">
+            <div class="logo-mark">
+                <svg viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6l4-3 4 3v6l-4 3-4-3V6z" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            OpenHire
+        </a>
+        <div class="nav-center">
+            <a href="#how">How it works</a>
+            <a href="#features">Features</a>
+            <a href="#pricing">Pricing</a>
+        </div>
+        <div class="nav-right">
+            <a href="login.html" class="nav-link">Sign in</a>
+            <button class="nav-btn">Get Started</button>
+        </div>
     </nav>
-    <a class="cta-mini" href="app.html">Launch Portal</a>
-  </div>
-</header>
 
-<section class="hero">
-  <div class="wrap">
-    <div>
-      <p class="eyebrow">Built for the India campus-hiring drive</p>
-      <h1><span class="ln">Interview a thousand candidates in a week.</span><span class="ln">Explain <em>every</em> shortlist decision.</span></h1>
-      <p class="hero-lede">OpenHire runs structured, voice-based interviews at volume, scores every candidate against your rubric with a specialized multi-agent pipeline, and hands your panel an evidence-backed report — not a black-box number.</p>
-      <div class="hero-actions">
-        <a class="btn-primary" href="#close">Request a pilot drive</a>
-        <a class="btn-ghost" href="#pipeline">See how scoring works ↓</a>
-      </div>
-      <dl class="register">
-        <div>
-          <dt>Built for</dt>
-          <dd>Tier 2/3<small>connectivity &amp; devices</small></dd>
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-bg">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="hero-grid"></div>
         </div>
-        <div>
-          <dt>Interview mode</dt>
-          <dd>Voice-first<small>multilingual, code-mixed</small></dd>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="badge-tag">New</span>
+                Adaptive follow-up questions now live →
+            </div>
+            <h1>Screen candidates in<br><span class="shimmer">minutes, not months</span></h1>
+            <p class="hero-desc">Replace chaotic phone screens with structured AI interviews. Get consistent, bias-free evaluations for every candidate — at any scale.</p>
+            <div class="hero-ctas">
+                <a href="#" class="btn btn-dark">
+                    Start free trial
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8m0 0L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="#how" class="btn btn-outline">See how it works</a>
+            </div>
+            <div class="hero-proof">
+                <div class="proof-chip">
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M3 7l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    No credit card required
+                </div>
+                <div class="proof-chip">
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M3 7l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    14-day free trial
+                </div>
+                <div class="proof-chip">
+                    <svg viewBox="0 0 14 14" fill="none"><path d="M3 7l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Setup in 5 minutes
+                </div>
+            </div>
         </div>
-        <div>
-          <dt>Decision gate</dt>
-          <dd>Human<small>review, always required</small></dd>
+    </section>
+
+    <!-- PRODUCT MOCKUP -->
+    <section class="mockup-section reveal">
+        <div class="mockup-wrapper">
+            <div class="mockup-frame">
+                <div class="mockup-bar">
+                    <div class="mockup-dot"></div>
+                    <div class="mockup-dot"></div>
+                    <div class="mockup-dot"></div>
+                    <div class="mockup-url">app.openhire.io/jobs/senior-engineer/candidates</div>
+                </div>
+                <div class="mockup-body">
+                    <div class="mockup-sidebar">
+                        <div class="mockup-sidebar-item active"><span class="dot"></span>Candidates</div>
+                        <div class="mockup-sidebar-item"><span class="dot"></span>Job Config</div>
+                        <div class="mockup-sidebar-item"><span class="dot"></span>Reports</div>
+                        <div class="mockup-sidebar-item"><span class="dot"></span>Settings</div>
+                    </div>
+                    <div class="mockup-main" id="mockupCandidates">
+                        <div class="mockup-card">
+                            <div class="mockup-candidate">
+                                <div class="mockup-avatar">AK</div>
+                                <div>
+                                    <div class="mockup-name">Ananya Krishnan</div>
+                                    <div class="mockup-role">Backend · 3 YOE · IIT Delhi</div>
+                                </div>
+                            </div>
+                            <div class="mockup-score">
+                                <div class="score-bar"><div class="score-fill" data-width="92" style="background: var(--green); width: 0;"></div></div>
+                                <span class="score-val" style="color: var(--green);">92</span>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-candidate">
+                                <div class="mockup-avatar">RM</div>
+                                <div>
+                                    <div class="mockup-name">Rahul Mehta</div>
+                                    <div class="mockup-role">Full Stack · 5 YOE · NIT Trichy</div>
+                                </div>
+                            </div>
+                            <div class="mockup-score">
+                                <div class="score-bar"><div class="score-fill" data-width="87" style="background: var(--accent-light); width: 0;"></div></div>
+                                <span class="score-val" style="color: var(--accent-light);">87</span>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-candidate">
+                                <div class="mockup-avatar">SP</div>
+                                <div>
+                                    <div class="mockup-name">Sneha Patel</div>
+                                    <div class="mockup-role">Backend · 2 YOE · VIT</div>
+                                </div>
+                            </div>
+                            <div class="mockup-score">
+                                <div class="score-bar"><div class="score-fill" data-width="81" style="background: var(--cyan); width: 0;"></div></div>
+                                <span class="score-val" style="color: var(--cyan);">81</span>
+                            </div>
+                        </div>
+                        <div class="mockup-card">
+                            <div class="mockup-candidate">
+                                <div class="mockup-avatar">DJ</div>
+                                <div>
+                                    <div class="mockup-name">Dev Joshi</div>
+                                    <div class="mockup-role">Backend · 4 YOE · BITS Pilani</div>
+                                </div>
+                            </div>
+                            <div class="mockup-score">
+                                <div class="score-bar"><div class="score-fill" data-width="74" style="background: var(--amber); width: 0;"></div></div>
+                                <span class="score-val" style="color: var(--amber);">74</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mockup-glow"></div>
         </div>
-      </dl>
-    </div>
-    <div class="stamp-frame">
-      <div class="stamp">
-        <span class="stamp-text">
-          <span class="line1">— OPENHIRE —</span>
-          <span class="line2">EVIDENCE<br>BACKED</span>
-          <span class="line3">NOT AUTO-DECIDED</span>
-        </span>
-      </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<hr class="hairline">
+    <!-- PIPELINE / HOW IT WORKS -->
+    <section class="section" id="how">
+        <div class="section-inner">
+            <div class="section-eyebrow reveal">How It Works</div>
+            <h2 class="section-heading reveal">From job post to shortlist in 4 steps</h2>
+            <p class="section-sub reveal">Your entire first-round screening, automated. Candidates interview on their time. You get a ranked, evidence-backed shortlist.</p>
 
-<section id="problem">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">01 — The Drive Day Problem</p>
-        <h2>One placement drive, three thousand resumes, one exhausted panel</h2>
-      </div>
-      <p class="section-note">A single campus drive compresses a year's hiring into a few days — and most scoring still happens by hand, inconsistently, under pressure.</p>
-    </div>
-    <div class="sheets">
-      <div class="sheet bad reveal">
-        <div class="sheet-label"><span>Panel Notebook — Day 2</span><span>Manual</span></div>
-        <div class="row-item"><span class="k">Candidates seen by 2pm</span><span class="v">61 of 240</span></div>
-        <div class="row-item"><span class="k">Scoring rubric used</span><span class="v">Varies by panelist</span></div>
-        <div class="row-item"><span class="k">Notes on skipped answers</span><span class="v">None recorded</span></div>
-        <div class="row-item"><span class="k">Why candidate #114 was cut</span><span class="v">"Didn't seem ready"</span></div>
-        <div class="sheet-foot">The same answer, scored by two different panelists, rarely gets the same mark.</div>
-      </div>
-      <div class="sheet good reveal">
-        <div class="sheet-label"><span>OpenHire Report — Day 2</span><span>Automated</span></div>
-        <div class="row-item"><span class="k">Candidates screened by 2pm</span><span class="v">240 of 240</span></div>
-        <div class="row-item"><span class="k">Scoring rubric used</span><span class="v">Same rubric, every candidate</span></div>
-        <div class="row-item"><span class="k">Notes on skipped answers</span><span class="v">Flagged for review</span></div>
-        <div class="row-item"><span class="k">Why candidate #114 was cut</span><span class="v">Transcript-quoted evidence</span></div>
-        <div class="sheet-foot">Every score traces back to a line in the transcript — auditable after the fact, not just in the moment.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<hr class="hairline">
-
-<section id="pipeline">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">02 — Routing Slip</p>
-        <h2>What happens between "candidate clicks link" and "recruiter sees a score"</h2>
-      </div>
-      <p class="section-note">Evaluation runs asynchronously on the sealed transcript — never live — so the interview itself stays fast on a weak connection.</p>
-    </div>
-    <div class="routing reveal">
-      <div class="stop">
-        <span class="stop-index">01 · Recruiter</span>
-        <h3>Job &amp; rubric set</h3>
-        <p>Configure the role, question set, and scoring weights once — reuse across the drive.</p>
-        <span class="stop-check"></span>
-      </div>
-      <div class="stop">
-        <span class="stop-index">02 · Candidate</span>
-        <h3>Voice interview</h3>
-        <p>A structured, conversational interview over a link — works on low bandwidth, any device.</p>
-        <span class="stop-check"></span>
-      </div>
-      <div class="stop">
-        <span class="stop-index">03 · Transcript</span>
-        <h3>Speech to sealed text</h3>
-        <p>The interview is transcribed and sealed — the record every downstream score is checked against.</p>
-        <span class="stop-check"></span>
-      </div>
-      <div class="stop">
-        <span class="stop-index">04 · Agent pipeline</span>
-        <h3>Specialized evaluation</h3>
-        <p>Skill, integrity, and scoring agents each read the sealed transcript and produce their piece of the report.</p>
-        <span class="stop-check"></span>
-      </div>
-      <div class="stop">
-        <span class="stop-index">05 · Recruiter</span>
-        <h3>Ranked, explainable list</h3>
-        <p>A filterable shortlist where every score links back to the evidence that produced it.</p>
-        <span class="stop-check"></span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<hr class="hairline">
-
-<section id="evidence">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">03 — Sample Report</p>
-        <h2>Every number on the page can be traced to a quote</h2>
-      </div>
-      <p class="section-note">Integrity signals are surfaced for a human to weigh — never used to auto-reject a candidate.</p>
-    </div>
-    <div class="scorecard reveal">
-      <div class="sc-left">
-        <div class="sc-id"><span>CAND-00114 · SDE INTERN TRACK</span><span>ROUND 1</span></div>
-
-        <div class="competency">
-          <div class="competency-head"><span>Problem solving</span><span class="score">82 / 100</span></div>
-          <div class="bar"><span style="--pct:82%"></span></div>
+            <div class="pipeline-box reveal" id="pipelineBox">
+                <div class="pipeline-header">
+                    <div class="pipeline-title">
+                        <span class="live-dot"></span>
+                        Live candidate flow
+                    </div>
+                    <div class="pipeline-hint">click to replay</div>
+                </div>
+                <div class="pipeline-track" id="pipelineTrack">
+                    <div class="p-step" data-step="0" style="--step-color: #7c6aef; --step-glow: rgba(124,106,239,0.2);">
+                        <div class="p-icon"><span class="p-step-num">1</span>📋</div>
+                        <div class="p-label">Create Job<br>& Questions</div>
+                    </div>
+                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
+                    <div class="p-step" data-step="1" style="--step-color: #22d3ee; --step-glow: rgba(34,211,238,0.2);">
+                        <div class="p-icon"><span class="p-step-num">2</span>🔗</div>
+                        <div class="p-label">Share Link<br>to Candidates</div>
+                    </div>
+                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
+                    <div class="p-step" data-step="2" style="--step-color: #a78bfa; --step-glow: rgba(167,139,250,0.2);">
+                        <div class="p-icon"><span class="p-step-num">3</span>🎙️</div>
+                        <div class="p-label">Candidate<br>Voice Interview</div>
+                    </div>
+                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
+                    <div class="p-step" data-step="3" style="--step-color: #fbbf24; --step-glow: rgba(251,191,36,0.2);">
+                        <div class="p-icon"><span class="p-step-num">4</span>🤖</div>
+                        <div class="p-label">AI Scores<br>& Evaluates</div>
+                    </div>
+                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
+                    <div class="p-step" data-step="4" style="--step-color: #34d399; --step-glow: rgba(52,211,153,0.2);">
+                        <div class="p-icon"><span class="p-step-num">5</span>✅</div>
+                        <div class="p-label">Get Ranked<br>Shortlist</div>
+                    </div>
+                </div>
+                <div class="pipeline-footer">
+                    <div class="pf-left">
+                        <div class="pf-dot" id="pfDot"></div>
+                        <div class="pf-text" id="pfText">Ready — <strong>click to simulate a candidate flow</strong></div>
+                    </div>
+                    <div class="pf-time" id="pfTime">00:00</div>
+                </div>
+            </div>
         </div>
-        <div class="competency">
-          <div class="competency-head"><span>Communication</span><span class="score">74 / 100</span></div>
-          <div class="bar"><span style="--pct:74%"></span></div>
-        </div>
-        <div class="competency">
-          <div class="competency-head"><span>Role fundamentals</span><span class="score">68 / 100</span></div>
-          <div class="bar"><span style="--pct:68%"></span></div>
-        </div>
+    </section>
 
-        <div class="evidence">
-          <span class="evidence-label">Cited transcript evidence — Q3</span>
-          "...so I'd first check the array's already sorted before reaching for a full re-sort, since that's wasted work on the happy path..."
-        </div>
+    <div class="divider"></div>
 
-        <div class="flag-row">
-          <span class="flag-badge">For review</span>
-          <span>One answer flagged for follow-up phrasing — not scored, not auto-rejected.</span>
-        </div>
-      </div>
-      <div class="sc-right">
-        <div class="verdict-line">
-          <span class="verdict-label">Composite</span>
-        </div>
-        <div class="verdict-value"><span class="count" data-count-to="76">0</span><sup>/100</sup></div>
-        <p class="verdict-desc">Weighted against the rubric your team configured for this role — same weights, every candidate in this drive.</p>
-        <div class="human-note">Recommendation only. Advancing a candidate is always a recruiter's call.</div>
-      </div>
-    </div>
-  </div>
-</section>
+    <!-- FEATURES -->
+    <section class="section" id="features">
+        <div class="section-inner">
+            <div class="section-eyebrow reveal">Why OpenHire</div>
+            <h2 class="section-heading reveal">Built for high-volume hiring</h2>
+            <p class="section-sub reveal">Stop losing top candidates to slow processes. Screen hundreds consistently, fairly, and at scale.</p>
 
-<hr class="hairline">
-
-<section id="india">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">04 — Ground Conditions</p>
-        <h2>Designed for the drive as it actually happens</h2>
-      </div>
-      <p class="section-note">Not a global HR tool retrofitted for India — built against Tier 2/3 connectivity and real candidate behavior from day one.</p>
-    </div>
-    <div class="ledger reveal">
-      <div class="ledger-row">
-        <span class="ld-check"></span>
-        <span class="ld-title">Connectivity fallback ladder</span>
-        <span class="ld-desc">Video drops to audio, audio drops to async response, async drops to a phone call — the interview doesn't just fail on a bad connection.</span>
-      </div>
-      <div class="ledger-row">
-        <span class="ld-check"></span>
-        <span class="ld-title">Multilingual &amp; code-mixed</span>
-        <span class="ld-desc">Candidates answer the way they actually speak — including switching languages mid-answer.</span>
-      </div>
-      <div class="ledger-row">
-        <span class="ld-check"></span>
-        <span class="ld-title">WhatsApp &amp; SMS delivery</span>
-        <span class="ld-desc">Interview links reach candidates on the channel they actually check, not just email.</span>
-      </div>
-      <div class="ledger-row">
-        <span class="ld-check"></span>
-        <span class="ld-title">India-only data residency</span>
-        <span class="ld-desc">Encryption and access control designed around where the data is allowed to live.</span>
-      </div>
-      <div class="ledger-row">
-        <span class="ld-check"></span>
-        <span class="ld-title">Bias tested across slices</span>
-        <span class="ld-desc">Explainability checked against language and accent — not just overall accuracy.</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<hr class="hairline">
-
-<section id="roadmap">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">05 — Drive Itinerary</p>
-        <h2>Shipped in stages, each one a working system</h2>
-        <div style="margin-top: 14px;">
-          <a class="btn-ghost" href="roadmap.html" style="font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:8px 16px;border:1px solid var(--seal);color:var(--seal-ink);text-decoration:none;border-radius:4px;display:inline-flex;align-items:center;gap:8px;background:rgba(178,58,46,0.06);">📊 Open Interactive Roadmap & Progress Tracker →</a>
+            <div class="features-grid reveal">
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(124,106,239,0.08);">⚡</div>
+                    <h3>10× Faster Screening</h3>
+                    <p>Replace weeks of phone screens with AI interviews that run 24/7. Candidates complete on their schedule.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: var(--accent-light);">85%</span>
+                        <span class="feature-stat-label">time saved</span>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(52,211,153,0.08);">🎯</div>
+                    <h3>Consistent Evaluation</h3>
+                    <p>Every candidate answers the same questions, scored by the same rubric. No bad days, no unconscious bias.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: var(--green);">94%</span>
+                        <span class="feature-stat-label">consistency</span>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(34,211,238,0.08);">📊</div>
+                    <h3>Explainable Rankings</h3>
+                    <p>Every score comes with evidence — transcript excerpts, competency breakdowns, and clear reasoning.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: var(--cyan);">100%</span>
+                        <span class="feature-stat-label">auditable</span>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(251,191,36,0.08);">📈</div>
+                    <h3>Scale Without Hiring</h3>
+                    <p>Screen 50 or 5,000 candidates for a role without adding headcount. Perfect for campus and bulk hiring.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: var(--amber);">5K+</span>
+                        <span class="feature-stat-label">concurrent</span>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(244,63,94,0.08);">🔒</div>
+                    <h3>Fair & Compliant</h3>
+                    <p>Structured interviews reduce adverse impact. Built-in bias checks and defensible scoring for compliance.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: #f43f5e;">EEOC</span>
+                        <span class="feature-stat-label">aligned</span>
+                    </div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon" style="background: rgba(167,139,250,0.08);">🔌</div>
+                    <h3>Integrates Easily</h3>
+                    <p>Works with your existing ATS. Share links via email, Slack, or embed in your careers page.</p>
+                    <div class="feature-stat">
+                        <span class="feature-stat-val" style="color: #a78bfa;">5 min</span>
+                        <span class="feature-stat-label">setup time</span>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-      <p class="section-note">Every stage ships as something demoable end-to-end — never a partial build waiting on the next one.</p>
-    </div>
-    <div class="roadmap reveal">
-      <div class="stage">
-        <div class="stage-num"><b>01</b>Basic Prototype</div>
-        <div class="stage-body">
-          <h3>The loop, proven end to end</h3>
-          <p>A recruiter creates a job, a candidate completes a voice interview, one LLM call scores it against the job — one language, one candidate at a time.</p>
-        </div>
-        <div class="stage-diff">
-          <div class="diff-row"><span>Frontend</span><span class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Backend</span><span class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Multi-agent</span><span class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
-        </div>
-      </div>
-      <div class="stage">
-        <div class="stage-num"><b>02</b>Advanced</div>
-        <div class="stage-body">
-          <h3>Adaptive, multi-competency, role-aware</h3>
-          <p>Conversational follow-ups based on what the candidate said, per-competency rubrics, configurable interview types, and working dashboards for both sides.</p>
-        </div>
-        <div class="stage-diff">
-          <div class="diff-row"><span>Frontend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Backend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Multi-agent</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot"></span></span></div>
-        </div>
-      </div>
-      <div class="stage">
-        <div class="stage-num"><b>03</b>Multi-Agent System</div>
-        <div class="stage-body">
-          <h3>The specialized pipeline</h3>
-          <p>Orchestrator, skill evaluator, integrity agent, scoring agent, and report generator — each auditable on its own, running async on the sealed transcript.</p>
-        </div>
-        <div class="stage-diff">
-          <div class="diff-row"><span>Frontend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Backend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Multi-agent</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span></span></div>
-        </div>
-      </div>
-      <div class="stage">
-        <div class="stage-num"><b>04</b>Production</div>
-        <div class="stage-body">
-          <h3>Ready for a real drive, at volume</h3>
-          <p>Full connectivity fallback, bias testing, mandatory human review gate, India data residency, Naukri/ATS sync, and per-interview credit billing.</p>
-        </div>
-        <div class="stage-diff">
-          <div class="diff-row"><span>Frontend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot"></span></span></div>
-          <div class="diff-row"><span>Backend</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span></span></div>
-          <div class="diff-row"><span>Multi-agent</span><span class="dots"><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on"></span></span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<hr class="hairline">
+    <div class="divider"></div>
 
-<section id="team">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">06 — Behind The Report</p>
-        <h2>A five-person team, each owning one part of the pipeline</h2>
-      </div>
-      <p class="section-note">Every layer — capture, scoring, storage, and delivery — has a named owner and a documented contract with the rest.</p>
-    </div>
-    <div class="roles reveal">
-      <div class="role"><div class="role-tag">Owns capture</div><div class="role-name">Frontend</div></div>
-      <div class="role"><div class="role-tag">Owns the API</div><div class="role-name">Backend</div></div>
-      <div class="role"><div class="role-tag">Owns the record</div><div class="role-name">Database</div></div>
-      <div class="role"><div class="role-tag">Owns scoring</div><div class="role-name">Multi-Agent System</div></div>
-      <div class="role"><div class="role-tag">Owns the loop</div><div class="role-name">Fullstack</div></div>
-    </div>
-  </div>
-</section>
+    <!-- DETAILED STEPS -->
+    <section class="section">
+        <div class="section-inner">
+            <div class="section-eyebrow reveal">The Details</div>
+            <h2 class="section-heading reveal">Everything you need,<br>nothing you don't</h2>
+            <p class="section-sub reveal">A closer look at each step of the process.</p>
 
-<section id="close" class="close">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <div class="section-head-main">
-        <p class="section-tag">07 — Next Drive</p>
-        <h2>Bring OpenHire to your next hiring drive</h2>
-      </div>
-    </div>
-    <div class="close-grid reveal">
-      <p>We're building this stage by stage, with a real campus drive in mind at every step. If you run high-volume hiring and want an explainable shortlist instead of a black box, we want to hear about your drive.</p>
-      <div class="sign-block">
-        <div class="sign-line">Authorized correspondence</div>
-        <a class="btn-primary" href="mailto:hello@openhire.example">Request a pilot drive</a>
-      </div>
-    </div>
-  </div>
-</section>
+            <div class="steps-detail">
+                <div class="step-row">
+                    <div class="step-row-num">01</div>
+                    <div class="step-row-content">
+                        <h3>Define your job & questions</h3>
+                        <p>Create a job posting with structured questions tailored to the role. Set competency rubrics so every candidate is measured against the same criteria.</p>
+                        <span class="step-row-tag">Takes ~5 minutes</span>
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-row-num">02</div>
+                    <div class="step-row-content">
+                        <h3>Share a link with candidates</h3>
+                        <p>Send a unique interview link via email, Slack, or embed it on your careers page. Candidates can complete the interview anytime, from any device.</p>
+                        <span class="step-row-tag">No app download needed</span>
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-row-num">03</div>
+                    <div class="step-row-content">
+                        <h3>Candidates complete a voice interview</h3>
+                        <p>An AI interviewer asks each question via natural voice. Candidates respond verbally — just like a real phone screen. The system transcribes everything automatically.</p>
+                        <span class="step-row-tag">~15 min per candidate</span>
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-row-num">04</div>
+                    <div class="step-row-content">
+                        <h3>AI evaluates & ranks every candidate</h3>
+                        <p>Multiple specialized AI agents score each transcript against your rubrics. You receive a detailed report with scores, evidence, and a ranked shortlist — ready for human review.</p>
+                        <span class="step-row-tag">Results in minutes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<footer>
-  <div class="wrap">
-    <span>OpenHire — evidence-backed interviews, built for India</span>
-    <span>Stage 1 · Prototype in development</span>
-  </div>
-</footer>
+    <div class="divider"></div>
 
-<script>
-  (function(){
-    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var items = document.querySelectorAll('.reveal');
+    <!-- TESTIMONIAL -->
+    <section class="section">
+        <div class="section-inner">
+            <div class="testimonial-card reveal">
+                <p class="testimonial-text">We used to spend 3 weeks on campus screening. With OpenHire, we shortlisted our top 20 from 800 applicants in 4 days — and our hiring managers loved the detailed reports.</p>
+                <div class="testimonial-author">Priya Sharma</div>
+                <div class="testimonial-role">Head of Talent Acquisition, Series B Tech Company</div>
+            </div>
+        </div>
+    </section>
 
-    function countUp(el){
-      var target = parseInt(el.getAttribute('data-count-to'), 10) || 0;
-      if(reduced){ el.textContent = target; return; }
-      var start = performance.now();
-      var duration = 900;
-      function step(now){
-        var p = Math.min(1, (now - start) / duration);
-        var eased = 1 - Math.pow(1 - p, 3);
-        el.textContent = Math.round(eased * target);
-        if(p < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
+    <!-- CTA -->
+    <section class="section">
+        <div class="section-inner">
+            <div class="cta-card reveal">
+                <h2>Ready to transform your hiring?</h2>
+                <p>Join teams already using OpenHire to hire faster, fairer, and at scale.</p>
+                <div class="hero-ctas">
+                    <a href="#" class="btn btn-dark">
+                        Start free trial
+                        <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8m0 0L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                    <a href="#" class="btn btn-outline">Book a demo</a>
+                </div>
+            </div>
+        </div>
+    </section>
 
-    if(reduced || !('IntersectionObserver' in window)){
-      items.forEach(function(el){ el.classList.add('is-in'); });
-      document.querySelectorAll('[data-count-to]').forEach(countUp);
-      return;
-    }
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(entry){
-        if(entry.isIntersecting){
-          entry.target.classList.add('is-in');
-          var counter = entry.target.querySelector('[data-count-to]');
-          if(counter){ countUp(counter); }
-          io.unobserve(entry.target);
+    <footer>
+        <p>OpenHire © 2026 — AI-Powered Interviews for High-Volume Hiring</p>
+    </footer>
+
+    <script>
+        // ─── Scroll reveal ───
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.12 });
+
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // Step rows
+        const stepObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry, i) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => entry.target.classList.add('visible'), i * 100);
+                }
+            });
+        }, { threshold: 0.15 });
+
+        document.querySelectorAll('.step-row').forEach(el => stepObserver.observe(el));
+
+        // ─── Mockup score animation ───
+        const mockupObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.score-fill').forEach((fill, i) => {
+                        setTimeout(() => {
+                            fill.style.width = fill.dataset.width + '%';
+                        }, 200 + i * 150);
+                    });
+                    mockupObserver.disconnect();
+                }
+            });
+        }, { threshold: 0.3 });
+
+        mockupObserver.observe(document.getElementById('mockupCandidates'));
+
+        // ─── Pipeline animation ───
+        const steps = document.querySelectorAll('.p-step');
+        const conns = document.querySelectorAll('.p-conn');
+        const pfDot = document.getElementById('pfDot');
+        const pfText = document.getElementById('pfText');
+        const pfTime = document.getElementById('pfTime');
+
+        const messages = [
+            'Configuring job & rubrics...',
+            'Generating candidate interview link...',
+            'Candidate is completing voice interview...',
+            'AI agents analyzing & scoring transcript...',
+            'Done — <strong>Top 5 candidates ready for review</strong>'
+        ];
+
+        let running = false;
+        let timer = null;
+
+        function fmtTime(s) {
+            return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
         }
-      });
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-    items.forEach(function(el){ io.observe(el); });
-  })();
-</script>
 
+        function resetPipeline() {
+            steps.forEach(s => s.classList.remove('active','done'));
+            conns.forEach(c => {
+                c.querySelector('.p-conn-fill').classList.remove('done');
+                c.querySelector('.p-conn-particle').classList.remove('go');
+            });
+            pfDot.classList.remove('done');
+            pfText.innerHTML = 'Ready — <strong>click to simulate a candidate flow</strong>';
+            pfTime.textContent = '00:00';
+        }
+
+        function runPipeline() {
+            if (running) return;
+            running = true;
+            resetPipeline();
+
+            let elapsed = 0;
+            timer = setInterval(() => {
+                elapsed++;
+                pfTime.textContent = fmtTime(elapsed);
+            }, 1000);
+
+            let idx = 0;
+
+            function next() {
+                if (idx >= steps.length) {
+                    clearInterval(timer);
+                    pfDot.classList.add('done');
+                    pfText.innerHTML = messages[4];
+                    running = false;
+                    setTimeout(resetPipeline, 5000);
+                    return;
+                }
+
+                if (idx > 0) {
+                    steps[idx - 1].classList.remove('active');
+                    steps[idx - 1].classList.add('done');
+                }
+
+                steps[idx].classList.add('active');
+                pfText.innerHTML = messages[idx];
+
+                if (idx > 0) {
+                    const conn = conns[idx - 1];
+                    const fill = conn.querySelector('.p-conn-fill');
+                    const particle = conn.querySelector('.p-conn-particle');
+
+                    particle.classList.remove('go');
+                    void particle.offsetWidth;
+                    particle.classList.add('go');
+
+                    setTimeout(() => fill.classList.add('done'), 100);
+                }
+
+                idx++;
+                setTimeout(next, 1500);
+            }
+
+            next();
+        }
+
+        document.getElementById('pipelineBox').addEventListener('click', runPipeline);
+
+        // Auto-start pipeline when visible
+        const pipelineObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    setTimeout(runPipeline, 800);
+                    pipelineObserver.disconnect();
+                }
+            });
+        }, { threshold: 0.35 });
+
+        pipelineObserver.observe(document.getElementById('pipelineBox'));
+    </script>
 </body>
 </html>
