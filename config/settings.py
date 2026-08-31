@@ -25,7 +25,13 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mock").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# gemini-2.5-flash was retired ("no longer available to new users" per the
+# API's own 404 body) and its successor gemini-3.6-flash took 64-126s on the
+# real resume_parser prompt/schema - well past RESUME_PARSER_TIMEOUT_SECONDS
+# (45s), causing repeated timeout->retry->fallback cycles in production.
+# gemini-flash-lite-latest was verified locally across 3 runs at 2.6-4.8s
+# with identical, fully correct extraction on the same prompt.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 # NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
 # Supports Nemotron ultra-powerful model with extended thinking. Cloud-hosted at
 # integrate.api.nvidia.com. The key is only ever read from the environment - never

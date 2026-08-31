@@ -67,6 +67,12 @@ class GeminiProvider(LLMProvider):
         return types.GenerateContentConfig(
             temperature=kwargs.get("temperature", 0.7),
             max_output_tokens=kwargs.get("max_tokens", 2048),
+            # This provider never passes `tools`, so there is nothing for
+            # Automatic Function Calling to do - only the SDK's own
+            # per-call discovery/dispatch overhead it warns about
+            # ("Direct use of AFC in AsyncModels.generate_content is not
+            # recommended"). Disabling it removes that overhead entirely.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
     async def generate(self, prompt: str, **kwargs) -> str:
