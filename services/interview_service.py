@@ -184,7 +184,21 @@ class InterviewService:
         await runner.start()
 
         session_id = await self._registry.create_session(runner)
-        await self._persist_record(session_id, runner, application_id=application_id)
+
+        # Persist the record and ensure it succeeds - foreign key constraints
+        # in application linking depend on this record existing in the database.
+        record = SessionRecord.from_runner(session_id, runner)
+        record = record.model_copy(update={"application_id": application_id})
+        try:
+            await self._sessions.save(record)
+        except Exception as exc:
+            logger.error(
+                "Failed to persist session record on creation (fatal)",
+                exc_info=True,
+                extra=log_context(event="session_creation_persistence_failure",
+                                  session_id=session_id),
+            )
+            raise
 
         logger.info(
             "session created",
