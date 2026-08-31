@@ -93,8 +93,9 @@ class ResumeMatcherAgent(BaseAgent):
             job_description.preferred_skills
         )
 
-        # Combine exact and semantic skill matching (70% exact, 30% semantic)
-        combined_skill_match = (exact_skill_match * 0.7) + (semantic_skill_score * 0.3)
+        # Combine exact and semantic skill matching (40% exact, 60% semantic)
+        # Semantic matching handles paraphrased skills better than exact matching
+        combined_skill_match = (exact_skill_match * 0.4) + (semantic_skill_score * 0.6)
 
         # Job description semantic similarity
         resume_summary = f"{parsed_resume.summary or ''} {' '.join(parsed_resume.skills)}"
