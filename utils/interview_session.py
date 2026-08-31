@@ -60,6 +60,7 @@ from utils.adaptive_interview import (
     start_question,
     validate_decision,
 )
+from utils.evidence import create_transcript_evidence
 
 # Bounded regeneration budget for a duplicate question (P4 Phase 19): P3's
 # generate_next_question raises DuplicateQuestionError rather than silently
@@ -236,7 +237,26 @@ class InterviewSessionRunner:
         self._state = state
         self.status = SessionStatus.ACTIVE
 
-        return await self._advance()
+        # The opening turn: a personalized greeting +
+        # "tell me about yourself" that runs BEFORE the adaptive engine's
+        # first ask_new decision. It bypasses decide_next_action()/
+        # start_question() entirely - it has no target_competency and isn't
+        # a P3 decision, just a fixed first turn - and does not count
+        # against questions_asked (see submit_answer's introduction branch
+        # for the matching questions_answered exclusion), so the adaptive
+        # budget (MAX_QUESTIONS_PER_INTERVIEW) is unaffected by it.
+        try:
+            intro_question = await self.interviewer.generate_introduction(
+                self.job_description, self.parsed_resume,
+            )
+        except Exception as exc:
+            # Same failure-safety contract as _generate_question_with_retry:
+            # a failure here must fail the session explicitly, never leave
+            # it ACTIVE with no question generated and no reported error.
+            self.status = SessionStatus.FAILED
+            raise InterviewSessionError(f"Question generation failed: {exc}") from exc
+        self._state = self._state.model_copy(update={"current_question": intro_question})
+        return intro_question
 
     async def submit_answer(self, answer_text: str) -> AnswerSubmissionResult:
         """The central operation (P4 Phase 5). See module docstring for the
@@ -277,6 +297,47 @@ class InterviewSessionRunner:
             # analysis it must be stored separately, never in this field.
             answer = InterviewAnswer(question_id=question.question_id, answer_text=answer_text)
             self.last_failed_answer = None
+
+            if question.question_type == "introduction":
+                # The opening turn is never evaluated or scored against a
+                # competency (see start()'s introduction comment) - it is
+                # recorded into the transcript directly, bypassing
+                # evaluate_answer()/record_answer() entirely so it can never
+                # write a competency_scores/confidence/evidence_coverage
+                # entry. questions_answered is deliberately NOT incremented
+                # (start() already excluded it from questions_asked), so it
+                # never counts against MAX_QUESTIONS_PER_INTERVIEW or any
+                # progress readout that reads those counters.
+                state = self.get_state().model_copy(update={
+                    "current_question": None,
+                    "exchanges": self.get_state().exchanges + [(question, answer)],
+                    "last_activity_time": datetime.now(timezone.utc).isoformat(),
+                })
+                self._state = state
+                self._previous_answer = answer
+
+                next_question = await self._advance()
+
+                evidence = create_transcript_evidence(
+                    text=answer.answer_text,
+                    question_id=question.question_id,
+                    agent="interviewer",
+                    explanation="Candidate's opening introduction - not evaluated against a competency.",
+                    candidate_id=state.candidate_id,
+                    answer_id=question.question_id,
+                    evidence_type="supporting",
+                    competency=None,
+                )
+                result = AnswerSubmissionResult(
+                    question=question,
+                    answer=answer,
+                    evidence=evidence,
+                    next_question=next_question,
+                    session_status=self.status,
+                    termination_reason=self._state.termination_reason if self._state else None,
+                )
+                self._last_submission_by_question[pending_id] = result
+                return result
 
             try:
                 evaluation = await self.interviewer.evaluate_answer(

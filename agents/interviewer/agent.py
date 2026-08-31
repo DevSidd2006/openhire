@@ -149,6 +149,43 @@ class InterviewerAgent(BaseAgent):
     # drives them.
     # -----------------------------------------------------------------
 
+    async def generate_introduction(
+        self,
+        job_description: JobDescription,
+        parsed_resume: ParsedResume,
+    ) -> InterviewQuestion:
+        """Phrase the interview's opening greeting - a personalized, resume-
+        aware "welcome, tell me about yourself" turn that runs BEFORE the
+        adaptive engine's first ask_new decision. Unlike every other
+        question this agent phrases, this one has no target_competency and
+        is never scored (see utils/interview_session.py's submit_answer:
+        an "introduction" question_type is recorded into the transcript
+        without going through evaluate_answer()/record_answer(), so it can
+        never contaminate a competency's score, confidence, or evidence
+        coverage)."""
+        prompt = self.load_prompt("interview_intro.md")
+        prompt = prompt.format(
+            job_description=job_description.description,
+            candidate_resume=parsed_resume.raw_text or f"{parsed_resume.candidate_name}: {parsed_resume.skills}",
+        )
+
+        result: AdaptiveQuestionResult = await self.call_llm_structured(
+            prompt,
+            schema=AdaptiveQuestionResult.model_json_schema(),
+            validate=AdaptiveQuestionResult.model_validate,
+        )
+
+        return InterviewQuestion(
+            question_id=f"q_{parsed_resume.candidate_id}_intro",
+            question_text=result.question_text,
+            category="introduction",
+            competency=None,
+            difficulty=result.difficulty,
+            reason=result.reason,
+            expected_duration_seconds=result.expected_duration_seconds,
+            question_type="introduction",
+        )
+
     async def evaluate_answer(
         self,
         question: InterviewQuestion,

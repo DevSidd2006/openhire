@@ -134,6 +134,14 @@ def _turn_payload(
             if result.submission is not None and result.submission.next_question is not None
             else None
         ),
+        # `speak_question`'s reply (the very first question, and any
+        # reconnect replay) never advances the interview, so `submission`
+        # is always None and `next_question` above is always null - but the
+        # question text itself is not: VoiceTurnResult.next_question_text
+        # carries it (utils/voice_turn.py:speak_current_question). Without
+        # this field on the wire, a client relying solely on `next_question`
+        # never learns the question's text at all, only its audio.
+        "next_question_text": result.next_question_text,
         "question_audio_base64": _encode_audio(result.question_audio),
         "audio_format": result.audio_format,
         "tts_error": result.tts_error,

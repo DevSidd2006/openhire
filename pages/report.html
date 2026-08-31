@@ -196,12 +196,20 @@
         : 'The multi-agent evaluation pipeline is still running. This page will refresh automatically.';
   }
 
+  // A "no_interview" sentinel is distinct from `null`: `null` means an
+  // interview happened but its evaluation hasn't been triggered/finished
+  // yet (worth polling for); "no_interview" means this application has no
+  // session_id at all - most commonly because it was rejected at matching
+  // and never reached an interview - so no evaluation will EVER appear no
+  // matter how long this page waits.
   async function resolveEvaluation() {
     if (sessionId) {
       const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
       return data.evaluation;
     }
     if (appId) {
+      const app = await apiRequest(`/applications/${encodeURIComponent(appId)}`);
+      if (!app.application.session_id) return 'no_interview';
       const data = await apiRequest(`/applications/${encodeURIComponent(appId)}/evaluation`);
       return data.evaluation;
     }
@@ -212,6 +220,7 @@
       const list = await apiRequest(`/applications?job_id=${encodeURIComponent(jobId)}`);
       const application = (list.applications || []).find(a => a.candidate_id === candidateId);
       if (!application) return null;
+      if (!application.session_id) return 'no_interview';
       const data = await apiRequest(`/applications/${encodeURIComponent(application.application_id)}/evaluation`);
       return data.evaluation;
     }
@@ -228,6 +237,14 @@
         document.getElementById('recommendationText').textContent = 'NO EVALUATION LINK PROVIDED';
         document.getElementById('recommendationExplanation').textContent =
           'Open this page from an interview, application, or leaderboard entry.';
+        return;
+      }
+      if (evaluation === 'no_interview') {
+        document.getElementById('reportHeaderMeta').textContent = 'No report to display.';
+        document.getElementById('recommendationText').textContent = 'NO INTERVIEW CONDUCTED';
+        document.getElementById('recommendationText').style.color = 'var(--text-muted)';
+        document.getElementById('recommendationExplanation').textContent =
+          'This application has not had an interview session started, so there is nothing to evaluate yet.';
         return;
       }
       if (!evaluation || evaluation.status === 'pending' || evaluation.status === 'running') {

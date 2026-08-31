@@ -24,7 +24,13 @@
     justify-content: center;
     align-items: center;
     padding: 2rem 1rem;
+    padding-right: 320px;
     position: relative;
+  }
+
+  @media (max-width: 900px) {
+    main { padding-right: 1rem; }
+    #transcriptPanel { display: none; }
   }
 
   .interview-header {
@@ -135,13 +141,18 @@
   .controls {
     position: fixed;
     bottom: 6.5rem;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 300px;
     display: flex;
     justify-content: center;
     gap: 1rem;
     flex-wrap: wrap;
     z-index: 10;
+  }
+
+  @media (max-width: 900px) {
+    .controls { right: 0; }
+    .question-bar { right: 0; }
   }
 
   .btn-end {
@@ -171,10 +182,11 @@
   }
 
   .question-bar {
-    position: absolute;
+    position: fixed;
     bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 300px;
+    margin: 0 auto;
     background: rgba(17, 24, 39, 0.9);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(107, 114, 128, 0.2);
@@ -255,8 +267,14 @@
   </div>
 
   <div class="controls">
+    <button id="micBtn" style="background:#16a34a; color:#fff; border:none; padding:0.75rem 1.5rem; border-radius:24px; font-size:14px; font-weight:600; cursor:pointer;">
+      🎤 Tap to speak
+    </button>
     <button class="btn-end" id="endBtn" onclick="window.history.back()">
       ✕ End interview
+    </button>
+    <button id="replayBtn" style="display:none; background:#4f46e5; color:#fff; border:none; padding:0.75rem 1.5rem; border-radius:24px; font-size:14px; font-weight:600; cursor:pointer; align-items:center; gap:0.5rem;">
+      🔊 Tap to hear question
     </button>
   </div>
 
@@ -264,6 +282,20 @@
     Loading interview question...
   </div>
 </main>
+
+<div id="transcriptPanel" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:rgba(17,24,39,0.95); border-left:1px solid rgba(107,114,128,0.2); padding:1rem; overflow-y:auto; box-sizing:border-box; z-index:20;">
+  <h3 style="color:#fff; font-size:14px; margin:0 0 1rem 0;">Transcript</h3>
+  <div id="transcriptLog"></div>
+</div>
+
+<div id="startOverlay" style="position:fixed; inset:0; background:rgba(10,14,23,0.95); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; z-index:100;">
+  <div style="color:#fff; font-size:16px; text-align:center; max-width:400px; padding:0 1rem;">
+    Click below to start - your browser blocks audio from playing automatically, so this gets things going.
+  </div>
+  <button id="startBtn" style="background:#4f46e5; color:#fff; border:none; padding:1rem 2rem; border-radius:24px; font-size:16px; font-weight:600; cursor:pointer;">
+    ▶ Start Interview
+  </button>
+</div>
 
 <script>
   // Configuration for different environments
@@ -335,19 +367,49 @@ function b64(buf) {
   return btoa(s);
 }
 
+let lastAudioBlobUrl = null;
+
 function play(b64audio, format) {
   if (!b64audio) return;
   const bin = atob(b64audio);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
-  new Audio(URL.createObjectURL(blob)).play().catch(() => {
-    console.log('Autoplay blocked by browser');
+  lastAudioBlobUrl = URL.createObjectURL(blob);
+  new Audio(lastAudioBlobUrl).play().catch(() => {
+    // The browser blocked this specific playback (e.g. it decided the page
+    // hasn't "really" been interacted with recently enough) - show a
+    // visible, clickable way to hear it instead of failing silently.
+    console.log('[voice] Autoplay blocked by browser - showing replay button');
+    document.getElementById('replayBtn').style.display = 'inline-flex';
   });
 }
 
+document.getElementById('replayBtn').onclick = () => {
+  if (!lastAudioBlobUrl) return;
+  new Audio(lastAudioBlobUrl).play().catch((e) => console.error('[voice] Replay failed:', e));
+  document.getElementById('replayBtn').style.display = 'none';
+};
+
 function updateQuestion(text) {
   document.getElementById('questionBar').textContent = text || 'Loading question...';
+}
+
+function addTranscriptEntry(speaker, text) {
+  if (!text) return;
+  const log = document.getElementById('transcriptLog');
+  const entry = document.createElement('div');
+  entry.style.marginBottom = '1rem';
+  const label = document.createElement('div');
+  label.textContent = speaker;
+  label.style.cssText = 'font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; color:' + (speaker === 'Interviewer' ? '#818cf8' : '#34d399');
+  const body = document.createElement('div');
+  body.textContent = text;
+  body.style.cssText = 'font-size:13px; color:#d1d5db; line-height:1.4;';
+  entry.appendChild(label);
+  entry.appendChild(body);
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
 }
 
 function updateAIStatus(text) {
@@ -389,17 +451,42 @@ function connectToSession(id) {
 
       if (msg.type === "error") {
         console.error('[voice] Server error:', msg.error);
+        // Voice (TTS) can fail independently of the question itself being
+        // ready - fall back to the question's text over REST so the page
+        // never gets stuck on "Loading interview question..." just because
+        // audio failed.
+        try {
+          const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
+          if (state.current_question) {
+            updateQuestion(state.current_question.question_text);
+            updateAIStatus('Listening (audio unavailable)');
+            updateUserStatus('Mic on');
+            addTranscriptEntry('Interviewer', state.current_question.question_text);
+          }
+        } catch (fetchErr) {
+          console.error('[voice] Fallback question fetch failed:', fetchErr);
+        }
         return;
       }
 
       if (msg.transcript) {
         updateUserStatus('Responded');
+        addTranscriptEntry('You', msg.transcript);
       }
 
       if (msg.next_question) {
         updateQuestion(msg.next_question.question_text);
         updateAIStatus('Listening');
         updateUserStatus('Mic on');
+        addTranscriptEntry('Interviewer', msg.next_question.question_text);
+      } else if (msg.next_question_text) {
+        // The initial speak_question reply (and any reconnect replay) never
+        // advances the interview, so next_question above is always null -
+        // the question text only ever arrives via this field.
+        updateQuestion(msg.next_question_text);
+        updateAIStatus('Listening');
+        updateUserStatus('Mic on');
+        addTranscriptEntry('Interviewer', msg.next_question_text);
       }
 
       if (msg.status === "sealed") {
@@ -419,8 +506,84 @@ function connectToSession(id) {
   };
 }
 
+// Browser-native speech recognition (Web Speech API) is the primary
+// capture path: it transcribes in the browser and sends plain text over
+// the "answer_text" message, which the server already supports
+// (api/routes/voice.py) exactly like a server-transcribed audio answer -
+// same submit_text_answer()/InterviewSessionRunner.submit_answer() path,
+// same evaluation. Falls back to raw audio capture (server-side STT) only
+// when the browser has no SpeechRecognition (e.g. Firefox).
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recognizedText = '';
+
 async function startRecording() {
   if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
+  if (SpeechRec) return startRecordingBrowserStt();
+  return startRecordingServerAudio();
+}
+
+function stopRecording() {
+  if (!capturing) return;
+  if (recognition) return stopRecordingBrowserStt();
+  return stopRecordingServerAudio();
+}
+
+function startRecordingBrowserStt() {
+  capturing = true;
+  updateMicButton();
+  recognizedText = '';
+  recognition = new SpeechRec();
+  recognition.lang = 'en-US';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        recognizedText += (recognizedText ? ' ' : '') + event.results[i][0].transcript;
+      }
+    }
+  };
+  recognition.onerror = (e) => {
+    console.error('[voice] SpeechRecognition error:', e.error);
+  };
+  recognition.onend = () => {
+    recognition = null;
+    const text = recognizedText.trim();
+    if (!text) {
+      updateUserStatus('Mic on');
+      return;
+    }
+    updateAIStatus('Evaluating');
+    updateUserStatus('Sending...');
+    ws.send(JSON.stringify({
+      type: "answer_text",
+      transcript: text,
+      utterance_id: crypto.randomUUID(),
+    }));
+  };
+  try {
+    recognition.start();
+  } catch (e) {
+    console.error('[voice] SpeechRecognition failed to start:', e);
+    capturing = false;
+    updateMicButton();
+    recognition = null;
+    updateUserStatus('Mic denied');
+    return;
+  }
+  updateUserStatus('Speaking');
+  updateAIStatus('Listening');
+}
+
+function stopRecordingBrowserStt() {
+  capturing = false;
+  updateMicButton();
+  // recognition.onend fires asynchronously and sends the transcript.
+  recognition.stop();
+}
+
+async function startRecordingServerAudio() {
   try {
     stream = stream || await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
@@ -437,6 +600,7 @@ async function startRecording() {
 
   pcmChunks = [];
   capturing = true;
+  updateMicButton();
   source = audioCtx.createMediaStreamSource(stream);
   node = audioCtx.createScriptProcessor(4096, 1, 1);
   node.onaudioprocess = (e) => {
@@ -453,9 +617,9 @@ async function startRecording() {
   updateAIStatus('Listening');
 }
 
-function stopRecording() {
-  if (!capturing) return;
+function stopRecordingServerAudio() {
   capturing = false;
+  updateMicButton();
   try { source && source.disconnect(); node && node.disconnect(); } catch (e) {}
 
   const total = pcmChunks.reduce((n, c) => n + c.length, 0);
@@ -480,25 +644,55 @@ function stopRecording() {
   }));
 }
 
-// Mouse/touch controls for recording
-document.addEventListener('mousedown', (e) => {
-  if (e.target.id === 'endBtn') return;
-  if (e.target.closest('.btn-end')) return;
-  startRecording();
-});
+// Mic on/off toggle (replaces press-and-hold, which was too easy to
+// interrupt accidentally - a stray mouseleave/touch-cancel would abort
+// SpeechRecognition mid-sentence).
+function updateMicButton() {
+  const btn = document.getElementById('micBtn');
+  if (capturing) {
+    btn.textContent = '🔴 Tap to stop';
+    btn.style.background = '#dc2626';
+  } else {
+    btn.textContent = '🎤 Tap to speak';
+    btn.style.background = '#16a34a';
+  }
+}
 
-document.addEventListener('mouseup', stopRecording);
-document.addEventListener('mouseleave', stopRecording);
-document.addEventListener('touchstart', (e) => {
-  if (!e.target.closest('.btn-end')) startRecording();
-});
-document.addEventListener('touchend', stopRecording);
+document.getElementById('micBtn').onclick = () => {
+  if (capturing) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+};
 
 // Load session on page load
-window.addEventListener('load', () => {
+document.getElementById('startBtn').onclick = async () => {
+  document.getElementById('startOverlay').style.display = 'none';
+  // Ask for the mic up front, inside this click, rather than waiting for
+  // the candidate's first press-and-hold - getUserMedia is what actually
+  // triggers the browser's permission prompt (SpeechRecognition draws on
+  // the same microphone permission but won't prompt proactively on its
+  // own). The stream itself isn't needed yet, so it's stopped immediately;
+  // startRecordingServerAudio() (the no-SpeechRecognition fallback path)
+  // re-acquires its own stream when actually recording.
+  try {
+    const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+    probe.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    console.error('[voice] Microphone permission denied:', e);
+    updateUserStatus('Mic denied');
+  }
   if (sessionId) {
     connectToSession(sessionId);
   } else {
+    updateQuestion('No session ID specified.');
+  }
+};
+
+window.addEventListener('load', () => {
+  if (!sessionId) {
+    document.getElementById('startOverlay').style.display = 'none';
     updateQuestion('No session ID specified.');
   }
 });

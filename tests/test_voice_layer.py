@@ -75,6 +75,13 @@ def _question_script(*texts):
     return script
 
 
+def _intro_json():
+    return json.dumps({
+        "question_text": "Welcome! Tell me about yourself.", "question_type": "introduction",
+        "difficulty": "easy", "reason": "Opening greeting", "expected_duration_seconds": 45,
+    })
+
+
 def _runner(job=None, resume=None, script=None, max_questions=None) -> InterviewSessionRunner:
     job = job or _job()
     resume = resume or _resume()
@@ -85,6 +92,15 @@ def _runner(job=None, resume=None, script=None, max_questions=None) -> Interview
         job, resume, interviewer=interviewer,
         candidate_id=resume.candidate_id, max_questions=max_questions,
     )
+
+
+async def _start_past_intro(runner, intro_answer="Hi, I'm the candidate."):
+    """Clears the introduction turn (never scored, never counted toward
+    questions_asked/questions_answered) via the plain text path, so a
+    test's actual STT/TTS/replay assertions land on the real first
+    question instead."""
+    await runner.start()
+    return await runner.submit_answer(intro_answer)
 
 
 def _service(stt=None, tts=None) -> VoiceTurnService:
@@ -162,8 +178,8 @@ class TestVoiceSessionLifecycle:
     @pytest.mark.asyncio
     async def test_6_7_full_voice_interview_seals_transcript_correctly(self):
         service = _service(stt=MockAudioProcessor(script=["Answer one.", "Answer two."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?"), max_questions=2)
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?"), max_questions=2)
+        await _start_past_intro(runner)
         assert runner.status == SessionStatus.ACTIVE
 
         first = await service.submit_audio_answer(runner, b"a1")
@@ -175,9 +191,10 @@ class TestVoiceSessionLifecycle:
 
         transcript = runner.get_transcript()
         assert transcript.is_sealed is True
-        assert len(transcript.exchanges) == 2
-        assert transcript.exchanges[0][1].answer_text == "Answer one."
-        assert transcript.exchanges[1][1].answer_text == "Answer two."
+        # +1 for the introduction exchange, recorded but never scored.
+        assert len(transcript.exchanges) == 3
+        assert transcript.exchanges[1][1].answer_text == "Answer one."
+        assert transcript.exchanges[2][1].answer_text == "Answer two."
         # Every exchange's answer references its own question.
         assert all(q.question_id == a.question_id for q, a in transcript.exchanges)
 
@@ -205,10 +222,11 @@ class TestVoiceCandidateIsolation:
     @pytest.mark.asyncio
     async def test_8_two_voice_sessions_never_cross_candidate_or_job(self):
         service = _service(stt=MockAudioProcessor(script=["Answer from A."]))
-        runner_a = _runner(job=_job("job_A"), resume=_resume("cand_A"))
-        runner_b = _runner(job=_job("job_B"), resume=_resume("cand_B"))
-        await runner_a.start()
-        await runner_b.start()
+        script = [_intro_json()] + _question_script("Q1?", "Q2?", "Q3?")
+        runner_a = _runner(job=_job("job_A"), resume=_resume("cand_A"), script=list(script))
+        runner_b = _runner(job=_job("job_B"), resume=_resume("cand_B"), script=list(script))
+        await _start_past_intro(runner_a)
+        await _start_past_intro(runner_b)
 
         # One shared VoiceTurnService drives both - it must hold no
         # per-session state of its own.
@@ -264,8 +282,8 @@ class TestVoiceFailureSemantics:
             stt=MockAudioProcessor(script=["A real answer."]),
             tts=MockSpeechSynthesizer(script=[SpeechPermanentError("tts down")]),
         )
-        runner = _runner(script=_question_script("Q1?", "Q2?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?"))
+        await _start_past_intro(runner)
 
         result = await service.submit_audio_answer(runner, b"audio")
 
@@ -340,8 +358,8 @@ class TestVoiceReplayAndDisconnectSafety:
         makes this safe - the voice layer inherits it for free by going
         through submit_answer() rather than reimplementing turn handling."""
         service = _service(stt=MockAudioProcessor(script=["Answer one.", "Answer one."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?", "Q3?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?", "Q3?"))
+        await _start_past_intro(runner)
         first_question_id = runner.get_current_question().question_id
 
         first = await service.submit_audio_answer(runner, b"same-audio")
@@ -366,8 +384,8 @@ class TestVoiceReplayAndDisconnectSafety:
         questions is not inherently wrong). Only the client knows "this is
         the same recording", so it supplies utterance_id."""
         service = _service(stt=MockAudioProcessor(script=["Answer one.", "Answer two."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?", "Q3?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?", "Q3?"))
+        await _start_past_intro(runner)
 
         first = await service.submit_audio_answer(runner, b"audio", utterance_id="utt-1")
         assert runner.get_state().questions_answered == 1
@@ -382,8 +400,8 @@ class TestVoiceReplayAndDisconnectSafety:
     async def test_12_a_distinct_utterance_is_still_accepted(self):
         """The replay guard must not block a genuinely new recording."""
         service = _service(stt=MockAudioProcessor(script=["Answer one.", "Answer two."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?", "Q3?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?", "Q3?"))
+        await _start_past_intro(runner)
 
         await service.submit_audio_answer(runner, b"audio-1", utterance_id="utt-1")
         await service.submit_audio_answer(runner, b"audio-2", utterance_id="utt-2")
@@ -395,10 +413,11 @@ class TestVoiceReplayAndDisconnectSafety:
         """utterance_id "utt-1" in session A must never suppress a turn in
         session B - the cache is keyed by (interview_id, utterance_id)."""
         service = _service(stt=MockAudioProcessor(script=["Answer A.", "Answer B."]))
-        runner_a = _runner(job=_job("job_A"), resume=_resume("cand_A"))
-        runner_b = _runner(job=_job("job_B"), resume=_resume("cand_B"))
-        await runner_a.start()
-        await runner_b.start()
+        script = [_intro_json()] + _question_script("Q1?", "Q2?", "Q3?")
+        runner_a = _runner(job=_job("job_A"), resume=_resume("cand_A"), script=list(script))
+        runner_b = _runner(job=_job("job_B"), resume=_resume("cand_B"), script=list(script))
+        await _start_past_intro(runner_a)
+        await _start_past_intro(runner_b)
 
         await service.submit_audio_answer(runner_a, b"audio", utterance_id="utt-1")
         await service.submit_audio_answer(runner_b, b"audio", utterance_id="utt-1")
@@ -411,8 +430,8 @@ class TestVoiceReplayAndDisconnectSafety:
         """A "no speech" turn recorded nothing, so a genuine retry with the
         same utterance_id must get a fresh attempt, not a sticky verdict."""
         service = _service(stt=MockAudioProcessor(script=["", "A real answer."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?", "Q3?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?", "Q3?"))
+        await _start_past_intro(runner)
 
         first = await service.submit_audio_answer(runner, b"silence", utterance_id="utt-1")
         assert first.outcome == VoiceTurnOutcome.NO_SPEECH_DETECTED
@@ -426,8 +445,8 @@ class TestVoiceReplayAndDisconnectSafety:
         """A dropped connection is simply "no further calls" - the runner
         holds all state, so a new transport can resume mid-interview."""
         service = _service(stt=MockAudioProcessor(script=["Answer one.", "Answer two."]))
-        runner = _runner(script=_question_script("Q1?", "Q2?", "Q3?"))
-        await runner.start()
+        runner = _runner(script=[_intro_json()] + _question_script("Q1?", "Q2?", "Q3?"))
+        await _start_past_intro(runner)
 
         await service.submit_audio_answer(runner, b"a1")
         state_after_disconnect = runner.get_state()
