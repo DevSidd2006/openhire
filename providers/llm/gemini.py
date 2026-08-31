@@ -110,6 +110,12 @@ class GeminiProvider(LLMProvider):
         fabricated data.
         """
         from google.genai import types
+        # Structured output (a full nested schema like ResumeParseResult)
+        # needs far more headroom than generate()'s 2048-token default -
+        # verified locally: a real resume prompt against ResumeParseResult
+        # hit finish_reason=MAX_TOKENS at 2048 and completed correctly at
+        # 8192.
+        kwargs.setdefault("max_tokens", 8192)
         config = self._config(**kwargs)
         config.response_mime_type = "application/json"
         config.response_json_schema = schema

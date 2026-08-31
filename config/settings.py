@@ -31,11 +31,17 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 # integrate.api.nvidia.com. The key is only ever read from the environment - never
 # hard-coded, logged, or reported.
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
-# P8B.5: nemotron-3-ultra-550b-a55b (the previous default) never returned
-# within the 45s RESUME_PARSER_TIMEOUT_SECONDS in production - verified
-# locally to hang past 50s with no response at all, then eventually 503 from
-# NVIDIA's hosted infra. nemotron-3-nano-30b-a3b responded in ~0.4-0.5s for
-# both plain and JSON-mode calls against the same account/key.
+# P8B.5: nemotron-3-ultra-550b-a55b never returned within the 45s
+# RESUME_PARSER_TIMEOUT_SECONDS in production - verified locally to hang
+# past 50s with no response at all. The smaller nemotron-3-nano-30b-a3b was
+# tried as a replacement and is fast (~0.4-0.5s), but on the ACTUAL resume
+# parser prompt (schemas/llm_outputs.py:ResumeParseResult, security-hardened
+# against prompt injection) it returned a hallucinated, unrelated response
+# instead of a JSON parse error - unlike a timeout, this a caller could
+# mistake for a real result. LLM_PROVIDER=gemini is the verified-working
+# alternative for structured extraction (see providers/llm/gemini.py); this
+# default is kept only for whichever call sites don't need structured
+# extraction reliability.
 NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 

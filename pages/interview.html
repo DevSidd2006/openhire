@@ -507,7 +507,7 @@ window.addEventListener('load', () => {
 document.getElementById('endBtn').onclick = async () => {
   const appId = new URLSearchParams(window.location.search).get('app_id') || '';
   try {
-    await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
+    await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
   } catch (e) {
     console.error('Error finishing session:', e);
   }
