@@ -5,6 +5,7 @@ way from a specific transcript answer through to the leaderboard:
     candidate -> question -> answer -> evidence -> competency -> score -> report -> leaderboard
 
 Never makes a real API call (mock provider only)."""
+from tests.rubric_fixtures import approved_rubric
 import pytest
 
 from data import load_job_description, load_all_resumes, load_interview_transcript
@@ -38,9 +39,17 @@ def _build_state(run_id: str) -> PipelineState:
         candidates_resume_texts=[r.raw_text for r in parsed_resumes],
         interview_transcripts=interview_transcripts,
         job_description=None,
+            # Matching is rubric-driven; a job with no approved rubric
+            # is deliberately not scorable.
+            job_rubric=approved_rubric(),
         parsed_resumes={},
         matching_scores={},
         shortlisted_candidates=[],
+        # This test exercises the interview/evaluation half of the pipeline,
+        # which is now gated behind an explicit recruiter decision: matching
+        # alone never advances a candidate to interview. Advancing here is
+        # what a recruiter would do after reading the leaderboard.
+        recruiter_advanced_candidates=list(interview_transcripts),
         interview_questions={},
         technical_evaluations={},
         behavioral_evaluations={},

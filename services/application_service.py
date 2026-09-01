@@ -30,6 +30,7 @@ from core.errors import ConflictError, NotFoundError
 from core.logging import get_logger, log_context
 from repositories.interfaces import (
     ApplicationRepository,
+    RubricRepository,
     CandidateRepository,
     JobRepository,
 )
@@ -82,11 +83,13 @@ class ApplicationService:
         job_repository: JobRepository,
         candidate_repository: CandidateRepository,
         matching_service: MatchingService,
+        rubric_repository: RubricRepository | None = None,
     ) -> None:
         self._applications = application_repository
         self._jobs = job_repository
         self._candidates = candidate_repository
         self._matching = matching_service
+        self._rubrics = rubric_repository
 
     # ------------------------------------------------------------------
     # Commands
@@ -165,14 +168,45 @@ class ApplicationService:
                 internal_detail=f"job_id={job_id!r} not found",
             )
 
+        rubric = (
+            await self._rubrics.get_approved_for_job(job_id) if self._rubrics else None
+        )
+
         applications = await self._applications.list_for_job(job_id)
         pending = [a for a in applications if a.status == ApplicationStatus.SUBMITTED]
+
+        if rubric is None:
+            # A job with no approved rubric is deliberately not scorable.
+            # Applications are queued rather than scored against an
+            # unreviewed rubric, and are picked up once one is approved.
+            for application in pending:
+                await self._applications.save(
+                    application.model_copy(
+                        update={"status": ApplicationStatus.SCORING_PENDING}
+                    )
+                )
+            logger.info(
+                "matching skipped: no approved rubric",
+                extra=log_context(event="matching_no_rubric", job_id=job_id),
+            )
+            return MatchingRunResult(job_id=job_id, attempted=0)
+
+        # A scored application now STAYS submitted (scoring is not a
+        # decision), so "already decided" can no longer be inferred from
+        # status alone. Idempotency is instead keyed on the rubric version an
+        # application was last scored against: re-running matching re-scores
+        # only what a new rubric version has invalidated.
+        pending = [
+            a for a in pending
+            if a.matching_score is None
+            or a.matching_score.rubric_version != rubric.version
+        ]
 
         result = MatchingRunResult(job_id=job_id, attempted=len(pending))
         # Already-decided applications are still part of "ranked
         # candidates" for this job - included so a caller sees the whole
         # picture, not just this run's deltas.
-        already_decided = [a for a in applications if a.status != ApplicationStatus.SUBMITTED]
+        already_decided = [a for a in applications if a not in pending]
 
         for application in pending:
             candidate_record = await self._candidates.get(application.candidate_id)
@@ -192,10 +226,18 @@ class ApplicationService:
 
             try:
                 matching_score = await self._matching.compute_match(
-                    job_record.job, candidate_record.resume
+                    rubric, candidate_record.resume
                 )
             except Exception as exc:  # noqa: BLE001 - a per-candidate failure must not abort the batch
                 result.errors.append(application.candidate_id)
+                # A system failure must never look like a candidate failure:
+                # park the application rather than leaving it unscored and
+                # indistinguishable from one nobody has looked at.
+                await self._applications.save(
+                    application.model_copy(
+                        update={"status": ApplicationStatus.SCORING_PENDING}
+                    )
+                )
                 logger.error(
                     "matching failed for one candidate, continuing batch: %s",
                     exc,
@@ -206,10 +248,14 @@ class ApplicationService:
                 )
                 continue
 
+            # Scoring ranks and explains; it does not decide. A scored
+            # application stays SUBMITTED and awaits a recruiter. Thin
+            # evidence is surfaced as NEEDS_HUMAN_REVIEW - an unknown, not a
+            # reject.
             new_status = (
-                ApplicationStatus.SHORTLISTED
-                if matching_score.shortlist_recommendation
-                else ApplicationStatus.REJECTED
+                ApplicationStatus.NEEDS_HUMAN_REVIEW
+                if matching_score.needs_human_review
+                else ApplicationStatus.SUBMITTED
             )
             updated = application.model_copy(
                 update={"matching_score": matching_score, "status": new_status}
@@ -219,7 +265,11 @@ class ApplicationService:
 
         result.applications.extend(already_decided)
         result.applications.sort(
-            key=lambda a: a.matching_score.match_score if a.matching_score else -1.0,
+            key=lambda a: (
+                a.matching_score.match_score
+                if a.matching_score and a.matching_score.match_score is not None
+                else -1.0
+            ),
             reverse=True,
         )
 
@@ -348,7 +398,11 @@ class ApplicationService:
             if a.status in (ApplicationStatus.SHORTLISTED, ApplicationStatus.INTERVIEW_LINKED)
         ]
         shortlisted.sort(
-            key=lambda a: a.matching_score.match_score if a.matching_score else 0.0,
+            key=lambda a: (
+                a.matching_score.match_score
+                if a.matching_score and a.matching_score.match_score is not None
+                else 0.0
+            ),
             reverse=True,
         )
         return shortlisted

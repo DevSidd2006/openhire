@@ -123,7 +123,9 @@ CREATE TABLE IF NOT EXISTS applications (
     -- Exact ApplicationStatus values (schemas/application.py) - lowercase,
     -- matching the Enum's actual string values, not its member names.
     status          text NOT NULL DEFAULT 'submitted'
-                        CHECK (status IN ('submitted', 'shortlisted', 'rejected', 'interview_linked')),
+                        CHECK (status IN ('submitted', 'shortlisted', 'rejected',
+                                          'interview_linked', 'scoring_pending',
+                                          'needs_human_review')),
     matching_score  jsonb,
     session_id      text,
     created_at      timestamptz NOT NULL DEFAULT now(),
@@ -282,3 +284,38 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_job_id_status
     ON evaluations (job_id, status);
 
 COMMIT;
+
+-- ============================================================================
+-- Evidence-bound matching: versioned rubrics.
+-- ============================================================================
+
+-- The rubric itself is stored as jsonb, matching how `jobs.job` and
+-- `applications.matching_score` store their aggregates. job_id/version/status
+-- are promoted to columns because they are queried and constrained.
+--
+-- Competency scores and their citations are NOT stored separately: they live
+-- inside applications.matching_score (MatchingScore.competency_verdicts), and
+-- the resume spans a verdict cites are re-derivable from the parsed resume,
+-- because span ids are content-hashed and deterministic
+-- (services/resume_spans.py). Storing them twice would only create drift.
+CREATE TABLE IF NOT EXISTS job_rubrics (
+    rubric_id    text PRIMARY KEY,
+    job_id       text NOT NULL REFERENCES jobs (job_id),
+    version      integer NOT NULL,
+    -- Exact RubricStatus values (schemas/rubric.py).
+    status       text NOT NULL
+                     CHECK (status IN ('draft', 'approved', 'superseded')),
+    rubric       jsonb NOT NULL,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz,
+
+    CONSTRAINT uq_job_rubrics_job_version UNIQUE (job_id, version)
+);
+
+-- At most one approved rubric per job. A leaderboard whose rows were scored
+-- under different rubric versions has incomparable ranks, so this is a real
+-- constraint rather than a service-layer convention.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_job_rubrics_one_approved
+    ON job_rubrics (job_id) WHERE status = 'approved';
+
+CREATE INDEX IF NOT EXISTS ix_job_rubrics_job_id ON job_rubrics (job_id);

@@ -78,6 +78,7 @@ from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.application import Application
+from schemas.rubric import JobRubric
 from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
@@ -670,3 +671,37 @@ __all__ = [
     "UserRecord",
     "UserRepository",
 ]
+
+
+class RubricRepository(ABC):
+    """Storage for versioned job rubrics.
+
+    At most one APPROVED rubric exists per job at any time; approving a new
+    version supersedes the old one. That invariant is what keeps a
+    leaderboard from mixing rows scored under different rubrics, which would
+    make ranks incomparable.
+    """
+
+    @abstractmethod
+    async def save(self, rubric: "JobRubric") -> "JobRubric":
+        """Persist a rubric (draft or otherwise)."""
+
+    @abstractmethod
+    async def get(self, rubric_id: str) -> Optional["JobRubric"]:
+        """Fetch one rubric by id, whatever its status."""
+
+    @abstractmethod
+    async def get_approved_for_job(self, job_id: str) -> Optional["JobRubric"]:
+        """The job's single active rubric, or None if it is not yet scorable."""
+
+    @abstractmethod
+    async def list_versions_for_job(self, job_id: str) -> list["JobRubric"]:
+        """Every version for a job, oldest first."""
+
+    @abstractmethod
+    async def approve(self, rubric_id: str) -> "JobRubric":
+        """Approve a rubric, superseding the job's previous approved version.
+
+        Rejects a rubric that fails its own approval gate: a malformed rubric
+        must not become active by bypassing the API layer.
+        """

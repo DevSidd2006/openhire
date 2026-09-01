@@ -12,12 +12,15 @@ api/routes/interview.py: `CreateSessionRequest.application_id` is optional
 and additive, and the pre-existing `/sessions` contract must be completely
 unaffected when it is omitted.
 """
+from repositories.memory import InMemoryRubricRepository
+from tests.rubric_fixtures import approved_rubric
 import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
 from core.errors import ConflictError, DependencyError, NotFoundError
 from repositories.interfaces import (
+    RubricRepository,
     ApplicationRepository,
     CandidateRecord,
     CandidateRepository,
@@ -88,13 +91,29 @@ def _candidate_service() -> CandidateService:
 def _application_service(
     *, job_repository: JobRepository = None, candidate_repository: CandidateRepository = None,
     application_repository: ApplicationRepository = None,
+    rubric_repository: RubricRepository = None,
 ) -> ApplicationService:
     return ApplicationService(
         application_repository=application_repository or InMemoryApplicationRepository(),
         job_repository=job_repository or InMemoryJobRepository(),
         candidate_repository=candidate_repository or InMemoryCandidateRepository(),
         matching_service=MatchingService(),
+        rubric_repository=rubric_repository,
     )
+
+
+
+async def _seeded_rubric_repo(job_id: str) -> InMemoryRubricRepository:
+    """A repo holding one APPROVED rubric for `job_id`.
+
+    Matching is rubric-driven: without an approved rubric the job is
+    deliberately not scorable and applications are parked as SCORING_PENDING.
+    """
+    repo = InMemoryRubricRepository()
+    rubric = approved_rubric(job_id=job_id)
+    await repo.save(rubric.model_copy(update={"status": "draft"}))
+    await repo.approve(rubric.rubric_id)
+    return repo
 
 
 async def _seed_job(job_repo: JobRepository, job_service: JobService = None) -> JobRecord:
@@ -369,6 +388,7 @@ class TestApplicationServiceApply:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
 
         first = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
@@ -387,9 +407,9 @@ class TestApplicationServiceApply:
 
 class TestApplicationServiceMatching:
     @pytest.mark.asyncio
-    async def test_matching_shortlists_a_strong_candidate(self):
-        """Reuses ResumeMatcherAgent unchanged - shortlisting is exactly its
-        own shortlist_recommendation, not a separately invented threshold."""
+    async def test_matching_scores_a_candidate_without_deciding(self):
+        """Scoring ranks and explains; it never shortlists or rejects.
+        A scored application stays SUBMITTED, awaiting a recruiter."""
         job_repo, candidate_repo, application_repo = (
             InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
         )
@@ -398,6 +418,7 @@ class TestApplicationServiceMatching:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
 
@@ -406,8 +427,10 @@ class TestApplicationServiceMatching:
         assert result.errors == []
         assert result.applications[0].matching_score is not None
         assert result.applications[0].status in (
-            ApplicationStatus.SHORTLISTED, ApplicationStatus.REJECTED,
+            ApplicationStatus.SUBMITTED, ApplicationStatus.NEEDS_HUMAN_REVIEW,
         )
+        assert result.applications[0].status is not ApplicationStatus.SHORTLISTED
+        assert result.applications[0].status is not ApplicationStatus.REJECTED
 
     @pytest.mark.asyncio
     async def test_matching_run_ranks_applications_by_match_score(self):
@@ -426,6 +449,7 @@ class TestApplicationServiceMatching:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         await service.apply(job_id=job.job_id, candidate_id=weak.candidate_id)
         await service.apply(job_id=job.job_id, candidate_id=strong.candidate_id)
@@ -442,8 +466,9 @@ class TestApplicationServiceMatching:
             await _application_service().run_matching_for_job("never-existed")
 
     @pytest.mark.asyncio
-    async def test_matching_never_re_scores_an_already_decided_application(self):
-        """Re-running match must not flip a decision already acted on."""
+    async def test_matching_does_not_re_score_the_same_rubric_version(self):
+        """A scored application now stays SUBMITTED, so idempotency is keyed
+        on the rubric version rather than on the status having moved on."""
         job_repo, candidate_repo, application_repo = (
             InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
         )
@@ -452,6 +477,7 @@ class TestApplicationServiceMatching:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
         first_run = await service.run_matching_for_job(job.job_id)
@@ -475,16 +501,16 @@ class TestApplicationServiceMatching:
         from schemas.evaluation import MatchingScore
 
         class _FlakyMatcherAgent:
-            async def run(self, *, job_description, parsed_resume, **kwargs):
+            async def run(self, *, job_rubric, parsed_resume, **kwargs):
                 if parsed_resume.candidate_id == bad.candidate_id:
                     return {"result": {"matching_score": None, "error": "boom"}}
                 return {
                     "result": {
                         "matching_score": MatchingScore(
                             match_id="m1", candidate_id=parsed_resume.candidate_id,
-                            job_id=job_description.job_id, match_score=0.9,
-                            experience_match=0.9, skill_gap=0.1,
-                            explanation="ok", shortlist_recommendation=True, confidence=0.9,
+                            job_id=job_rubric.job_id, rubric_version=job_rubric.version,
+                            match_score=0.9, coverage=1.0, band="strong",
+                            explanation="ok", confidence=0.9,
                         )
                     }
                 }
@@ -493,6 +519,7 @@ class TestApplicationServiceMatching:
         application_service = ApplicationService(
             application_repository=application_repo, job_repository=job_repo,
             candidate_repository=candidate_repo, matching_service=matching_service,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         await application_service.apply(job_id=job.job_id, candidate_id=good.candidate_id)
         await application_service.apply(job_id=job.job_id, candidate_id=bad.candidate_id)
@@ -501,7 +528,15 @@ class TestApplicationServiceMatching:
         assert result.errors == [bad.candidate_id]
         assert result.matched_count == 1
         good_application = next(a for a in result.applications if a.candidate_id == good.candidate_id)
-        assert good_application.status == ApplicationStatus.SHORTLISTED
+        # Scoring succeeded, so the application is scored but undecided.
+        assert good_application.status == ApplicationStatus.SUBMITTED
+        assert good_application.matching_score is not None
+        # The failed candidate is parked, never rejected: a system failure
+        # must not look like a candidate failure.
+        bad_application = await application_repo.get_for_job_and_candidate(
+            job.job_id, bad.candidate_id
+        )
+        assert bad_application.status == ApplicationStatus.SCORING_PENDING
 
     @pytest.mark.asyncio
     async def test_get_shortlist_returns_only_shortlisted_ranked_by_score(self):
@@ -520,6 +555,7 @@ class TestApplicationServiceMatching:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         await service.apply(job_id=job.job_id, candidate_id=strong.candidate_id)
         await service.apply(job_id=job.job_id, candidate_id=weak.candidate_id)
@@ -545,6 +581,7 @@ class TestApplicationServiceInterviewLink:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         application = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
 
@@ -561,6 +598,7 @@ class TestApplicationServiceInterviewLink:
         service = _application_service(
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
         application = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
         # Force-shortlist directly (avoids depending on the mock matcher's

@@ -50,6 +50,10 @@ class MockLLMProvider(LLMProvider):
             return self._mock_integrity_check(prompt)
         elif "# bias checker agent prompt" in prompt_lower:
             return self._mock_bias_check(prompt)
+        elif "# competency verifier agent prompt" in prompt_lower:
+            return self._mock_competency_verdicts(prompt)
+        elif "# rubric generator agent prompt" in prompt_lower:
+            return self._mock_rubric(prompt)
         elif "score" in prompt_lower or "ranking" in prompt_lower:
             return self._mock_scoring(prompt)
         elif "report" in prompt_lower or "summary" in prompt_lower:
@@ -67,6 +71,88 @@ class MockLLMProvider(LLMProvider):
             return json.loads(response)
         except json.JSONDecodeError:
             return self._create_mock_structure(schema, prompt)
+
+    def _mock_rubric(self, prompt: str) -> str:
+        """Mock an anchored rubric.
+
+        Weights sum to exactly 1.0 and all five anchors are present, so the
+        drafted rubric passes its own approval gate - a mock that produced an
+        unapprovable rubric would make every job permanently unscorable.
+        """
+        anchors = {
+            "1": "No evidence of this on the resume.",
+            "2": "Mentioned, but not demonstrated in any role.",
+            "3": "Applied in real work with visible outcomes.",
+            "4": "Led or owned work depending on this.",
+            "5": "Recognised depth: scope, scale or authorship.",
+        }
+        return json.dumps(
+            {
+                "competencies": [
+                    {
+                        "name": "Backend engineering",
+                        "definition": "Builds and ships production services.",
+                        "weight": 0.4,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Systems and operations",
+                        "definition": "Runs what they build in production.",
+                        "weight": 0.35,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Ownership",
+                        "definition": "Drives ambiguous work to completion.",
+                        "weight": 0.25,
+                        "anchors": anchors,
+                    },
+                ]
+            }
+        )
+
+    def _mock_competency_verdicts(self, prompt: str) -> str:
+        """Mock competency verdicts for the evidence-bound matcher.
+
+        Cites real span_ids lifted from the prompt, because the matcher
+        validates citations against what was actually retrieved and discards
+        any verdict citing a span that was not offered. A mock that invented
+        span ids would be silently thrown away and every competency would
+        come back insufficient.
+        """
+        import re
+
+        competencies = re.findall(r"^Name: (.+)$", prompt, flags=re.MULTILINE)
+        blocks = prompt.split("# Competency Verifier Agent Prompt")
+
+        verdicts = []
+        for name in competencies:
+            block = next((b for b in blocks if f"Name: {name}" in b), prompt)
+            spans = re.findall(
+                r"^\[(sp_[A-Za-z0-9_]+)\] \((\w+)\)", block, flags=re.MULTILINE
+            )
+            span_ids = [sid for sid, _ in spans]
+            # Encode the prompt's own rule rather than scoring on mere
+            # presence: a skill that is only LISTED supports at most level 2,
+            # while levels 3+ require evidence of applied work. A mock that
+            # scored 4 for any span at all would make a keyword-stuffed
+            # resume indistinguishable from a substantive one, hiding exactly
+            # the failure the adversarial cases exist to catch.
+            demonstrated = any(
+                span_type in ("achievement", "responsibility", "project")
+                for _, span_type in spans
+            )
+            verdicts.append(
+                {
+                    "competency_name": name,
+                    "score": 4 if demonstrated else (2 if span_ids else 1),
+                    "cited_span_ids": span_ids[:2],
+                    "rationale": f"Mock verdict for {name}",
+                    "evidence_sufficiency": "sufficient" if span_ids else "insufficient",
+                }
+            )
+
+        return json.dumps({"verdicts": verdicts})
 
     def _mock_resume_parse_response(self, prompt: str) -> str:
         """Mock resume parsing. Keys match schemas.resume field names

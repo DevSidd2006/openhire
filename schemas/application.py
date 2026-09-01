@@ -45,17 +45,28 @@ class ApplicationStatus(str, Enum):
     Mirrors the flow Chunk 2's brief lays out: Job -> Applications ->
     Matching -> Ranked candidates -> Shortlisted candidates -> Interview.
 
-    SUBMITTED    candidate has applied; no matching computed yet.
-    SHORTLISTED  matching ran and ResumeMatcherAgent's own
-                 `shortlist_recommendation` was True (services/matching_service.py) -
-                 not a separately invented threshold.
-    REJECTED     matching ran and the recommendation was False.
+    SUBMITTED    candidate has applied; scoring may or may not have run.
+                 A scored application STAYS submitted - scoring produces a
+                 rank and an explanation, never a decision.
+    SCORING_PENDING  scoring could not complete (embedding/LLM outage, or no
+                 approved rubric for the job yet). NOT a judgment about the
+                 candidate: a system failure must never look like a candidate
+                 failure.
+    NEEDS_HUMAN_REVIEW  scoring completed but rubric coverage was below
+                 threshold - too little resume evidence to rank fairly. An
+                 unknown, not a reject.
+    SHORTLISTED  a recruiter explicitly shortlisted the candidate after
+                 reading the leaderboard. Never set by matching.
+    REJECTED     a recruiter explicitly rejected the candidate. Never set by
+                 matching.
     INTERVIEW_LINKED  an interview session (Chunk 1's /sessions) has been
                  created for this application - see
                  services/application_service.py:link_interview_session.
     """
 
     SUBMITTED = "submitted"
+    SCORING_PENDING = "scoring_pending"
+    NEEDS_HUMAN_REVIEW = "needs_human_review"
     SHORTLISTED = "shortlisted"
     REJECTED = "rejected"
     INTERVIEW_LINKED = "interview_linked"

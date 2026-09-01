@@ -61,6 +61,7 @@ from schemas.evaluation import BehavioralEvaluation, MatchingScore, TechnicalEva
 from schemas.interview import InterviewAnswer, InterviewQuestion, InterviewTranscript
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
+from schemas.rubric import EvidenceSufficiency, JobRubric
 from schemas.scoring import CandidateReport, CandidateScores
 from tests.fakes import ScriptedLLMProvider
 from utils.interview_session import InterviewSessionRunner
@@ -128,22 +129,49 @@ async def adapt_resume_parser(case: EvaluationCase, provider: Optional[LLMProvid
 # ---------------------------------------------------------------------------
 
 async def adapt_resume_matcher(case: EvaluationCase, provider: Optional[LLMProvider] = None) -> Dict[str, Any]:
-    # No LLM call in this agent - `provider` is accepted only for a uniform
-    # adapter interface (evaluation/runner.py calls every adapter the same
-    # way) and is otherwise unused here.
+    # This agent DOES call the LLM now (one call scores every competency
+    # against its anchors and must cite resume spans), so `provider` is
+    # passed through rather than ignored as it was under the old
+    # similarity-only matcher.
     inp = case.input
-    job = JobDescription.model_validate(inp["job"])
+    rubric = JobRubric.model_validate(inp["rubric"])
     resume = ParsedResume.model_validate(inp["resume"])
-    agent = ResumeMatcherAgent()
-    result = await agent.execute(job_description=job, parsed_resume=resume)
-    ctx: Dict[str, Any] = {"result": result, "output": result.get("matching_score"), "job": job, "resume": resume, "facts": {}}
+    agent = ResumeMatcherAgent(llm_provider=provider) if provider else ResumeMatcherAgent()
+    result = await agent.execute(job_rubric=rubric, parsed_resume=resume)
+    ctx: Dict[str, Any] = {
+        "result": result,
+        "output": result.get("matching_score"),
+        "rubric": rubric,
+        "resume": resume,
+        "facts": {},
+    }
+
+    # Every competency that was actually scored must cite evidence. An
+    # uncited score is the loophole the whole design exists to close, so it
+    # is asserted here as a property of every case, not just one.
+    score = result.get("matching_score")
+    if score is not None:
+        ctx["facts"]["every_scored_competency_is_cited"] = all(
+            bool(v.cited_span_ids)
+            for v in score.competency_verdicts
+            if v.evidence_sufficiency is not EvidenceSufficiency.INSUFFICIENT
+        )
 
     monotonic = inp.get("monotonic_check")
     if monotonic:
-        resume2 = resume.model_copy(update={"skills": resume.skills + [monotonic["added_required_skill"]]})
-        result2 = await agent.execute(job_description=job, parsed_resume=resume2)
+        resume2 = resume.model_copy(
+            update={"skills": resume.skills + [monotonic["added_required_skill"]]}
+        )
+        result2 = await agent.execute(job_rubric=rubric, parsed_resume=resume2)
         ms1, ms2 = result["matching_score"], result2["matching_score"]
-        ctx["facts"]["required_skill_match_non_decreasing"] = ms2.match_score >= ms1.match_score
+        # Either score may be None when coverage was too thin to rank; an
+        # unranked candidate is an unknown, so the comparison is skipped
+        # rather than fabricated.
+        ctx["facts"]["required_skill_match_non_decreasing"] = (
+            ms1.match_score is None
+            or ms2.match_score is None
+            or ms2.match_score >= ms1.match_score
+        )
     return ctx
 
 

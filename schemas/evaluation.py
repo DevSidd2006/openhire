@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import List, Literal, Optional, Any
 from pydantic import BaseModel, Field
 
+from schemas.rubric import CompetencyVerdict
+
 # The full evidence-type vocabulary (P2). "supporting"/"contradicting" mirror
 # the judgment an evidence item backs; "insufficient" marks a genuine
 # absence-of-evidence finding (e.g. "no transcript exchange addressed this
@@ -193,21 +195,34 @@ class BiasAudit(BaseModel):
 
 
 class MatchingScore(BaseModel):
-    """Resume to job matching score."""
+    """Resume to job matching score, computed against one rubric version.
+
+    Carries `coverage` and `rubric_version` as first-class fields because a
+    leaderboard is only coherent when every row was scored against the same
+    rubric, and because a score computed from half the rubric is a different
+    kind of claim than one computed from all of it.
+
+    Deliberately carries NO shortlist_recommendation: the matcher ranks and
+    explains, it does not decide. Advancing and rejecting are both recruiter
+    actions taken after reading the leaderboard.
+
+    `match_score` is None when coverage was too thin to rank the candidate
+    fairly - an unknown, not a zero.
+    """
     match_id: str
     candidate_id: str
     job_id: str
-    
-    match_score: float = Field(ge=0.0, le=1.0, description="Overall match score")
-    skill_matches: List[str] = Field(default_factory=list)
-    missing_required_skills: List[str] = Field(default_factory=list)
-    missing_preferred_skills: List[str] = Field(default_factory=list)
-    
-    experience_match: float = Field(ge=0.0, le=1.0)
-    skill_gap: float = Field(ge=0.0, le=1.0)
-    
-    evidence: List[EvidenceItem] = Field(default_factory=list)
+
+    # Defaults exist for directly-constructed scores (fixtures, and callers
+    # that only need a MatchingScore object). The matcher itself always sets
+    # both explicitly, so a real score never relies on these.
+    rubric_version: int = 1
+    match_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    coverage: float = Field(default=1.0, ge=0.0, le=1.0)
+    band: Optional[str] = None
+
+    competency_verdicts: List[CompetencyVerdict] = Field(default_factory=list)
+    needs_human_review: bool = False
+
     explanation: str
-    
-    shortlist_recommendation: bool = True
     confidence: float = Field(ge=0.0, le=1.0)

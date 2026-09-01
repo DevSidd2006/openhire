@@ -13,6 +13,7 @@ All LLM calls go through ScriptedLLMProvider/MockLLMProvider (tests/fakes.py
 and providers/llm/mock.py) - no network, no API key, matching the rest of
 this test suite.
 """
+from tests.rubric_fixtures import approved_rubric
 import asyncio
 import json
 
@@ -690,9 +691,15 @@ class TestFullInterviewToReportIntegration:
             candidates_resume_texts=[resume.raw_text],
             interview_transcripts={"cand_001": transcript},
             job_description=None,
+            # Matching is rubric-driven; a job with no approved rubric
+            # is deliberately not scorable.
+            job_rubric=approved_rubric(),
             parsed_resumes={},
             matching_scores={},
             shortlisted_candidates=[],
+            # The interview/evaluation stages are gated behind an explicit
+            # recruiter advance; matching alone never starts an interview.
+            recruiter_advanced_candidates=["cand_001"],
             interview_questions={},
             technical_evaluations={},
             behavioral_evaluations={},

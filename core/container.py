@@ -45,6 +45,7 @@ from core.config import AppSettings
 from core.logging import get_logger
 from core.security import AnonymousAuthProvider, AuthProvider, JWTAuthProvider
 from repositories.interfaces import (
+    RubricRepository,
     ApplicationRepository,
     CandidateRepository,
     EvaluationRepository,
@@ -83,6 +84,9 @@ class ServiceContainer:
     job_repository: JobRepository
     candidate_repository: CandidateRepository
     application_repository: ApplicationRepository
+    # Versioned hiring rubrics. A job with no approved rubric is not
+    # scorable, so this gates matching entirely.
+    rubric_repository: RubricRepository
     # Chunk 4: evaluation job persistence, same stub-now/database-later
     # contract. `evaluation_dispatcher` is NOT a repository - it is the
     # container-level singleton `EvaluationService` schedules background
@@ -176,6 +180,7 @@ class ServiceContainer:
             "job_repository",
             "candidate_repository",
             "application_repository",
+            "rubric_repository",
             "evaluation_repository",
             "evaluation_dispatcher",
             "auth_provider",
@@ -222,6 +227,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         from repositories.postgres import (
             POSTGRES_BACKEND_NAME,
             PostgresApplicationRepository,
+    PostgresRubricRepository,
             PostgresCandidateRepository,
             PostgresConnectionPool,
             PostgresEvaluationRepository,
@@ -246,6 +252,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             job_repository=PostgresJobRepository(pool),
             candidate_repository=PostgresCandidateRepository(pool),
             application_repository=PostgresApplicationRepository(pool),
+            rubric_repository=PostgresRubricRepository(pool),
             evaluation_repository=PostgresEvaluationRepository(pool),
             user_repository=user_repo,
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
@@ -257,6 +264,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
     from repositories.memory import (
         EPHEMERAL_BACKEND_NAME,
         InMemoryApplicationRepository,
+    InMemoryRubricRepository,
         InMemoryCandidateRepository,
         InMemoryEvaluationRepository,
         InMemoryJobRepository,
@@ -280,6 +288,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         job_repository=InMemoryJobRepository(),
         candidate_repository=InMemoryCandidateRepository(),
         application_repository=InMemoryApplicationRepository(),
+        rubric_repository=InMemoryRubricRepository(),
         evaluation_repository=InMemoryEvaluationRepository(),
         user_repository=InMemoryUserRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),

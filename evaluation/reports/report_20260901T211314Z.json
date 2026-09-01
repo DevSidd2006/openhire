@@ -1,0 +1,165 @@
+{
+  "generated_at": "20260901T211314Z",
+  "provider": "mock",
+  "results": [
+    {
+      "case_id": "matcher_demonstrated_experience_ranks_strong",
+      "agent": "resume_matcher",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": false,
+          "detail": "output.band: expected 'strong', got 'potential'"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 1.0, expected [0.99, 1.0]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.needs_human_review: expected False, got False"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [
+        "field_equals"
+      ],
+      "explanation": "field_equals: output.band: expected 'strong', got 'potential'",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_keyword_stuffing_does_not_rank_strong",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_one_of",
+          "passed": true,
+          "detail": "output.band = 'weak', expected one of ['weak', 'potential']"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_sparse_resume_is_unknown_not_rejected",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.needs_human_review: expected True, got True"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.match_score: expected None, got None"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 0.0, expected [0.0, 0.5]"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_partial_evidence_reports_partial_coverage",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 0.4, expected [0.0, 1.0]"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_monotonic_required_skill",
+      "agent": "resume_matcher",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "fact:required_skill_match_non_decreasing",
+          "passed": false,
+          "detail": "required_skill_match_non_decreasing = False"
+        }
+      ],
+      "failures": [
+        "fact:required_skill_match_non_decreasing"
+      ],
+      "explanation": "fact:required_skill_match_non_decreasing: required_skill_match_non_decreasing = False",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_score_carries_its_rubric_version",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_version: expected 3, got 3"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    }
+  ]
+}

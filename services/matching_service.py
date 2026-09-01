@@ -17,6 +17,7 @@ from agents.resume_matcher.agent import ResumeMatcherAgent
 from core.errors import DependencyError
 from core.logging import get_logger, log_context
 from schemas.evaluation import MatchingScore
+from schemas.rubric import JobRubric
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 
@@ -30,7 +31,7 @@ class MatchingService:
         self._resume_matcher_factory = resume_matcher_factory
 
     async def compute_match(
-        self, job_description: JobDescription, parsed_resume: ParsedResume
+        self, job_rubric: JobRubric, parsed_resume: ParsedResume
     ) -> MatchingScore:
         """Match one candidate's resume against one job.
 
@@ -42,8 +43,8 @@ class MatchingService:
         matcher = self._resume_matcher_factory() if self._resume_matcher_factory else ResumeMatcherAgent()
 
         agent_result = await matcher.run(
-            run_id=f"match_{job_description.job_id}_{parsed_resume.candidate_id}",
-            job_description=job_description,
+            run_id=f"match_{job_rubric.job_id}_{parsed_resume.candidate_id}",
+            job_rubric=job_rubric,
             parsed_resume=parsed_resume,
         )
         result = (agent_result or {}).get("result") or {}
@@ -56,17 +57,17 @@ class MatchingService:
                 error_reason,
                 extra=log_context(
                     event="matching_failed",
-                    job_id=job_description.job_id,
+                    job_id=job_rubric.job_id,
                     candidate_id=parsed_resume.candidate_id,
                 ),
             )
             raise DependencyError(
                 "Matching could not be computed for this candidate. Please try again.",
                 internal_detail=(
-                    f"ResumeMatcherAgent failed for job_id={job_description.job_id!r} "
+                    f"ResumeMatcherAgent failed for job_id={job_rubric.job_id!r} "
                     f"candidate_id={parsed_resume.candidate_id!r}: {error_reason}"
                 ),
-                context={"job_id": job_description.job_id, "candidate_id": parsed_resume.candidate_id},
+                context={"job_id": job_rubric.job_id, "candidate_id": parsed_resume.candidate_id},
             )
 
         return matching_score

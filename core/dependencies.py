@@ -20,6 +20,7 @@ from api.registry import SessionRegistry
 from core.config import AppSettings, get_settings
 from core.container import ServiceContainer, build_default_container
 from repositories.interfaces import (
+    RubricRepository,
     ApplicationRepository,
     CandidateRepository,
     EvaluationRepository,
@@ -92,6 +93,10 @@ def get_candidate_repository(request: Request) -> CandidateRepository:
 
 def get_application_repository(request: Request) -> ApplicationRepository:
     return _container_from_app(request.app).application_repository
+
+
+def get_rubric_repository(request: Request) -> RubricRepository:
+    return get_container(request).rubric_repository
 
 
 def get_evaluation_repository(request: Request) -> EvaluationRepository:
@@ -168,6 +173,7 @@ def get_application_service(request: Request) -> ApplicationService:
         job_repository=container.job_repository,
         candidate_repository=container.candidate_repository,
         matching_service=get_matching_service(request),
+        rubric_repository=container.rubric_repository,
     )
 
 
