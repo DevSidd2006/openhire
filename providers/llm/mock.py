@@ -32,18 +32,18 @@ class MockLLMProvider(LLMProvider):
             return self._mock_resume_parse_response(prompt)
         elif "# jd analyzer agent prompt" in prompt_lower:
             return self._mock_jd_response(prompt)
+        elif "# adaptive interview question prompt" in prompt_lower:
+            return self._mock_adaptive_question(prompt)
+        elif "# interview introduction prompt" in prompt_lower:
+            return self._mock_interview_introduction(prompt)
+        elif "# answer evaluation agent prompt" in prompt_lower:
+            return self._mock_answer_evaluation(prompt)
+        elif "# interview question generation prompt" in prompt_lower:
+            return self._mock_interview_question(prompt)
         elif "# technical evaluator agent prompt" in prompt_lower:
             return self._mock_technical_evaluation(prompt)
         elif "# behavioral evaluator agent prompt" in prompt_lower:
             return self._mock_behavioral_evaluation(prompt)
-        elif "# interview question generation prompt" in prompt_lower:
-            return self._mock_interview_question(prompt)
-        elif "# answer evaluation agent prompt" in prompt_lower:
-            return self._mock_answer_evaluation(prompt)
-        elif "# interview introduction prompt" in prompt_lower:
-            return self._mock_interview_introduction(prompt)
-        elif "# adaptive interview question prompt" in prompt_lower:
-            return self._mock_adaptive_question(prompt)
         elif "# resume auditor agent prompt" in prompt_lower:
             return self._mock_claim_verification(prompt)
         elif "# integrity agent prompt" in prompt_lower:

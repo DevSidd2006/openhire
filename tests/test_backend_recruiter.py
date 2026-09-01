@@ -94,8 +94,16 @@ def _scripted_interviewer():
     from agents.interviewer.agent import InterviewerAgent
     from tests.fakes import ScriptedLLMProvider
 
+    # Generate enough question/eval pairs for an interview to complete.
+    # The interview asks: intro question, then evaluates, then asks follow-ups
+    # until sufficient coverage is reached.
+    script = []
+    for i in range(10):  # 10 question/eval pairs should be enough
+        script.append(_question_json(f"Q{i+1}?"))
+        script.append(_eval_json(confidence=0.85))  # High enough to count as coverage
+
     return lambda: InterviewerAgent(
-        llm_provider=ScriptedLLMProvider(script=[_question_json("Q1?"), _eval_json()])
+        llm_provider=ScriptedLLMProvider(script=script)
     )
 
 
