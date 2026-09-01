@@ -120,7 +120,14 @@ class ScoringAgent(BaseAgent):
         # (via _compute_rubric_score) - see module docstring.
         tech_score = self._normalize_score(technical_evaluation.technical_score)
         behav_score = self._normalize_score(behavioral_evaluation.behavioral_score)
-        job_fit_score = self._normalize_score(matching_score.match_score * 10)
+        # match_score is None when rubric coverage was too thin to rank the
+        # candidate. That is an unknown, not a zero, so job_fit_score is left
+        # unset rather than fabricated as 0.0.
+        job_fit_score = (
+            self._normalize_score(matching_score.match_score * 10)
+            if matching_score.match_score is not None
+            else None
+        )
 
         rubric_score, rubric_coverage, matched_competencies, coverage_note = self._compute_rubric_score(
             job_description, technical_evaluation, behavioral_evaluation, tech_score, behav_score

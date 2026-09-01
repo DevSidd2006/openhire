@@ -34,6 +34,10 @@ class PipelineState(TypedDict):
 
     # Intermediate results
     job_description: Optional[Any]
+    # The APPROVED rubric matching scores against. A job with no approved
+    # rubric is not scorable (see the design spec): matching is skipped
+    # rather than falling back to an unreviewed rubric.
+    job_rubric: Optional[Any]
     parsed_resumes: Dict[str, Any]  # candidate_id -> ParsedResume
     matching_scores: Dict[str, Any]  # candidate_id -> MatchingScore
     shortlisted_candidates: List[str]
@@ -223,15 +227,29 @@ def create_pipeline_graph():
         }
 
     async def node_match_resumes(state: PipelineState) -> Dict[str, Any]:
-        """Match resumes to job."""
+        """Score resumes against the job's APPROVED rubric.
+
+        `shortlisted_candidates` here means "successfully scored and
+        rankable" - it is NOT a hire/no-hire judgment. The matcher no longer
+        emits a shortlist recommendation, because deciding is a recruiter's
+        job; candidates whose coverage was too thin to rank are excluded from
+        the ranking and surfaced for human review instead.
+        """
         if not state["job_description"]:
             return {"errors": state["errors"] + ["No job description; skipping resume matching"]}
+
+        rubric = state.get("job_rubric")
+        if not rubric:
+            return {
+                "errors": state["errors"]
+                + ["No approved rubric for this job; skipping resume matching"]
+            }
 
         candidate_ids = list(state["parsed_resumes"].keys())
         match_tasks = [
             resume_matcher.run(
                 run_id=state.get("run_id"),
-                job_description=state["job_description"],
+                job_rubric=rubric,
                 parsed_resume=state["parsed_resumes"][candidate_id],
             )
             for candidate_id in candidate_ids
@@ -240,20 +258,20 @@ def create_pipeline_graph():
         agent_results = await asyncio.gather(*match_tasks)
 
         matching_scores = {}
-        shortlisted = []
+        rankable = []
         errors = []
         for candidate_id, agent_result in zip(candidate_ids, agent_results):
             result = _unwrap(agent_result)
             if result.get("matching_score"):
                 matching_scores[candidate_id] = result["matching_score"]
-                if result.get("shortlist_recommendation"):
-                    shortlisted.append(candidate_id)
+                if not result.get("needs_human_review"):
+                    rankable.append(candidate_id)
             else:
                 errors.append(f"Matching failed for {candidate_id}")
 
         return {
             "matching_scores": {**state["matching_scores"], **matching_scores},
-            "shortlisted_candidates": state["shortlisted_candidates"] + shortlisted,
+            "shortlisted_candidates": state["shortlisted_candidates"] + rankable,
             "errors": state["errors"] + errors,
             "audit_logs": state["audit_logs"] + _audit_logs(agent_results),
         }

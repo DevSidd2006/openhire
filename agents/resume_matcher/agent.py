@@ -1,162 +1,141 @@
+"""Evidence-bound resume matcher.
+
+Replaces the previous fixed-weight similarity scorer (50% skills / 20% JD
+similarity / 30% experience). That design could not distinguish a claim from
+evidence - a resume mentioning Kubernetes scored the same whether the
+candidate ran production clusters or attended a webinar - which made keyword
+stuffing a winning strategy and left no ranking auditable.
+
+Here every competency in the job's rubric is scored 1-5 against written
+anchors, and every score must cite the resume spans that justify it. Scores
+citing nothing real are excluded rather than counted as zero.
 """
-Resume Matcher Agent.
-Compares resumes against job descriptions to calculate match scores.
-Uses both exact string matching and semantic similarity via embeddings.
-"""
-from typing import Any, Dict
-import json
+from __future__ import annotations
+
 import uuid
+from typing import Any, Dict, List
+
+from pydantic import BaseModel
 
 from agents.base import BaseAgent
 from schemas.evaluation import MatchingScore
-from schemas.job import JobDescription
 from schemas.resume import ParsedResume
+from schemas.rubric import CompetencyVerdict, JobRubric
+from services.competency_verifier import validate_citations
+from services.resume_spans import ResumeSpan, extract_spans
+from services.rubric_aggregation import aggregate
 from services.semantic_matching import SemanticMatcher
+
+RETRIEVAL_K = 8
+
+
+class _VerdictBatch(BaseModel):
+    verdicts: List[CompetencyVerdict]
 
 
 class ResumeMatcherAgent(BaseAgent):
-    """Matches candidate resumes to job requirements using exact and semantic matching."""
+    """Scores a resume against a job's approved rubric, with citations."""
 
     def __init__(self, semantic_matcher=None, **kwargs):
         super().__init__(name="resume_matcher", **kwargs)
         self.semantic_matcher = semantic_matcher or SemanticMatcher()
 
     async def execute(
-        self,
-        job_description: JobDescription,
-        parsed_resume: ParsedResume,
-        **kwargs
+        self, job_rubric: JobRubric, parsed_resume: ParsedResume, **kwargs
     ) -> Dict[str, Any]:
-        """
-        Match resume to job description.
-        
-        Args:
-            job_description: Parsed job description
-            parsed_resume: Parsed resume
-            
-        Returns:
-            MatchingScore with match analysis
+        """Score one candidate against one rubric version.
+
+        Deliberately does NOT catch exceptions: an embedding outage or LLM
+        failure must propagate so the caller can mark the application
+        SCORING_PENDING. Swallowing them here would turn an infrastructure
+        failure into a low score, and a low score into a rejection.
         """
         self.logger.info(
-            f"Matching candidate {parsed_resume.candidate_id} to job {job_description.job_id}"
+            f"Matching candidate {parsed_resume.candidate_id} against rubric "
+            f"{job_rubric.rubric_id} v{job_rubric.version}"
         )
 
-        try:
-            # Calculate match scores
-            match_score = await self._calculate_match(job_description, parsed_resume)
+        spans = extract_spans(parsed_resume)
 
-            return {
-                "matching_score": match_score,
-                "shortlist_recommendation": match_score.shortlist_recommendation,
-                "match_percentage": match_score.match_score * 100,
-            }
+        retrieved: Dict[str, List[ResumeSpan]] = {}
+        for comp in job_rubric.competencies:
+            retrieved[comp.name] = await self.semantic_matcher.retrieve_spans_for_competency(
+                comp, spans, k=RETRIEVAL_K
+            )
 
-        except Exception as e:
-            self.logger.error(f"Matching failed: {str(e)}")
-            return {"matching_score": None, "error": str(e)}
+        verdicts = await self._verify(job_rubric, retrieved, parsed_resume)
+        result = aggregate(job_rubric.competencies, verdicts)
 
-    async def _calculate_match(
-        self, job_description: JobDescription, parsed_resume: ParsedResume
-    ) -> MatchingScore:
-        """Calculate match score between resume and job using exact and semantic matching."""
+        return {
+            "matching_score": MatchingScore(
+                match_id=f"match_{uuid.uuid4().hex[:8]}",
+                candidate_id=parsed_resume.candidate_id,
+                job_id=job_rubric.job_id,
+                rubric_version=job_rubric.version,
+                match_score=result.final_score,
+                coverage=result.coverage,
+                band=result.band,
+                competency_verdicts=verdicts,
+                needs_human_review=result.needs_human_review,
+                explanation=self._explain(result, verdicts),
+                confidence=result.coverage,
+            ),
+            "needs_human_review": result.needs_human_review,
+        }
 
-        # Exact skill matching
-        candidate_skills_lower = [s.lower() for s in parsed_resume.skills]
-        required_skills_lower = [s.lower() for s in job_description.required_skills]
-        preferred_skills_lower = [s.lower() for s in job_description.preferred_skills]
+    async def _verify(
+        self, rubric: JobRubric, retrieved: Dict[str, List[ResumeSpan]], resume: ParsedResume
+    ) -> List[CompetencyVerdict]:
+        """One LLM call scoring every competency, then citation validation."""
+        prompt = self._build_prompt(rubric, retrieved, resume)
 
-        skill_matches = [
-            s for s in job_description.required_skills
-            if s.lower() in candidate_skills_lower
+        batch = await self.call_llm_structured(
+            prompt, _VerdictBatch.model_json_schema(), validate=_VerdictBatch.model_validate
+        )
+
+        validated: List[CompetencyVerdict] = []
+        for verdict in batch.verdicts:
+            allowed = {s.span_id for s in retrieved.get(verdict.competency_name, [])}
+            validated.append(validate_citations(verdict, allowed))
+        return validated
+
+    def _build_prompt(
+        self, rubric: JobRubric, retrieved: Dict[str, List[ResumeSpan]], resume: ParsedResume
+    ) -> str:
+        template = self.load_prompt("competency_verifier.md")
+        blocks = []
+        for comp in rubric.competencies:
+            spans_block = "\n".join(
+                f"[{s.span_id}] ({s.span_type}) {s.text}" for s in retrieved.get(comp.name, [])
+            ) or "(no evidence retrieved for this competency)"
+            blocks.append(
+                template.format(
+                    competency_name=comp.name,
+                    competency_definition=comp.definition,
+                    anchor_1=comp.anchors[1], anchor_2=comp.anchors[2],
+                    anchor_3=comp.anchors[3], anchor_4=comp.anchors[4],
+                    anchor_5=comp.anchors[5],
+                    spans_block=spans_block,
+                    structured_features=(
+                        f"Total experience: {resume.total_experience_years or 'unknown'} years; "
+                        f"{len(resume.work_experience)} roles listed"
+                    ),
+                )
+            )
+        return "\n\n---\n\n".join(blocks) + '\n\nReturn JSON: {"verdicts": [...]}'
+
+    @staticmethod
+    def _explain(result, verdicts: List[CompetencyVerdict]) -> str:
+        if result.needs_human_review:
+            return (
+                f"Insufficient resume evidence to rank this candidate "
+                f"(coverage {result.coverage:.0%}). Unscored: "
+                f"{', '.join(result.uncited_competencies)}. Routed to human review "
+                "rather than scored low - a sparse resume is an unknown, not a reject."
+            )
+        parts = [
+            f"{v.competency_name}: {v.score}/5 ({len(v.cited_span_ids)} cited span(s))"
+            for v in verdicts
+            if v.competency_name in result.scored_competencies
         ]
-        missing_required = [
-            s for s in job_description.required_skills
-            if s.lower() not in candidate_skills_lower
-        ]
-        missing_preferred = [
-            s for s in job_description.preferred_skills
-            if s.lower() not in candidate_skills_lower
-        ]
-
-        # Calculate exact match score
-        exact_skill_match = len(skill_matches) / len(required_skills_lower) if required_skills_lower else 1.0
-        preferred_skill_match = (
-            (len(job_description.preferred_skills) - len(missing_preferred)) / len(preferred_skills_lower)
-            if preferred_skills_lower
-            else 0.5
-        )
-
-        # Semantic matching using embeddings
-        semantic_skill_score, semantic_matches = await self.semantic_matcher.calculate_skill_semantic_similarity(
-            parsed_resume.skills,
-            job_description.required_skills,
-            job_description.preferred_skills
-        )
-
-        # Combine exact and semantic skill matching (25% exact, 75% semantic)
-        # Semantic matching via embeddings is more reliable for skill matching since
-        # job descriptions and resumes use different terminology for identical concepts
-        # (e.g., "CI/CD (GitHub Actions)" vs "CI/CD", "LLM Integration" vs "Machine Learning/LLM Integration")
-        combined_skill_match = (exact_skill_match * 0.25) + (semantic_skill_score * 0.75)
-
-        # Job description semantic similarity
-        resume_summary = f"{parsed_resume.summary or ''} {' '.join(parsed_resume.skills)}"
-        job_summary = f"{job_description.description or ''} {' '.join(job_description.required_skills)}"
-        jd_similarity = await self.semantic_matcher.calculate_job_description_similarity(
-            resume_summary, job_summary
-        )
-
-        # Experience match
-        experience_match = self._calculate_experience_match(
-            parsed_resume.total_experience_years,
-            job_description.experience_years
-        )
-
-        # Overall match score (weighted combination)
-        # Skills: 50%, Job description fit: 20%, Experience: 30%
-        match_score = (
-            combined_skill_match * 0.5 +
-            jd_similarity * 0.2 +
-            experience_match * 0.3
-        )
-
-        # Shortlist recommendation
-        # Require good skill match and job description fit
-        shortlist = match_score >= 0.6 and combined_skill_match >= 0.5
-
-        explanation = (
-            f"Candidate matches {len(skill_matches)}/{len(required_skills_lower)} required skills (exact) "
-            f"+ {len(semantic_matches)} semantic matches. "
-            f"Job fit score: {jd_similarity:.2f}"
-        )
-
-        return MatchingScore(
-            match_id=f"match_{uuid.uuid4().hex[:8]}",
-            candidate_id=parsed_resume.candidate_id,
-            job_id=job_description.job_id,
-            match_score=match_score,
-            skill_matches=skill_matches,
-            missing_required_skills=missing_required,
-            missing_preferred_skills=missing_preferred,
-            experience_match=experience_match,
-            skill_gap=1.0 - combined_skill_match,
-            evidence=[],
-            explanation=explanation,
-            shortlist_recommendation=shortlist,
-            confidence=0.85,
-        )
-
-    def _calculate_experience_match(
-        self, candidate_years: float, required_years: int
-    ) -> float:
-        """Calculate experience match score."""
-        if candidate_years is None or required_years is None:
-            return 0.5  # Neutral if unknown
-
-        if candidate_years >= required_years:
-            # More experience is good, but diminishing returns
-            excess = min(candidate_years - required_years, required_years)
-            return min(1.0, (required_years + excess * 0.25) / required_years)
-        else:
-            # Less experience is negative but not disqualifying
-            return candidate_years / required_years
+        return f"Band {result.band}, coverage {result.coverage:.0%}. " + "; ".join(parts)

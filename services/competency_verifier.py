@@ -13,26 +13,12 @@ requires demonstrated application.
 """
 from __future__ import annotations
 
-from enum import Enum
-from typing import List, Set
-
-from pydantic import BaseModel, Field
+from typing import Set
 
 
-class EvidenceSufficiency(str, Enum):
-    SUFFICIENT = "sufficient"
-    PARTIAL = "partial"
-    INSUFFICIENT = "insufficient"
+from schemas.rubric import CompetencyVerdict, EvidenceSufficiency
 
-
-class CompetencyVerdict(BaseModel):
-    """One competency's score plus the evidence that justifies it."""
-
-    competency_name: str
-    score: int = Field(ge=1, le=5)
-    cited_span_ids: List[str] = Field(default_factory=list)
-    rationale: str
-    evidence_sufficiency: EvidenceSufficiency
+__all__ = ["CompetencyVerdict", "EvidenceSufficiency", "validate_citations"]
 
 
 def validate_citations(

@@ -94,3 +94,25 @@ class JobRubric(BaseModel):
             violations.append(f"duplicate competency names: {sorted(dupes)}")
 
         return violations
+
+
+class EvidenceSufficiency(str, Enum):
+    """Whether the resume carried enough evidence to score a competency."""
+
+    SUFFICIENT = "sufficient"
+    PARTIAL = "partial"
+    INSUFFICIENT = "insufficient"
+
+
+class CompetencyVerdict(BaseModel):
+    """One competency's score plus the evidence that justifies it.
+
+    Lives in schemas rather than services because it is a data model that
+    both the matcher and the persisted MatchingScore depend on.
+    """
+
+    competency_name: str
+    score: int = Field(ge=1, le=5)
+    cited_span_ids: List[str] = Field(default_factory=list)
+    rationale: str
+    evidence_sufficiency: EvidenceSufficiency
