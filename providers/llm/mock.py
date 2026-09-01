@@ -40,6 +40,8 @@ class MockLLMProvider(LLMProvider):
             return self._mock_interview_question(prompt)
         elif "# answer evaluation agent prompt" in prompt_lower:
             return self._mock_answer_evaluation(prompt)
+        elif "# interview introduction prompt" in prompt_lower:
+            return self._mock_interview_introduction(prompt)
         elif "# adaptive interview question prompt" in prompt_lower:
             return self._mock_adaptive_question(prompt)
         elif "# resume auditor agent prompt" in prompt_lower:
@@ -202,6 +204,18 @@ class MockLLMProvider(LLMProvider):
                 "is_vague": False,
                 "missing_detail": None,
                 "explanation": "Mock evaluation: answer addresses the target competency.",
+            }
+        )
+
+    def _mock_interview_introduction(self, prompt: str) -> str:
+        """Mock opening turn for prompts/interview_intro.md."""
+        return json.dumps(
+            {
+                "question_text": "Welcome! Could you briefly introduce yourself and your background?",
+                "question_type": "introduction",
+                "difficulty": "easy",
+                "reason": "Opening greeting before the interview begins",
+                "expected_duration_seconds": 45,
             }
         )
 

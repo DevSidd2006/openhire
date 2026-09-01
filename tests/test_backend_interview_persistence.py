@@ -65,6 +65,10 @@ def _question_json(text, qtype="initial", difficulty="medium"):
     })
 
 
+def _intro_json(text="Welcome! Tell me about yourself."):
+    return _question_json(text, qtype="introduction", difficulty="easy")
+
+
 def _eval_json(score=8.0, confidence=0.9, status="supported"):
     return json.dumps({
         "score": score, "confidence": confidence, "evidence_status": status,
@@ -73,7 +77,7 @@ def _eval_json(score=8.0, confidence=0.9, status="supported"):
 
 
 def _scripted_interviewer(*question_texts, hang_seconds=None):
-    script = []
+    script = [_intro_json()]
     for text in question_texts:
         script.extend([_question_json(text), _eval_json()])
     return lambda: InterviewerAgent(
@@ -88,6 +92,10 @@ def _service(*, registry=None, sessions=None, transcripts=None, interviewer_fact
         transcript_repository=transcripts or InMemoryTranscriptRepository(),
         interviewer_factory=interviewer_factory or _scripted_interviewer("Q1?", "Q2?", "Q3?"),
     )
+
+
+async def _answer_intro(service, session_id, text="Hi, nice to meet you."):
+    return await service.submit_answer(session_id, text)
 
 
 def _job_payload(job_id="job_http"):
@@ -160,11 +168,12 @@ class TestSessionCreationPersistence:
         session_id, runner = await service.create_session(
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
         )
+        await _answer_intro(service, session_id)
         await service.submit_answer(session_id, "A detailed answer about Python.")
 
         record = await sessions.get(session_id)
-        assert len(record.state.exchanges) == 1
-        assert record.state.exchanges[0][1].answer_text == "A detailed answer about Python."
+        assert len(record.state.exchanges) == 2
+        assert record.state.exchanges[1][1].answer_text == "A detailed answer about Python."
         assert record.questions_answered == 1
 
 
@@ -181,6 +190,7 @@ class TestSessionRestoration:
         session_id, original_runner = await service.create_session(
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
         )
+        await _answer_intro(service, session_id)
         await service.submit_answer(session_id, "First answer.")
 
         # Simulate a restart: a BRAND NEW registry, same repositories - the
@@ -205,6 +215,7 @@ class TestSessionRestoration:
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
             max_questions=3,
         )
+        await _answer_intro(service, session_id)
         await service.submit_answer(session_id, "Answer one.")
 
         restored_service = _service(registry=SessionRegistry(), sessions=sessions)
@@ -214,6 +225,7 @@ class TestSessionRestoration:
         record = await sessions.get(session_id)
         assert record.state.questions_answered == 2
         assert [a.answer_text for _, a in record.state.exchanges] == [
+            "Hi, nice to meet you.",
             "Answer one.", "Answer two, after restart.",
         ]
 
@@ -229,6 +241,7 @@ class TestSessionRestoration:
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
             max_questions=1,
         )
+        await _answer_intro(service, session_id)
         await service.submit_answer(session_id, "The only answer.")
         assert runner.status == SessionStatus.SEALED
         original_transcript = runner.get_transcript()
@@ -241,7 +254,7 @@ class TestSessionRestoration:
         assert restored_transcript.interview_id == original_transcript.interview_id
         assert restored_transcript.is_sealed is True
         assert len(restored_transcript.exchanges) == len(original_transcript.exchanges)
-        assert restored_transcript.exchanges[0][1].answer_text == "The only answer."
+        assert restored_transcript.exchanges[1][1].answer_text == "The only answer."
 
     @pytest.mark.asyncio
     async def test_restoration_is_immune_to_the_job_being_edited_afterward(self):
@@ -311,12 +324,13 @@ class TestFailedStatePersistence:
         propagates."""
         sessions = InMemorySessionRepository()
         broken_interviewer = lambda: InterviewerAgent(
-            llm_provider=ScriptedLLMProvider(script=[_question_json("Q1?"), RuntimeError("LLM exploded")])
+            llm_provider=ScriptedLLMProvider(script=[_intro_json(), _question_json("Q1?"), RuntimeError("LLM exploded")])
         )
         service = _service(sessions=sessions, interviewer_factory=broken_interviewer)
         session_id, runner = await service.create_session(
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
         )
+        await _answer_intro(service, session_id)
 
         with pytest.raises(InterviewSessionError):
             await service.submit_answer(session_id, "This answer's evaluation will fail.")
@@ -390,6 +404,7 @@ class TestVoiceAnswerPersistence:
         session_id, runner = await service.create_session(
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
         )
+        await runner.submit_answer("Hi, nice to meet you.")
         await runner.submit_answer("Spoken answer.")
         await service.record_turn_outcome(session_id, runner)
 
@@ -420,6 +435,7 @@ class TestTranscriptPersistenceAcrossRestart:
             job_description=_job(), parsed_resume=_resume(), candidate_id="cand_persist",
             max_questions=1,
         )
+        await _answer_intro(service, session_id)
 
         async def broken_save(transcript):
             raise RuntimeError("transcript store unreachable")
@@ -439,7 +455,7 @@ class TestTranscriptPersistenceAcrossRestart:
         assert recovered is True
         stored = await transcripts.get(runner.interview_id)
         assert stored is not None and stored.is_sealed is True
-        assert len(stored.exchanges) == 1
+        assert len(stored.exchanges) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -569,6 +585,7 @@ class TestExistingApiCompatibility:
             json=_create_payload(job_id="job_compat3", candidate_id="cand_compat3", max_questions=3),
         )
         sid = created.json()["session_id"]
+        client.post(f"/sessions/{sid}/answers", json={"answer_text": "Hi, nice to meet you."})
         client.post(f"/sessions/{sid}/answers", json={"answer_text": "First answer."})
 
         _simulate_restart(app)

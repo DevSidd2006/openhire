@@ -42,6 +42,7 @@ import os
 # Must run before any import that pulls in config.settings.
 for _var, _value in (
     ("LLM_PROVIDER", "mock"),
+    ("EMBEDDING_PROVIDER", "mock"),
     ("AUDIO_PROVIDER", "mock"),
     ("AUDIO_PROCESSOR", "mock"),
     ("TTS_PROVIDER", "mock"),
