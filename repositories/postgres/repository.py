@@ -25,7 +25,10 @@ from typing import Dict, List, Optional
 
 import asyncpg
 
+from schemas.rubric import JobRubric, RubricStatus
+
 from repositories.interfaces import (
+    RubricRepository,
     Application,
     ApplicationRepository,
     CandidateRecord,
@@ -683,3 +686,108 @@ __all__ = [
     "PostgresSessionRepository",
     "PostgresTranscriptRepository",
 ]
+
+
+def _rubric_from_row(row: asyncpg.Record) -> JobRubric:
+    """Rebuild a JobRubric from its jsonb payload.
+
+    status/version live in their own columns so they can be constrained and
+    queried, but the jsonb payload is the source of truth for the object, so
+    the columns are re-applied onto it here rather than trusted to agree.
+    """
+    return JobRubric.model_validate(
+        {**row["rubric"], "status": row["status"], "version": row["version"]}
+    )
+
+
+class PostgresRubricRepository(RubricRepository):
+    """Durable storage for `JobRubric`. See
+    repositories/postgres/schema.sql's `job_rubrics` table."""
+
+    def __init__(self, pool: PostgresConnectionPool) -> None:
+        self._pool = pool
+
+    async def save(self, rubric: JobRubric) -> JobRubric:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO job_rubrics (rubric_id, job_id, version, status, rubric)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (rubric_id) DO UPDATE
+                    SET status = EXCLUDED.status,
+                        rubric = EXCLUDED.rubric,
+                        updated_at = now()
+                RETURNING rubric_id, job_id, version, status, rubric
+                """,
+                rubric.rubric_id,
+                rubric.job_id,
+                rubric.version,
+                rubric.status.value,
+                rubric.model_dump(mode="json"),
+            )
+        return _rubric_from_row(row)
+
+    async def get(self, rubric_id: str) -> Optional[JobRubric]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM job_rubrics WHERE rubric_id = $1", rubric_id
+            )
+        return _rubric_from_row(row) if row is not None else None
+
+    async def get_approved_for_job(self, job_id: str) -> Optional[JobRubric]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM job_rubrics WHERE job_id = $1 AND status = 'approved'",
+                job_id,
+            )
+        return _rubric_from_row(row) if row is not None else None
+
+    async def list_versions_for_job(self, job_id: str) -> List[JobRubric]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM job_rubrics WHERE job_id = $1 ORDER BY version",
+                job_id,
+            )
+        return [_rubric_from_row(row) for row in rows]
+
+    async def approve(self, rubric_id: str) -> JobRubric:
+        """Approve a rubric, superseding the job's previous approved version.
+
+        Re-runs the approval gate here as well as at the API layer: a
+        malformed rubric must not become active by bypassing a route. The
+        supersede and the approve happen in one transaction, because the
+        partial unique index would otherwise reject the second write and
+        leave the job with no approved rubric at all.
+        """
+        rubric = await self.get(rubric_id)
+        if rubric is None:
+            raise KeyError(f"Rubric {rubric_id} not found")
+
+        violations = rubric.validate_approvable()
+        if violations:
+            raise ValueError(f"Rubric {rubric_id} is not approvable: {violations}")
+
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    UPDATE job_rubrics SET status = 'superseded', updated_at = now()
+                    WHERE job_id = $1 AND status = 'approved' AND rubric_id <> $2
+                    """,
+                    rubric.job_id,
+                    rubric_id,
+                )
+                row = await conn.fetchrow(
+                    """
+                    UPDATE job_rubrics SET status = 'approved', updated_at = now()
+                    WHERE rubric_id = $1
+                    RETURNING rubric_id, job_id, version, status, rubric
+                    """,
+                    rubric_id,
+                )
+        return _rubric_from_row(row)

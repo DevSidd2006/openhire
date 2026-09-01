@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from repositories.postgres.pool import PostgresConnectionPool
 from repositories.postgres.repository import (
+    PostgresRubricRepository,
     PostgresApplicationRepository,
     PostgresCandidateRepository,
     PostgresEvaluationRepository,
@@ -36,6 +37,7 @@ from repositories.postgres.user_repository import PostgresUserRepository
 POSTGRES_BACKEND_NAME = "PostgreSQL (repositories/postgres)"
 
 __all__ = [
+    "PostgresRubricRepository",
     "POSTGRES_BACKEND_NAME",
     "PostgresConnectionPool",
     "PostgresApplicationRepository",

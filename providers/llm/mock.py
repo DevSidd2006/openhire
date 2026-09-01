@@ -52,6 +52,8 @@ class MockLLMProvider(LLMProvider):
             return self._mock_bias_check(prompt)
         elif "# competency verifier agent prompt" in prompt_lower:
             return self._mock_competency_verdicts(prompt)
+        elif "# rubric generator agent prompt" in prompt_lower:
+            return self._mock_rubric(prompt)
         elif "score" in prompt_lower or "ranking" in prompt_lower:
             return self._mock_scoring(prompt)
         elif "report" in prompt_lower or "summary" in prompt_lower:
@@ -69,6 +71,45 @@ class MockLLMProvider(LLMProvider):
             return json.loads(response)
         except json.JSONDecodeError:
             return self._create_mock_structure(schema, prompt)
+
+    def _mock_rubric(self, prompt: str) -> str:
+        """Mock an anchored rubric.
+
+        Weights sum to exactly 1.0 and all five anchors are present, so the
+        drafted rubric passes its own approval gate - a mock that produced an
+        unapprovable rubric would make every job permanently unscorable.
+        """
+        anchors = {
+            "1": "No evidence of this on the resume.",
+            "2": "Mentioned, but not demonstrated in any role.",
+            "3": "Applied in real work with visible outcomes.",
+            "4": "Led or owned work depending on this.",
+            "5": "Recognised depth: scope, scale or authorship.",
+        }
+        return json.dumps(
+            {
+                "competencies": [
+                    {
+                        "name": "Backend engineering",
+                        "definition": "Builds and ships production services.",
+                        "weight": 0.4,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Systems and operations",
+                        "definition": "Runs what they build in production.",
+                        "weight": 0.35,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Ownership",
+                        "definition": "Drives ambiguous work to completion.",
+                        "weight": 0.25,
+                        "anchors": anchors,
+                    },
+                ]
+            }
+        )
 
     def _mock_competency_verdicts(self, prompt: str) -> str:
         """Mock competency verdicts for the evidence-bound matcher.

@@ -1,3 +1,5 @@
+# Rubric Generator Agent Prompt
+
 You are designing a hiring rubric for one role. The rubric decides how every
 applicant to this job is ranked, so it must be specific to this role rather
 than generic.

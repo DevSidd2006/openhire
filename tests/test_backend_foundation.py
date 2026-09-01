@@ -48,6 +48,7 @@ from core.security import (
 from repositories.interfaces import RepositoryError, SessionRecord
 from repositories.memory import (
     InMemoryApplicationRepository,
+    InMemoryRubricRepository,
     InMemoryCandidateRepository,
     InMemoryEvaluationRepository,
     InMemoryJobRepository,
@@ -196,6 +197,7 @@ class TestStartupValidation:
             job_repository=InMemoryJobRepository(),
             candidate_repository=InMemoryCandidateRepository(),
             application_repository=InMemoryApplicationRepository(),
+            rubric_repository=InMemoryRubricRepository(),
             evaluation_repository=InMemoryEvaluationRepository(),
             user_repository=InMemoryUserRepository(),
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
