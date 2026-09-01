@@ -80,6 +80,9 @@ class TestCandidateIsolationThroughFullPipeline:
             candidates_resume_texts=["Candidate A resume text.", "Candidate B resume text."],
             interview_transcripts={"cand_001": transcript_a.model_copy(update={"candidate_id": "cand_001"}), "cand_002": transcript_b.model_copy(update={"candidate_id": "cand_002"})},
             job_description=None, parsed_resumes={}, matching_scores={}, shortlisted_candidates=[],
+            # Interview/evaluation stages are gated behind an explicit
+            # recruiter advance; matching alone never starts an interview.
+            recruiter_advanced_candidates=["cand_001", "cand_002"],
             interview_questions={}, technical_evaluations={}, behavioral_evaluations={}, resume_audits={},
             integrity_evaluations={}, bias_audits={}, candidate_scores={}, candidate_reports={},
             leaderboard=None, run_id="run_p6_isolation", errors=[], audit_logs=[],

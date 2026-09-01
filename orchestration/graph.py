@@ -37,6 +37,10 @@ class PipelineState(TypedDict):
     parsed_resumes: Dict[str, Any]  # candidate_id -> ParsedResume
     matching_scores: Dict[str, Any]  # candidate_id -> MatchingScore
     shortlisted_candidates: List[str]
+    # Candidates a recruiter has EXPLICITLY advanced to interview after
+    # reading the leaderboard. Empty by default and never populated by
+    # matching: a match score must not be sufficient to start an interview.
+    recruiter_advanced_candidates: List[str]
     interview_questions: Dict[str, Any]  # candidate_id -> list of questions
 
     # Evaluation results
@@ -53,6 +57,20 @@ class PipelineState(TypedDict):
     run_id: Optional[str]
     errors: List[str]
     audit_logs: List[Any]
+
+
+def route_after_matching(state: PipelineState) -> str:
+    """Decide whether the run may proceed from matching into interviewing.
+
+    Fails closed: unless a recruiter has explicitly advanced candidates, the
+    run ends after matching. A shortlist alone is NOT sufficient - shortlisting
+    is an output of matching, while advancing is a human decision made after
+    reading the leaderboard. Treating a missing field as "advance" would
+    reintroduce the auto-start this gate exists to prevent, so absence ends
+    the run too.
+    """
+    advanced = state.get("recruiter_advanced_candidates") or []
+    return "generate_questions" if advanced else END
 
 
 def _unwrap(agent_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -552,7 +570,15 @@ def create_pipeline_graph():
     graph.add_edge(START, "analyze_job")
     graph.add_edge("analyze_job", "parse_resumes")
     graph.add_edge("parse_resumes", "match_resumes")
-    graph.add_edge("match_resumes", "generate_questions")
+    # Matching does NOT flow unconditionally into interview generation. A
+    # match score must never auto-start an AI interview; a recruiter advances
+    # candidates explicitly after reading the leaderboard. See
+    # route_after_matching.
+    graph.add_conditional_edges(
+        "match_resumes",
+        route_after_matching,
+        {"generate_questions": "generate_questions", END: END},
+    )
     graph.add_edge("generate_questions", "parallel_evaluations")
     graph.add_edge("parallel_evaluations", "bias_check")
     graph.add_edge("bias_check", "score")

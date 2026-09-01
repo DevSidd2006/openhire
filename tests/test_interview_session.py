@@ -693,6 +693,9 @@ class TestFullInterviewToReportIntegration:
             parsed_resumes={},
             matching_scores={},
             shortlisted_candidates=[],
+            # The interview/evaluation stages are gated behind an explicit
+            # recruiter advance; matching alone never starts an interview.
+            recruiter_advanced_candidates=["cand_001"],
             interview_questions={},
             technical_evaluations={},
             behavioral_evaluations={},

@@ -47,6 +47,11 @@ def _empty_state(job_description_text: str, run_id: str = "run_test") -> Pipelin
         parsed_resumes={},
         matching_scores={},
         shortlisted_candidates=[],
+        # This test exercises the interview/evaluation half of the pipeline,
+        # which is now gated behind an explicit recruiter decision: matching
+        # alone never advances a candidate to interview. Advancing here is
+        # what a recruiter would do after reading the leaderboard.
+        recruiter_advanced_candidates=list(interview_transcripts),
         interview_questions={},
         technical_evaluations={},
         behavioral_evaluations={},
