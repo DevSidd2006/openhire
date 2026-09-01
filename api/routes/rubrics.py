@@ -62,8 +62,17 @@ class LeaderboardRowView(BaseModel):
     rank: Optional[int] = None
     application_id: str
     candidate_id: str
+    # Resolved from the stored resume so the leaderboard shows a person
+    # rather than an opaque id. Falls back to the candidate_id when no
+    # resume is on file - never a blank cell.
+    candidate_name: str
     status: str
     match_score: Optional[float] = None
+    # Rubric-free resume-to-JD embedding similarity in [0, 1]. Present even
+    # when `match_score` is not, which is the whole point: a job with no
+    # approved rubric can still be ranked by this. None means "not computed",
+    # never "scored zero" - render it as an unknown, not a bottom rank.
+    semantic_score: Optional[float] = None
     coverage: float
     band: Optional[str] = None
     explanation: str
@@ -234,6 +243,17 @@ async def get_match_leaderboard(
     for position, row in enumerate(ranked, start=1):
         row.rank = position
 
+    # Rows with no rubric score are ordered by semantic score so a job
+    # awaiting rubric approval still presents a usable ordering. They are
+    # deliberately NOT given a `rank`: a similarity number is not the
+    # evidence-bound ranking `rows` promises, and merging the two lists would
+    # blur that distinction exactly where a recruiter is deciding.
+    def _by_semantic(row: LeaderboardRowView) -> float:
+        return row.semantic_score if row.semantic_score is not None else -1.0
+
+    needs_review.sort(key=_by_semantic, reverse=True)
+    pending.sort(key=_by_semantic, reverse=True)
+
     return MatchLeaderboardResponse(
         job_id=job_id,
         rubric_version=approved.version if approved else None,
@@ -248,9 +268,11 @@ async def _build_row(application, candidates: CandidateRepository) -> Leaderboar
     score = application.matching_score
 
     span_text = {}
+    candidate_name = application.candidate_id
     candidate_record = await candidates.get(application.candidate_id)
     if candidate_record is not None and candidate_record.resume is not None:
         span_text = {s.span_id: s for s in extract_spans(candidate_record.resume)}
+        candidate_name = candidate_record.resume.candidate_name or candidate_name
 
     verdict_views: List[CompetencyVerdictView] = []
     for verdict in (score.competency_verdicts if score else []):
@@ -274,8 +296,10 @@ async def _build_row(application, candidates: CandidateRepository) -> Leaderboar
     return LeaderboardRowView(
         application_id=application.application_id,
         candidate_id=application.candidate_id,
+        candidate_name=candidate_name,
         status=application.status.value,
         match_score=score.match_score if score else None,
+        semantic_score=application.semantic_score,
         coverage=score.coverage if score else 0.0,
         band=score.band if score else None,
         explanation=score.explanation if score else "Not scored yet.",

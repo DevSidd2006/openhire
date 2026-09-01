@@ -127,6 +127,12 @@ CREATE TABLE IF NOT EXISTS applications (
                                           'interview_linked', 'scoring_pending',
                                           'needs_human_review')),
     matching_score  jsonb,
+    -- Rubric-free resume-to-JD embedding similarity in [0, 1]
+    -- (services/semantic_screening.py). Kept as its own column rather than
+    -- folded into matching_score's jsonb because it is computed on a
+    -- different trigger: it exists even for a job with no approved rubric,
+    -- which is exactly when matching_score is NULL.
+    semantic_score  double precision,
     session_id      text,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz,
@@ -225,6 +231,11 @@ BEGIN
                               'needs_human_review'));
     END IF;
 END $$;
+
+-- Add applications.semantic_score to databases created before rubric-free
+-- semantic screening existed. Same guarded, re-runnable shape as the status
+-- constraint migration above.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS semantic_score double precision;
 
 -- ---------------------------------------------------------------------
 -- transcripts — InterviewTranscript (schemas/interview.py), used as-is

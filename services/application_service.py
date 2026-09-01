@@ -36,6 +36,7 @@ from repositories.interfaces import (
 )
 from schemas.application import Application, ApplicationStatus
 from services.matching_service import MatchingService
+from services.semantic_screening import SemanticScreeningService
 
 logger = get_logger("services.application")
 
@@ -84,12 +85,33 @@ class ApplicationService:
         candidate_repository: CandidateRepository,
         matching_service: MatchingService,
         rubric_repository: RubricRepository | None = None,
+        semantic_screening_service: SemanticScreeningService | None = None,
     ) -> None:
         self._applications = application_repository
         self._jobs = job_repository
         self._candidates = candidate_repository
         self._matching = matching_service
         self._rubrics = rubric_repository
+        self._semantic_screening = semantic_screening_service or SemanticScreeningService()
+
+    async def _compute_semantic_scores(
+        self, job_record, applications: List[Application]
+    ) -> dict:
+        """Semantic JD-similarity score per application_id.
+
+        A missing or None entry means "not computed" - a candidate whose
+        record has vanished, or an embedding outage - and must never be
+        rendered as a zero.
+        """
+        scores: dict = {}
+        for application in applications:
+            candidate_record = await self._candidates.get(application.candidate_id)
+            if candidate_record is None or candidate_record.resume is None:
+                continue
+            scores[application.application_id] = await self._semantic_screening.score(
+                job_record.job, candidate_record.resume
+            )
+        return scores
 
     # ------------------------------------------------------------------
     # Commands
@@ -173,23 +195,58 @@ class ApplicationService:
         )
 
         applications = await self._applications.list_for_job(job_id)
-        pending = [a for a in applications if a.status == ApplicationStatus.SUBMITTED]
+        # SCORING_PENDING is included, not just SUBMITTED: that status is
+        # where the no-rubric branch below parks applications, and the whole
+        # point of parking them is that they get picked up once a rubric is
+        # approved. Filtering on SUBMITTED alone stranded them forever.
+        pending = [
+            a for a in applications
+            if a.status in (ApplicationStatus.SUBMITTED, ApplicationStatus.SCORING_PENDING)
+        ]
+
+        # The rubric-free semantic score is computed for every pending
+        # application regardless of rubric state - it is what gives a job
+        # with no approved rubric something to rank by at all. It never
+        # touches `status`: an application with only a semantic score has
+        # still not been evaluated against reviewed criteria.
+        semantic_scores = await self._compute_semantic_scores(job_record, pending)
 
         if rubric is None:
-            # A job with no approved rubric is deliberately not scorable.
-            # Applications are queued rather than scored against an
-            # unreviewed rubric, and are picked up once one is approved.
+            # A job with no approved rubric is deliberately not scorable
+            # against reviewed criteria. Applications are queued rather than
+            # scored against an unreviewed rubric, and are picked up once one
+            # is approved - but they now carry a semantic score meanwhile.
+            # `attempted` stays 0 - nothing was scored against a rubric - but
+            # the saved applications ARE returned, ranked by semantic score.
+            # Returning an empty list here left the caller with only its
+            # pre-match copy, so the semantic score was invisible in exactly
+            # the no-rubric case it exists to cover.
+            semantic_only = MatchingRunResult(job_id=job_id, attempted=0)
             for application in pending:
-                await self._applications.save(
-                    application.model_copy(
-                        update={"status": ApplicationStatus.SCORING_PENDING}
+                semantic_only.applications.append(
+                    await self._applications.save(
+                        application.model_copy(
+                            update={
+                                "status": ApplicationStatus.SCORING_PENDING,
+                                "semantic_score": semantic_scores.get(
+                                    application.application_id, application.semantic_score
+                                ),
+                            }
+                        )
                     )
                 )
-            logger.info(
-                "matching skipped: no approved rubric",
-                extra=log_context(event="matching_no_rubric", job_id=job_id),
+            semantic_only.applications.sort(
+                key=lambda a: a.semantic_score if a.semantic_score is not None else -1.0,
+                reverse=True,
             )
-            return MatchingRunResult(job_id=job_id, attempted=0)
+            logger.info(
+                "matching skipped: no approved rubric (semantic score only)",
+                extra=log_context(
+                    event="matching_no_rubric", job_id=job_id,
+                    semantic_scored=sum(1 for v in semantic_scores.values() if v is not None),
+                ),
+            )
+            return semantic_only
 
         # A scored application now STAYS submitted (scoring is not a
         # decision), so "already decided" can no longer be inferred from
@@ -235,7 +292,12 @@ class ApplicationService:
                 # indistinguishable from one nobody has looked at.
                 await self._applications.save(
                     application.model_copy(
-                        update={"status": ApplicationStatus.SCORING_PENDING}
+                        update={
+                            "status": ApplicationStatus.SCORING_PENDING,
+                            "semantic_score": semantic_scores.get(
+                                application.application_id, application.semantic_score
+                            ),
+                        }
                     )
                 )
                 logger.error(
@@ -258,7 +320,13 @@ class ApplicationService:
                 else ApplicationStatus.SUBMITTED
             )
             updated = application.model_copy(
-                update={"matching_score": matching_score, "status": new_status}
+                update={
+                    "matching_score": matching_score,
+                    "status": new_status,
+                    "semantic_score": semantic_scores.get(
+                        application.application_id, application.semantic_score
+                    ),
+                }
             )
             stored = await self._applications.save(updated)
             result.applications.append(stored)

@@ -78,13 +78,17 @@
 
     if (user && user.role === 'recruiter') {
       actionsEl.innerHTML = `
-        <button class="btn-primary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Leaderboard</button>
+        <button class="btn-primary" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'">Resume Screening</button>
+        <button class="btn-secondary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Final Leaderboard</button>
       `;
       sidebarEl.innerHTML = `
         <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
-        <p class="card-sub" style="margin-bottom:1rem;">Candidate submissions are evaluated against this rubric.</p>
-        <button class="btn-secondary" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Inspect Candidate Shortlist</button>
+        <p class="card-sub" style="margin-bottom:1rem;">Applicants are screened against this job's rubric, then interviewed once you shortlist them.</p>
+        <div id="rubricPanel" style="margin-bottom:1rem;"></div>
+        <button class="btn-secondary" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'">Resume Screening</button>
+        <button class="btn-outline" style="width:100%;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">Final Leaderboard (post-interview)</button>
       `;
+      loadRubricPanel();
     } else {
       actionsEl.innerHTML = `
         <button class="btn-primary" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply Now</button>
@@ -96,6 +100,101 @@
       `;
     }
   })();
+
+  // ------------------------------------------------------------------
+  // Rubric lifecycle.
+  //
+  // A job is not scorable until a recruiter APPROVES a rubric: the rubric
+  // decides every ranking on the job, so an unreviewed one silently corrupts
+  // the whole leaderboard. Drafting is automated; approving deliberately is
+  // not, which is why these are two separate buttons and never one.
+  // ------------------------------------------------------------------
+
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function loadRubricPanel() {
+    const el = document.getElementById('rubricPanel');
+    if (!el) return;
+    el.innerHTML = '<p class="card-sub">Checking rubric…</p>';
+
+    let versions = [];
+    try {
+      const data = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/rubric/versions`);
+      versions = data.versions || [];
+    } catch (err) {
+      el.innerHTML = `<p class="card-sub">Could not load rubric versions: ${esc(err.message)}</p>`;
+      return;
+    }
+
+    const approved = versions.find(v => v.status === 'approved');
+    const drafts = versions.filter(v => v.status === 'draft');
+
+    if (approved) {
+      el.innerHTML = `
+        <p class="card-sub" style="margin-bottom:0.5rem;">
+          <strong style="color:var(--success);">Rubric v${approved.version} approved</strong> —
+          ${approved.competencies.length} competencies. This job is scorable.
+        </p>
+        ${competencyTags(approved)}
+        <button class="btn-outline" style="width:100%; margin-top:0.5rem;" onclick="draftRubric()">Draft a new version</button>`;
+      return;
+    }
+
+    if (drafts.length) {
+      const latest = drafts[drafts.length - 1];
+      el.innerHTML = `
+        <p class="card-sub" style="margin-bottom:0.5rem;">
+          <strong style="color:var(--warning);">Rubric v${latest.version} is a draft.</strong>
+          Nothing can be scored until you approve it. Read the competencies before approving —
+          an unreviewed rubric affects every ranking on this job.
+        </p>
+        ${competencyTags(latest)}
+        <button class="btn-primary" style="width:100%; margin-top:0.5rem;" onclick="approveRubric('${latest.rubric_id}')">Approve v${latest.version}</button>
+        <button class="btn-outline" style="width:100%; margin-top:0.4rem;" onclick="draftRubric()">Re-draft</button>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <p class="card-sub" style="margin-bottom:0.5rem;">
+        <strong style="color:var(--warning);">No rubric yet.</strong>
+        Applicants to this job cannot be scored against reviewed criteria until one is approved.
+      </p>
+      <button class="btn-primary" style="width:100%;" onclick="draftRubric()">Draft rubric from job description</button>`;
+  }
+
+  function competencyTags(rubric) {
+    return `<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">${
+      rubric.competencies.map(c =>
+        `<span class="tag" title="${esc(c.definition)}">${esc(c.name)} · ${Math.round(c.weight * 100)}%</span>`
+      ).join('')
+    }</div>`;
+  }
+
+  async function draftRubric() {
+    const el = document.getElementById('rubricPanel');
+    el.innerHTML = '<p class="card-sub">Drafting rubric from the job description…</p>';
+    try {
+      await apiRequest(`/jobs/${encodeURIComponent(jobId)}/rubric/draft`, { method: 'POST' });
+      loadRubricPanel();
+    } catch (err) {
+      el.innerHTML = `<p class="card-sub">Could not draft a rubric: ${esc(err.message)}</p>`;
+    }
+  }
+
+  async function approveRubric(rubricId) {
+    if (!confirm('Approve this rubric? It becomes the basis for every ranking on this job.')) return;
+    try {
+      await apiRequest(`/jobs/${encodeURIComponent(jobId)}/rubric/${encodeURIComponent(rubricId)}/approve`, { method: 'POST' });
+      loadRubricPanel();
+    } catch (err) {
+      // The approval gate reports every violation at once, so show it verbatim.
+      alert(`Could not approve this rubric: ${err.message}`);
+    }
+  }
 </script>
 </body>
 </html>

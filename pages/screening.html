@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Resume Screening</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* Evidence disclosure: the cited resume text behind a competency score.
+     Collapsed by default so the table stays scannable, because the common
+     action is comparing rows, not auditing one. */
+  .evidence { margin-top:0.6rem; border-top:1px solid var(--border, rgba(0,0,0,0.08)); padding-top:0.6rem; }
+  .evidence summary { cursor:pointer; font-family:var(--font-mono); font-size:11px;
+    text-transform:uppercase; color:var(--text-muted); }
+  .competency { margin:0.6rem 0 0.8rem; }
+  .competency-head { display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; }
+  .quote { border-left:2px solid var(--primary); padding:0.2rem 0 0.2rem 0.6rem; margin:0.35rem 0;
+    font-size:0.82rem; color:var(--text-main); line-height:1.5; }
+  .bucket-note { font-size:0.85rem; }
+</style>
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.5rem;">
+    <div>
+      <h2 class="card-title">Resume Screening</h2>
+      <p class="card-sub" id="screeningMeta">Applicants ranked by resume, before any interview.</p>
+    </div>
+    <div style="display:flex; gap:0.5rem;">
+      <button class="btn-secondary" onclick="runMatching()">⚡ Run Matcher</button>
+      <button class="btn-outline" onclick="window.history.back()">Back</button>
+    </div>
+  </div>
+
+  <div class="card" id="rubricBanner" style="margin-bottom:1.25rem; display:none;"></div>
+
+  <!-- Ranked: scored against an approved rubric, every score backed by cited
+       resume text. This is the only bucket that carries a rank. -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card-header" style="margin-bottom:0.75rem;">
+      <div>
+        <h3 class="card-title" style="font-size:1.05rem;">Ranked Applicants</h3>
+        <p class="card-sub">Scored against the job's approved rubric, with the resume evidence behind every score.</p>
+      </div>
+    </div>
+    <div id="rankedList"></div>
+  </div>
+
+  <!-- Deliberately separate and unranked: too little resume evidence to place
+       fairly. An unknown, not a bottom rank. -->
+  <div class="card" style="margin-bottom:1.25rem;" id="reviewCard">
+    <div class="card-header" style="margin-bottom:0.75rem;">
+      <div>
+        <h3 class="card-title" style="font-size:1.05rem;">Needs Human Review</h3>
+        <p class="card-sub">Scored, but with too little resume evidence to rank fairly. Not a rejection — read these yourself.</p>
+      </div>
+    </div>
+    <div id="reviewList"></div>
+  </div>
+
+  <!-- Not scored against reviewed criteria at all. Ordered by semantic
+       similarity so the bucket is still usable while a rubric is pending. -->
+  <div class="card" id="pendingCard">
+    <div class="card-header" style="margin-bottom:0.75rem;">
+      <div>
+        <h3 class="card-title" style="font-size:1.05rem;">Awaiting Rubric Scoring</h3>
+        <p class="card-sub">Not yet scored against reviewed criteria — ordered by semantic match to the job description.</p>
+      </div>
+    </div>
+    <div id="pendingList"></div>
+  </div>
+</main>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  guardAuthenticatedPage();
+  renderNavbar('screening');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobId = urlParams.get('job_id');
+
+  function pct(value) {
+    return value == null ? null : Math.round(value * 100);
+  }
+
+  /** A null score means "not computed", never zero - render it as unknown. */
+  function scorePill(value, label) {
+    const p = pct(value);
+    if (p === null) {
+      return `<span class="tag" title="Not computed — no rubric yet, or the embedding provider was unavailable.">${label} —</span>`;
+    }
+    const band = p >= 70 ? 'high' : (p >= 45 ? 'med' : 'low');
+    return `<span class="score-pill ${band}">${label} ${p}%</span>`;
+  }
+
+  function competencyBlock(verdict) {
+    const quotes = verdict.cited_spans.length
+      ? verdict.cited_spans.map(s => `<div class="quote">“${escapeHtml(s.text)}”</div>`).join('')
+      : '<div class="card-sub" style="margin-top:0.3rem;">No resume text was cited for this competency.</div>';
+    return `
+      <div class="competency">
+        <div class="competency-head">
+          <strong style="color:var(--text-main); font-size:0.88rem;">${escapeHtml(verdict.competency_name)}</strong>
+          <span style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-muted);">
+            ${verdict.score}/5 · ${escapeHtml(verdict.evidence_sufficiency)}
+          </span>
+        </div>
+        <p class="card-sub" style="margin:0.2rem 0 0;">${escapeHtml(verdict.rationale)}</p>
+        ${quotes}
+      </div>`;
+  }
+
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /** One applicant card. `showRank` is false for the unranked buckets, where
+      a position would imply a comparison the score cannot support. */
+  function applicantRow(row, showRank) {
+    const rankLabel = showRank && row.rank
+      ? `<span style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">#${row.rank}</span> `
+      : '';
+    const evidence = row.competency_verdicts.length ? `
+      <details class="evidence">
+        <summary>Evidence — ${row.competency_verdicts.length} competenc${row.competency_verdicts.length === 1 ? 'y' : 'ies'}, ${pct(row.coverage)}% coverage</summary>
+        ${row.competency_verdicts.map(competencyBlock).join('')}
+      </details>` : '';
+
+    return `
+      <div style="padding:0.9rem 0; border-bottom:1px solid var(--border, rgba(0,0,0,0.08));">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <div style="font-weight:600; color:var(--text-main);">
+              ${rankLabel}${escapeHtml(row.candidate_name)}
+            </div>
+            <div class="card-sub" style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(row.candidate_id)} · ${escapeHtml(row.status.replace(/_/g, ' '))}</div>
+          </div>
+          <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+            ${scorePill(row.match_score, 'Rubric')}
+            ${scorePill(row.semantic_score, 'Semantic')}
+            ${row.band ? `<span class="tag">${escapeHtml(row.band)}</span>` : ''}
+            <button class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:11.5px;"
+              onclick="decide('${row.application_id}', 'shortlist')">Shortlist</button>
+            <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;"
+              onclick="decide('${row.application_id}', 'reject')">Reject</button>
+          </div>
+        </div>
+        <p class="card-sub" style="margin:0.4rem 0 0;">${escapeHtml(row.explanation)}</p>
+        ${evidence}
+      </div>`;
+  }
+
+  function renderBucket(elementId, rows, showRank, emptyMessage) {
+    const el = document.getElementById(elementId);
+    el.innerHTML = rows.length
+      ? rows.map(r => applicantRow(r, showRank)).join('')
+      : `<p class="card-sub bucket-note">${emptyMessage}</p>`;
+  }
+
+  async function loadScreening() {
+    if (!jobId) {
+      document.getElementById('screeningMeta').textContent = 'No job selected.';
+      renderBucket('rankedList', [], true, 'Open this page from a specific job to see its applicants.');
+      return;
+    }
+    document.getElementById('screeningMeta').textContent = `Applicants for role: ${jobId}`;
+    renderBucket('rankedList', [], true, 'Loading…');
+
+    try {
+      const data = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match-leaderboard`);
+
+      // The rubric state is the single most useful thing to know here: with
+      // no approved rubric nothing can be ranked, and saying so beats an
+      // unexplained empty table.
+      const banner = document.getElementById('rubricBanner');
+      banner.style.display = 'block';
+      banner.innerHTML = data.rubric_version
+        ? `<p class="card-sub" style="margin:0;">Scoring against <strong>rubric v${data.rubric_version}</strong>.</p>`
+        : `<p class="card-sub" style="margin:0;">
+             This job has <strong>no approved rubric</strong>, so no applicant can be scored against reviewed
+             criteria yet. Only semantic match is available below.
+             <a href="job-detail.html?job_id=${encodeURIComponent(jobId)}">Draft and approve a rubric →</a>
+           </p>`;
+
+      renderBucket('rankedList', data.rows, true, 'No applicants have been scored against the rubric yet.');
+      renderBucket('reviewList', data.needs_review, false, 'Nothing is waiting on human review.');
+      renderBucket('pendingList', data.scoring_pending, false, 'Nothing is awaiting rubric scoring.');
+    } catch (err) {
+      renderBucket('rankedList', [], true, `Could not load screening results: ${escapeHtml(err.message)}`);
+    }
+  }
+
+  async function runMatching() {
+    if (!jobId) {
+      alert('Open this page from a specific job first.');
+      return;
+    }
+    try {
+      const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
+      alert(`Matcher ran: ${result.matched} scored against the rubric, ${result.failed_candidate_ids.length} failed.`);
+      loadScreening();
+    } catch (err) {
+      alert(`Could not run the matcher: ${err.message}`);
+    }
+  }
+
+  /** Shortlisting and rejecting are the recruiter's decision, and the only
+      way an application ever leaves the screening stage. Scoring never
+      decides on its own. */
+  async function decide(applicationId, action) {
+    const verb = action === 'shortlist' ? 'Shortlist' : 'Reject';
+    if (!confirm(`${verb} this applicant?`)) return;
+    try {
+      await apiRequest(`/applications/${encodeURIComponent(applicationId)}/${action}`, { method: 'POST' });
+      loadScreening();
+    } catch (err) {
+      alert(`Could not ${action} this applicant: ${err.message}`);
+    }
+  }
+
+  loadScreening();
+</script>
+</body>
+</html>
