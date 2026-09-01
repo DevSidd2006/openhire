@@ -211,6 +211,21 @@ BEGIN
     END IF;
 END $$;
 
+-- Ensure applications.status check constraint allows all current ApplicationStatus values
+-- (handles existing databases created before scoring_pending / needs_human_review were added).
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'applications'
+    ) THEN
+        ALTER TABLE applications DROP CONSTRAINT IF EXISTS applications_status_check;
+        ALTER TABLE applications ADD CONSTRAINT applications_status_check
+            CHECK (status IN ('submitted', 'shortlisted', 'rejected',
+                              'interview_linked', 'scoring_pending',
+                              'needs_human_review'));
+    END IF;
+END $$;
+
 -- ---------------------------------------------------------------------
 -- transcripts — InterviewTranscript (schemas/interview.py), used as-is
 -- with no separate persistence representation. Only ever inserted once

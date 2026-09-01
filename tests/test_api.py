@@ -489,14 +489,18 @@ class TestFullApiToPipelineIntegration:
         assert transcript.candidate_id == "cand_001"
         assert len(transcript.exchanges) == turn + 1
 
+        from tests.rubric_fixtures import approved_rubric
+
         pipeline_state = PipelineState(
             job_description_text=job.description,
             candidates_resume_texts=[resume.raw_text],
             interview_transcripts={"cand_001": transcript},
             job_description=None,
+            job_rubric=approved_rubric(job_id=job.job_id),
             parsed_resumes={},
             matching_scores={},
             shortlisted_candidates=[],
+            recruiter_advanced_candidates=["cand_001"],
             interview_questions={},
             technical_evaluations={},
             behavioral_evaluations={},

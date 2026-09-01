@@ -49,7 +49,7 @@ for _var, _value in (
     ("VECTOR_STORE_TYPE", "mock"),
     ("DATABASE_URL", ""),
     ("ENVIRONMENT", "test"),
-    ("DATABASE_URL", ""),
+    ("AUTH_ENABLED", "false"),
 ):
     os.environ.setdefault(_var, _value)
 

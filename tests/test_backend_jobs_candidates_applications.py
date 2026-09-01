@@ -767,6 +767,9 @@ class TestApplicationsApi:
         strong_id = self._create_candidate(client, _RESUME_TEXT_STRONG, "Jane Doe")
         client.post("/applications", json={"job_id": job_id, "candidate_id": strong_id})
 
+        draft = client.post(f"/jobs/{job_id}/rubric/draft").json()
+        client.post(f"/jobs/{job_id}/rubric/{draft['rubric_id']}/approve")
+
         match_response = client.post(f"/jobs/{job_id}/match")
         assert match_response.status_code == 200
         body = match_response.json()
