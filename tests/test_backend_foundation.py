@@ -73,6 +73,10 @@ def _question_json(text, qtype="initial", difficulty="medium"):
     })
 
 
+def _intro_json(text="Welcome! Tell me about yourself."):
+    return _question_json(text, qtype="introduction", difficulty="easy")
+
+
 def _eval_json(score=8.0, confidence=0.9, status="supported"):
     return json.dumps({
         "score": score, "confidence": confidence, "evidence_status": status,
@@ -100,7 +104,7 @@ def _create_payload(candidate_id="cand_found", job_id="job_found"):
 
 
 def _scripted_interviewer(*question_texts):
-    script = []
+    script = [_intro_json()]
     for text in question_texts:
         script.extend([_question_json(text), _eval_json()])
     return lambda: InterviewerAgent(llm_provider=ScriptedLLMProvider(script=script))
@@ -568,7 +572,7 @@ class TestInterviewServicePersistence:
         stored = await service._transcripts.get(runner.interview_id)
         assert stored is not None
         assert stored.is_sealed is True
-        assert len(stored.exchanges) == runner.get_state().questions_answered
+        assert len(stored.exchanges) == runner.get_state().questions_answered + 1
 
     @pytest.mark.asyncio
     async def test_a_persistence_failure_does_not_fail_a_live_interview(
@@ -579,16 +583,16 @@ class TestInterviewServicePersistence:
         discard real work."""
         service = self._service()
 
-        async def broken_save(record):
-            raise RuntimeError("database is on fire")
-
-        service._sessions.save = broken_save  # type: ignore[assignment]
-
         session_id, runner = await service.create_session(
             job_description=sample_job_description,
             parsed_resume=sample_parsed_resume,
             candidate_id=sample_parsed_resume.candidate_id,
         )
+        async def broken_save(record):
+            raise RuntimeError("database is on fire")
+
+        service._sessions.save = broken_save  # type: ignore[assignment]
+        await _answer_intro(service, session_id)
         result = await service.submit_answer(session_id, "A detailed answer.")
         assert result.answer.answer_text == "A detailed answer."
         assert runner.get_state().questions_answered == 1
@@ -620,6 +624,10 @@ async def _drive_to_sealed(service, sample_job_description, sample_parsed_resume
             break
     assert runner.status == SessionStatus.SEALED
     return session_id, runner
+
+
+async def _answer_intro(service, session_id, text="Hi, nice to meet you."):
+    return await service.submit_answer(session_id, text)
 
 
 def _break_transcript_save(service):
@@ -666,6 +674,7 @@ class TestSealedTranscriptPersistenceCorrection:
         )
         _break_transcript_save(service)
 
+        await _answer_intro(service, session_id)
         result = await service.submit_answer(session_id, "A detailed answer.")
         assert result.session_status == SessionStatus.SEALED
 
@@ -690,6 +699,7 @@ class TestSealedTranscriptPersistenceCorrection:
         )
         _break_transcript_save(service)
 
+        await _answer_intro(service, session_id)
         result = await service.submit_answer(session_id, "A detailed answer.")
         assert result.session_status == SessionStatus.SEALED
         assert runner.status == SessionStatus.SEALED
@@ -725,6 +735,7 @@ class TestSealedTranscriptPersistenceCorrection:
             max_questions=1,
         )
         _break_transcript_save(service)
+        await _answer_intro(service, session_id)
         await service.submit_answer(session_id, "A detailed answer.")
         assert await service.get_transcript_persistence_status(runner) is False
 
@@ -805,6 +816,8 @@ class TestSealedTranscriptPersistenceCorrection:
         ).json()
         sid = created["session_id"]
 
+        intro = client.post(f"/sessions/{sid}/answers", json={"answer_text": "Hi, nice to meet you."})
+        assert intro.status_code == 200
         response = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A detailed answer."})
         body = response.json()
         assert body["status"] == "sealed"
@@ -832,6 +845,8 @@ class TestSealedTranscriptPersistenceCorrection:
 
         app.state.container.transcript_repository.save = broken_save  # type: ignore[attr-defined]
 
+        intro = client.post(f"/sessions/{sid}/answers", json={"answer_text": "Hi, nice to meet you."})
+        assert intro.status_code == 200
         response = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A detailed answer."})
         body = response.json()
         # The interview still completed successfully (the engine's own
@@ -865,6 +880,8 @@ class TestSealedTranscriptPersistenceCorrection:
         repo = app.state.container.transcript_repository
         repo.save = broken_save  # type: ignore[attr-defined]
 
+        intro = client.post(f"/sessions/{sid}/answers", json={"answer_text": "Hi, nice to meet you."})
+        assert intro.status_code == 200
         failed = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A detailed answer."})
         assert failed.json()["transcript_persisted"] is False
 

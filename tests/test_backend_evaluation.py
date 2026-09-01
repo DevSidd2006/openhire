@@ -95,6 +95,10 @@ def _question_json(text, qtype="initial", difficulty="medium"):
     })
 
 
+def _intro_json(text="Welcome! Tell me about yourself."):
+    return _question_json(text, qtype="introduction", difficulty="easy")
+
+
 def _eval_json(score=8.0, confidence=0.9, status="supported"):
     return json.dumps({
         "score": score, "confidence": confidence, "evidence_status": status,
@@ -106,7 +110,7 @@ def _scripted_interviewer(*question_texts):
     from agents.interviewer.agent import InterviewerAgent
     from tests.fakes import ScriptedLLMProvider
 
-    script = []
+    script = [_intro_json()]
     for text in question_texts:
         script.extend([_question_json(text), _eval_json()])
     return lambda: InterviewerAgent(llm_provider=ScriptedLLMProvider(script=script))
@@ -573,6 +577,8 @@ class TestBackgroundExecutionIsReal:
         assert created.status_code == 201
         sid = created.json()["session_id"]
 
+        intro = client.post(f"/sessions/{sid}/answers", json={"answer_text": "Hi, nice to meet you."})
+        assert intro.status_code == 200
         response = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A real answer."})
         body = response.json()
         assert body["status"] == "sealed"

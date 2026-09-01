@@ -41,7 +41,7 @@ def client():
 
 def _set_scripted_interviewer(script, hang_seconds=None):
     app.state.interviewer_factory = lambda: InterviewerAgent(
-        llm_provider=ScriptedLLMProvider(script=script, hang_seconds=hang_seconds)
+        llm_provider=ScriptedLLMProvider(script=[_intro_json()] + list(script), hang_seconds=hang_seconds)
     )
 
 
@@ -50,6 +50,10 @@ def _question_json(text, qtype="initial", difficulty="medium"):
         "question_text": text, "question_type": qtype, "difficulty": difficulty,
         "reason": "x", "expected_duration_seconds": 60,
     })
+
+
+def _intro_json(text="Welcome! Tell me about yourself."):
+    return _question_json(text, qtype="introduction", difficulty="easy")
 
 
 def _eval_json(score=8.0, confidence=0.8, status="supported", is_vague=False, missing_detail=None):
@@ -78,6 +82,10 @@ def _create_payload(job=None, resume=None, candidate_id="cand_api", job_id="job_
     if max_questions is not None:
         payload["max_questions"] = max_questions
     return payload
+
+
+def _answer_intro(client, session_id, text="Hi, I'm excited to be here."):
+    return client.post(f"/sessions/{session_id}/answers", json={"answer_text": text})
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +123,7 @@ class TestSessionCreation:
         body = r.json()
         assert body["session_id"]
         assert body["status"] == "active"
-        assert body["current_question"]["question_text"] == "First question."
+        assert body["current_question"]["question_type"] == "introduction"
         # Internal-only fields never leak into the response.
         assert "reason" not in body["current_question"]
 
@@ -152,7 +160,7 @@ class TestSessionRetrieval:
         body = r.json()
         assert body["session_id"] == created["session_id"]
         assert body["status"] == "active"
-        assert body["progress"]["questions_asked"] == 1
+        assert body["progress"]["questions_asked"] == 0
         assert body["progress"]["questions_answered"] == 0
         assert body["current_question"]["question_id"] == created["current_question"]["question_id"]
 
@@ -175,11 +183,15 @@ class TestAnswerSubmission:
         _set_scripted_interviewer(script)
         created = client.post("/sessions", json=_create_payload()).json()
         sid = created["session_id"]
+        intro = _answer_intro(client, sid)
+        assert intro.status_code == 200
+        first_real_question = intro.json()["next_question"]
+        assert first_real_question is not None
 
         r = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A strong, concrete answer."})
         assert r.status_code == 200
         body = r.json()
-        assert body["answer_id"] == created["current_question"]["question_id"]
+        assert body["answer_id"] == first_real_question["question_id"]
         assert body["evidence"]["evidence_type"] == "supporting"
         assert body["evidence"]["relevance"] == 0.9
         assert body["next_question"]["question_text"] == "Q about second competency."
@@ -211,6 +223,8 @@ class TestFullSessionOverHTTP:
 
         created = client.post("/sessions", json=_create_payload(job=job)).json()
         sid = created["session_id"]
+        intro = _answer_intro(client, sid)
+        assert intro.status_code == 200
         r = client.post(f"/sessions/{sid}/answers", json={"answer_text": "A strong, concrete Python answer."})
         body = r.json()
         assert body["status"] == "sealed"
@@ -225,6 +239,7 @@ class TestFullSessionOverHTTP:
         script = [_question_json("Tell me about Python."), _eval_json(score=9.0, confidence=0.9)]
         _set_scripted_interviewer(script)
         sid = client.post("/sessions", json=_create_payload(job=job)).json()["session_id"]
+        _answer_intro(client, sid)
         client.post(f"/sessions/{sid}/answers", json={"answer_text": "strong answer"})
 
         r = client.post(f"/sessions/{sid}/answers", json={"answer_text": "too late"})
@@ -284,6 +299,7 @@ class TestSessionIsolation:
         assert sid_a != sid_b
 
         # A's answer only ever affects A's state.
+        _answer_intro(client, sid_a)
         client.post(f"/sessions/{sid_a}/answers", json={"answer_text": "Answer from candidate A."})
 
         state_a = client.get(f"/sessions/{sid_a}").json()
@@ -339,11 +355,16 @@ class TestConcurrency:
             state = (await ac.get(f"/sessions/{sid}")).json()
         app.state.interviewer_factory = None
 
-        assert all(r.status_code == 200 for r in responses)
-        # Exactly one answer was accepted for the one pending question.
-        assert state["progress"]["questions_answered"] == 1
-        bodies = [r.json() for r in responses]
-        assert bodies[0]["answer_id"] == bodies[1]["answer_id"]
+        statuses = sorted(r.status_code for r in responses)
+        assert statuses == [200, 409]
+        # Exactly one introduction answer was accepted for the one pending
+        # question. Introduction answers are intentionally excluded from
+        # questions_answered.
+        assert state["progress"]["questions_answered"] == 0
+        success = next(r for r in responses if r.status_code == 200).json()
+        failure = next(r for r in responses if r.status_code == 409).json()
+        assert success["answer_id"]
+        assert failure["error"] == "session_error"
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +381,8 @@ class TestPromptInjection:
         _set_scripted_interviewer(script)
         created = client.post("/sessions", json=_create_payload(job=job, max_questions=1)).json()
         sid = created["session_id"]
+        intro = _answer_intro(client, sid)
+        assert intro.status_code == 200
 
         r = client.post(
             f"/sessions/{sid}/answers",
@@ -444,9 +467,11 @@ class TestFullApiToPipelineIntegration:
         created = client.post("/sessions", json=payload).json()
         sid = created["session_id"]
         assert created["status"] == "active"
+        intro = _answer_intro(client, sid, text="Hi, I'm Candidate 1, happy to be here.")
+        assert intro.status_code == 200
 
         turn = 0
-        next_question = created["current_question"]
+        next_question = intro.json()["next_question"]
         while next_question is not None:
             r = client.post(f"/sessions/{sid}/answers", json={"answer_text": answers[turn]})
             body = r.json()
@@ -462,7 +487,7 @@ class TestFullApiToPipelineIntegration:
         transcript = runner.get_transcript()
         assert transcript.is_sealed is True
         assert transcript.candidate_id == "cand_001"
-        assert len(transcript.exchanges) == turn
+        assert len(transcript.exchanges) == turn + 1
 
         pipeline_state = PipelineState(
             job_description_text=job.description,
