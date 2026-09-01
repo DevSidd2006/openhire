@@ -282,3 +282,69 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_job_id_status
     ON evaluations (job_id, status);
 
 COMMIT;
+
+-- ============================================================================
+-- Evidence-bound matching: versioned rubrics and cited competency scores.
+-- ============================================================================
+
+-- At most one APPROVED row per job_id, enforced by the partial unique index
+-- below: a leaderboard whose rows were scored under different rubric versions
+-- has incomparable ranks.
+CREATE TABLE IF NOT EXISTS job_rubrics (
+    rubric_id    TEXT PRIMARY KEY,
+    job_id       TEXT NOT NULL,
+    version      INTEGER NOT NULL,
+    status       TEXT NOT NULL CHECK (status IN ('draft', 'approved', 'superseded')),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    approved_at  TIMESTAMPTZ,
+    approved_by  TEXT,
+    UNIQUE (job_id, version)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS one_approved_rubric_per_job
+    ON job_rubrics (job_id) WHERE status = 'approved';
+
+CREATE TABLE IF NOT EXISTS rubric_competencies (
+    competency_id TEXT PRIMARY KEY,
+    rubric_id     TEXT NOT NULL REFERENCES job_rubrics(rubric_id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    definition    TEXT NOT NULL,
+    weight        DOUBLE PRECISION NOT NULL CHECK (weight >= 0 AND weight <= 1),
+    anchor_1      TEXT NOT NULL,
+    anchor_2      TEXT NOT NULL,
+    anchor_3      TEXT NOT NULL,
+    anchor_4      TEXT NOT NULL,
+    anchor_5      TEXT NOT NULL,
+    UNIQUE (rubric_id, name)
+);
+
+-- Verbatim citable resume fragments. Retained because leaderboard rows render
+-- the quoted text behind every score; a citation whose span was discarded is
+-- unauditable.
+CREATE TABLE IF NOT EXISTS resume_spans (
+    span_id        TEXT NOT NULL,
+    application_id TEXT NOT NULL,
+    span_type      TEXT NOT NULL,
+    text           TEXT NOT NULL,
+    PRIMARY KEY (application_id, span_id)
+);
+
+CREATE TABLE IF NOT EXISTS competency_scores (
+    score_id             TEXT PRIMARY KEY,
+    application_id       TEXT NOT NULL,
+    rubric_version       INTEGER NOT NULL,
+    competency_name      TEXT NOT NULL,
+    score                INTEGER CHECK (score BETWEEN 1 AND 5),
+    evidence_sufficiency TEXT NOT NULL
+        CHECK (evidence_sufficiency IN ('sufficient', 'partial', 'insufficient')),
+    rationale            TEXT NOT NULL,
+    UNIQUE (application_id, rubric_version, competency_name)
+);
+
+CREATE TABLE IF NOT EXISTS competency_score_citations (
+    score_id       TEXT NOT NULL REFERENCES competency_scores(score_id) ON DELETE CASCADE,
+    application_id TEXT NOT NULL,
+    span_id        TEXT NOT NULL,
+    PRIMARY KEY (score_id, span_id),
+    FOREIGN KEY (application_id, span_id) REFERENCES resume_spans(application_id, span_id)
+);

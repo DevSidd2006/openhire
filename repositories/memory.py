@@ -33,12 +33,14 @@ the startup banner logs a warning naming this module, and `/health` reports
 possible to run in production without noticing.
 """
 from __future__ import annotations
+from schemas.rubric import JobRubric, RubricStatus
 
 import asyncio
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from repositories.interfaces import (
+    RubricRepository,
     Application,
     ApplicationRepository,
     CandidateRecord,
@@ -383,3 +385,45 @@ __all__ = [
     "InMemoryTranscriptRepository",
     "InMemoryUserRepository",
 ]
+
+
+class InMemoryRubricRepository(RubricRepository):
+    """In-memory rubric storage for tests and local runs."""
+
+    def __init__(self):
+        self._rubrics: dict[str, JobRubric] = {}
+
+    async def save(self, rubric: JobRubric) -> JobRubric:
+        self._rubrics[rubric.rubric_id] = rubric
+        return rubric
+
+    async def get(self, rubric_id: str) -> Optional[JobRubric]:
+        return self._rubrics.get(rubric_id)
+
+    async def get_approved_for_job(self, job_id: str) -> Optional[JobRubric]:
+        for rubric in self._rubrics.values():
+            if rubric.job_id == job_id and rubric.status is RubricStatus.APPROVED:
+                return rubric
+        return None
+
+    async def list_versions_for_job(self, job_id: str) -> list[JobRubric]:
+        return sorted(
+            (r for r in self._rubrics.values() if r.job_id == job_id),
+            key=lambda r: r.version,
+        )
+
+    async def approve(self, rubric_id: str) -> JobRubric:
+        rubric = self._rubrics[rubric_id]
+        violations = rubric.validate_approvable()
+        if violations:
+            raise ValueError(f"Rubric {rubric_id} is not approvable: {violations}")
+
+        for other in list(self._rubrics.values()):
+            if other.job_id == rubric.job_id and other.status is RubricStatus.APPROVED:
+                self._rubrics[other.rubric_id] = other.model_copy(
+                    update={"status": RubricStatus.SUPERSEDED}
+                )
+
+        approved = rubric.model_copy(update={"status": RubricStatus.APPROVED})
+        self._rubrics[rubric_id] = approved
+        return approved
