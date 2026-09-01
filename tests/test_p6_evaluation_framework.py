@@ -13,6 +13,7 @@ Framework self-tests confirm evaluation/runner.py actually loads and
 executes the golden dataset (catches "the JSON is malformed" or "an agent
 name has no adapter" before they'd silently show as 0 cases).
 """
+from tests.rubric_fixtures import approved_rubric
 import copy
 
 import pytest
@@ -79,7 +80,10 @@ class TestCandidateIsolationThroughFullPipeline:
             job_description_text="Backend role requiring Python, FastAPI, SQL, REST APIs.",
             candidates_resume_texts=["Candidate A resume text.", "Candidate B resume text."],
             interview_transcripts={"cand_001": transcript_a.model_copy(update={"candidate_id": "cand_001"}), "cand_002": transcript_b.model_copy(update={"candidate_id": "cand_002"})},
-            job_description=None, parsed_resumes={}, matching_scores={}, shortlisted_candidates=[],
+            job_description=None,
+            # Matching is rubric-driven; a job with no approved rubric
+            # is deliberately not scorable.
+            job_rubric=approved_rubric(), parsed_resumes={}, matching_scores={}, shortlisted_candidates=[],
             # Interview/evaluation stages are gated behind an explicit
             # recruiter advance; matching alone never starts an interview.
             recruiter_advanced_candidates=["cand_001", "cand_002"],

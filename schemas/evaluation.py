@@ -213,9 +213,12 @@ class MatchingScore(BaseModel):
     candidate_id: str
     job_id: str
 
-    rubric_version: int
+    # Defaults exist for directly-constructed scores (fixtures, and callers
+    # that only need a MatchingScore object). The matcher itself always sets
+    # both explicitly, so a real score never relies on these.
+    rubric_version: int = 1
     match_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    coverage: float = Field(ge=0.0, le=1.0)
+    coverage: float = Field(default=1.0, ge=0.0, le=1.0)
     band: Optional[str] = None
 
     competency_verdicts: List[CompetencyVerdict] = Field(default_factory=list)

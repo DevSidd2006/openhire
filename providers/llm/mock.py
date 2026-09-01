@@ -50,6 +50,8 @@ class MockLLMProvider(LLMProvider):
             return self._mock_integrity_check(prompt)
         elif "# bias checker agent prompt" in prompt_lower:
             return self._mock_bias_check(prompt)
+        elif "# competency verifier agent prompt" in prompt_lower:
+            return self._mock_competency_verdicts(prompt)
         elif "score" in prompt_lower or "ranking" in prompt_lower:
             return self._mock_scoring(prompt)
         elif "report" in prompt_lower or "summary" in prompt_lower:
@@ -67,6 +69,36 @@ class MockLLMProvider(LLMProvider):
             return json.loads(response)
         except json.JSONDecodeError:
             return self._create_mock_structure(schema, prompt)
+
+    def _mock_competency_verdicts(self, prompt: str) -> str:
+        """Mock competency verdicts for the evidence-bound matcher.
+
+        Cites real span_ids lifted from the prompt, because the matcher
+        validates citations against what was actually retrieved and discards
+        any verdict citing a span that was not offered. A mock that invented
+        span ids would be silently thrown away and every competency would
+        come back insufficient.
+        """
+        import re
+
+        competencies = re.findall(r"^Name: (.+)$", prompt, flags=re.MULTILINE)
+        blocks = prompt.split("# Competency Verifier Agent Prompt")
+
+        verdicts = []
+        for name in competencies:
+            block = next((b for b in blocks if f"Name: {name}" in b), prompt)
+            span_ids = re.findall(r"^\[(sp_[A-Za-z0-9_]+)\]", block, flags=re.MULTILINE)
+            verdicts.append(
+                {
+                    "competency_name": name,
+                    "score": 4 if span_ids else 1,
+                    "cited_span_ids": span_ids[:2],
+                    "rationale": f"Mock verdict for {name}",
+                    "evidence_sufficiency": "sufficient" if span_ids else "insufficient",
+                }
+            )
+
+        return json.dumps({"verdicts": verdicts})
 
     def _mock_resume_parse_response(self, prompt: str) -> str:
         """Mock resume parsing. Keys match schemas.resume field names

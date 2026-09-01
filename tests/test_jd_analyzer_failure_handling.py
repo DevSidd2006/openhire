@@ -3,6 +3,7 @@ explicit failure - JDAnalyzerAgent must never fabricate a plausible-looking
 JobDescription (the removed _create_default_job_description() behavior),
 and the graph must never let downstream candidate evaluation proceed on an
 invented job description. Never makes a real API call."""
+from tests.rubric_fixtures import approved_rubric
 import json
 import pytest
 
@@ -44,6 +45,9 @@ def _empty_state(job_description_text: str, run_id: str = "run_test") -> Pipelin
         candidates_resume_texts=[r.raw_text for r in parsed_resumes],
         interview_transcripts=interview_transcripts,
         job_description=None,
+            # Matching is rubric-driven; a job with no approved rubric
+            # is deliberately not scorable.
+            job_rubric=approved_rubric(),
         parsed_resumes={},
         matching_scores={},
         shortlisted_candidates=[],
