@@ -77,3 +77,37 @@ def test_bands_are_assigned_from_absolute_thresholds():
     assert aggregate(comps, [_verdict("A", 5)]).band == "strong"
     assert aggregate(comps, [_verdict("A", 3)]).band == "potential"
     assert aggregate(comps, [_verdict("A", 1)]).band == "weak"
+
+
+def test_raising_any_competency_score_never_lowers_the_final_score():
+    """Monotonicity of the aggregation itself.
+
+    This used to be asserted as a golden evaluation case, but scoring is now
+    an LLM judgment, so the end-to-end score is not monotonic in the way a
+    pure similarity calculation was. The property still holds - and is worth
+    guarding - at the layer that actually owns it: the weighted aggregation.
+    """
+    comps = [_comp("A", 0.6), _comp("B", 0.4)]
+    previous = None
+    for score in range(1, 6):
+        result = aggregate(comps, [_verdict("A", score), _verdict("B", 3)])
+        if previous is not None:
+            assert result.final_score >= previous
+        previous = result.final_score
+
+
+def test_gaining_evidence_never_lowers_coverage():
+    comps = [_comp("A", 0.5), _comp("B", 0.5)]
+    uncovered = aggregate(
+        comps, [_verdict("A", 3), _verdict("B", 3, EvidenceSufficiency.INSUFFICIENT)]
+    )
+    covered = aggregate(comps, [_verdict("A", 3), _verdict("B", 3)])
+    assert covered.coverage >= uncovered.coverage
+
+
+def test_a_zero_weight_competency_cannot_move_the_score():
+    """A competency the rubric says does not matter must not affect ranking."""
+    comps = [_comp("A", 1.0), _comp("B", 0.0)]
+    high = aggregate(comps, [_verdict("A", 4), _verdict("B", 5)])
+    low = aggregate(comps, [_verdict("A", 4), _verdict("B", 1)])
+    assert high.final_score == low.final_score

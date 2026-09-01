@@ -128,11 +128,24 @@ class MockLLMProvider(LLMProvider):
         verdicts = []
         for name in competencies:
             block = next((b for b in blocks if f"Name: {name}" in b), prompt)
-            span_ids = re.findall(r"^\[(sp_[A-Za-z0-9_]+)\]", block, flags=re.MULTILINE)
+            spans = re.findall(
+                r"^\[(sp_[A-Za-z0-9_]+)\] \((\w+)\)", block, flags=re.MULTILINE
+            )
+            span_ids = [sid for sid, _ in spans]
+            # Encode the prompt's own rule rather than scoring on mere
+            # presence: a skill that is only LISTED supports at most level 2,
+            # while levels 3+ require evidence of applied work. A mock that
+            # scored 4 for any span at all would make a keyword-stuffed
+            # resume indistinguishable from a substantive one, hiding exactly
+            # the failure the adversarial cases exist to catch.
+            demonstrated = any(
+                span_type in ("achievement", "responsibility", "project")
+                for _, span_type in spans
+            )
             verdicts.append(
                 {
                     "competency_name": name,
-                    "score": 4 if span_ids else 1,
+                    "score": 4 if demonstrated else (2 if span_ids else 1),
                     "cited_span_ids": span_ids[:2],
                     "rationale": f"Mock verdict for {name}",
                     "evidence_sufficiency": "sufficient" if span_ids else "insufficient",
