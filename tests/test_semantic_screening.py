@@ -130,3 +130,24 @@ async def test_unconfigured_embedding_provider_does_not_propagate():
     service = SemanticScreeningService(semantic_matcher=_ExplodingMatcher())
 
     assert await service.score(_job(), _resume()) is None
+
+
+@pytest.mark.asyncio
+async def test_negative_cosine_is_clamped_to_zero():
+    """Cosine similarity is defined on [-1, 1] and opposed embeddings really
+    do return a negative. The score is rendered as a percentage, so a
+    negative must never reach the UI as "-13% match"."""
+    service = SemanticScreeningService(semantic_matcher=_StubMatcher(similarity=-0.13))
+
+    score = await service.score(_job(), _resume())
+
+    assert score == 0.0
+    # Still distinct from None, which means "could not be computed".
+    assert score is not None
+
+
+@pytest.mark.asyncio
+async def test_similarity_above_one_is_clamped():
+    service = SemanticScreeningService(semantic_matcher=_StubMatcher(similarity=1.4))
+
+    assert await service.score(_job(), _resume()) == 1.0

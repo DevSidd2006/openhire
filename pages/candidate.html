@@ -85,13 +85,21 @@
         return;
       }
       appListEl.innerHTML = apps.map(app => {
-        const matchPct = app.matching_score ? Math.round(app.matching_score.match_score * 100) : null;
+        // Same two-score contract as apply.html: the rubric score when the
+        // job has an approved rubric, otherwise the rubric-free semantic
+        // match. A null is "not computed", shown as pending, never as 0%.
+        const rubricPct = app.matching_score && app.matching_score.match_score != null
+          ? Math.round(app.matching_score.match_score * 100) : null;
+        const semanticPct = app.semantic_score != null
+          ? Math.round(app.semantic_score * 100) : null;
+        const matchPct = rubricPct !== null ? rubricPct : semanticPct;
+        const matchLabel = rubricPct !== null ? 'Match' : (semanticPct !== null ? 'Semantic match' : 'Match');
         const canInterview = app.status === 'shortlisted' || app.status === 'interview_linked';
         return `
         <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
           <div>
             <h4 style="font-weight:600;">Role: ${app.job_id}</h4>
-            <p class="card-sub">Match: <strong style="color:var(--primary); font-family:var(--font-mono);">${matchPct !== null ? matchPct + '%' : 'pending'}</strong> | Status: <span class="tag">${app.status}</span></p>
+            <p class="card-sub">${matchLabel}: <strong style="color:var(--primary); font-family:var(--font-mono);">${matchPct !== null ? matchPct + '%' : 'pending'}</strong> | Status: <span class="tag">${app.status}</span></p>
           </div>
           <div style="display:flex; gap:0.4rem;">
             ${canInterview ? `<button class="btn-primary" style="padding:0.35rem 0.8rem; font-size:12px;" onclick="launchInterview('${app.application_id}')">🎙️ Launch Interview</button>` : ''}

@@ -93,9 +93,17 @@ class SemanticScreeningService:
             return None
 
         try:
-            return await self._get_matcher().calculate_job_description_similarity(
+            similarity = await self._get_matcher().calculate_job_description_similarity(
                 resume_text, job_text
             )
+            # Cosine similarity is defined on [-1, 1], not [0, 1] as the
+            # helper's docstring claims - opposed embeddings genuinely return
+            # a negative. Clamp rather than pass it on: this value is rendered
+            # as a percentage, and "-13% match" is not a thing. A negative and
+            # a zero both mean "no detectable similarity", which is a real
+            # (bad) score and stays distinct from None, which means the score
+            # could not be computed at all.
+            return max(0.0, min(1.0, float(similarity)))
         except Exception as exc:  # noqa: BLE001 - see below; this must never propagate
             # Deliberately swallowed to None: this score is supplementary, so
             # an outage here must degrade the leaderboard's extra column, not
