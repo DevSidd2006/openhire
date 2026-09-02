@@ -93,6 +93,14 @@ class Application(BaseModel):
     # application's job. None before that - never a fabricated score.
     matching_score: Optional[MatchingScore] = None
 
+    # Rubric-free resume-to-JD embedding similarity in [0, 1], from
+    # services/semantic_screening.py. Deliberately stored beside
+    # `matching_score` rather than folded into it: it is a weak, uncited
+    # signal, and its only job is to give a job with no approved rubric
+    # something to rank by. None means "not computed" (no rubric-independent
+    # text, or an embedding outage) - never "scored zero".
+    semantic_score: Optional[float] = None
+
     # The linked interview session's id, once one exists (Chunk 1's
     # /sessions, unmodified). None until `link_interview_session` sets it.
     session_id: Optional[str] = None

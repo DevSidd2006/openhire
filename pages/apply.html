@@ -153,19 +153,41 @@
       const matchResult = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
       const ourApplication = matchResult.applications.find(a => a.application_id === applicationId) || appResult.application;
 
-      const matchPct = ourApplication.matching_score ? Math.round(ourApplication.matching_score.match_score * 100) : null;
+      // Two independent scores, and neither one is a decision:
+      //  - matching_score: the evidence-bound rubric score. Absent until a
+      //    recruiter has approved a rubric for this job.
+      //  - semantic_score: rubric-free resume-to-JD similarity, computed for
+      //    every application. Present even with no rubric.
+      // A null score means "not computed" (no rubric yet, or an embedding
+      // outage) - it must never be shown as 0% or read as a rejection.
+      const rubricPct = ourApplication.matching_score && ourApplication.matching_score.match_score != null
+        ? Math.round(ourApplication.matching_score.match_score * 100)
+        : null;
+      const semanticPct = ourApplication.semantic_score != null
+        ? Math.round(ourApplication.semantic_score * 100)
+        : null;
 
-      if (ourApplication.status !== 'shortlisted') {
-        alert(`Thanks for applying!${matchPct !== null ? ` Match score: ${matchPct}%.` : ''} This role isn't a strong enough match right now, so no interview will be scheduled.`);
-        window.location.href = 'candidate.html';
-        return;
+      const scoreLine = rubricPct !== null
+        ? ` Your resume scored ${rubricPct}% against this role's rubric.`
+        : (semanticPct !== null
+            ? ` Your resume is a ${semanticPct}% semantic match to this job description.`
+            : '');
+
+      // Scoring ranks and explains; a recruiter decides who advances. Every
+      // status below is "received, awaiting a human" - none of them is a
+      // rejection, and this page must not invent one.
+      let statusLine;
+      if (ourApplication.status === 'scoring_pending') {
+        statusLine = " We're still finishing the full review of your application.";
+      } else if (ourApplication.status === 'needs_human_review') {
+        statusLine = ' A recruiter will review your application personally.';
+      } else {
+        statusLine = ' Your application is now with the hiring team for review.';
       }
 
-      // 4. Shortlisted - start the adaptive interview session.
-      btn.textContent = 'Starting interview...';
-      const sessionId = await ensureInterviewSession(ourApplication);
-      alert(`Resume parsed! Match score: ${matchPct}%. Launching interview.`);
-      window.location.href = `interview.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(applicationId)}`;
+      alert(`Thanks for applying!${scoreLine}${statusLine} You'll hear from us if you're invited to interview.`);
+      window.location.href = 'candidate.html';
+      return;
     } catch (err) {
       alert(`Could not submit your application: ${err.message}`);
       btn.disabled = false;

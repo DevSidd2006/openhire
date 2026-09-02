@@ -95,6 +95,7 @@ def _application_from_row(row: asyncpg.Record) -> Application:
             if row["matching_score"] is not None
             else None
         ),
+        semantic_score=row["semantic_score"],
         session_id=row["session_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -309,17 +310,19 @@ class PostgresApplicationRepository(ApplicationRepository):
                     """
                     INSERT INTO applications
                         (application_id, job_id, candidate_id, status, matching_score,
-                         session_id, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+                         semantic_score, session_id, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
                     ON CONFLICT (application_id) DO UPDATE
                         SET job_id = EXCLUDED.job_id,
                             candidate_id = EXCLUDED.candidate_id,
                             status = EXCLUDED.status,
                             matching_score = EXCLUDED.matching_score,
+                            semantic_score = EXCLUDED.semantic_score,
                             session_id = EXCLUDED.session_id,
                             updated_at = now()
                     RETURNING application_id, job_id, candidate_id, status,
-                              matching_score, session_id, created_at, updated_at
+                              matching_score, semantic_score, session_id,
+                              created_at, updated_at
                     """,
                     application.application_id,
                     application.job_id,
@@ -330,6 +333,7 @@ class PostgresApplicationRepository(ApplicationRepository):
                         if application.matching_score is not None
                         else None
                     ),
+                    application.semantic_score,
                     application.session_id,
                     application.created_at,
                 )

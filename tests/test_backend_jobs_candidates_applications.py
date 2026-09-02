@@ -88,10 +88,26 @@ def _candidate_service() -> CandidateService:
     return CandidateService(candidate_repository=InMemoryCandidateRepository())
 
 
+class _StubSemanticScreening:
+    """Deterministic stand-in for SemanticScreeningService.
+
+    Injected everywhere so these tests never reach a real embedding
+    provider; the semantic score's own behaviour is covered in
+    tests/test_semantic_screening.py.
+    """
+
+    def __init__(self, score=0.5):
+        self._score = score
+
+    async def score(self, job, resume):
+        return self._score
+
+
 def _application_service(
     *, job_repository: JobRepository = None, candidate_repository: CandidateRepository = None,
     application_repository: ApplicationRepository = None,
     rubric_repository: RubricRepository = None,
+    semantic_screening_service=None,
 ) -> ApplicationService:
     return ApplicationService(
         application_repository=application_repository or InMemoryApplicationRepository(),
@@ -99,6 +115,7 @@ def _application_service(
         candidate_repository=candidate_repository or InMemoryCandidateRepository(),
         matching_service=MatchingService(),
         rubric_repository=rubric_repository,
+        semantic_screening_service=semantic_screening_service or _StubSemanticScreening(),
     )
 
 
@@ -520,6 +537,7 @@ class TestApplicationServiceMatching:
             application_repository=application_repo, job_repository=job_repo,
             candidate_repository=candidate_repo, matching_service=matching_service,
             rubric_repository=await _seeded_rubric_repo(job.job_id),
+            semantic_screening_service=_StubSemanticScreening(),
         )
         await application_service.apply(job_id=job.job_id, candidate_id=good.candidate_id)
         await application_service.apply(job_id=job.job_id, candidate_id=bad.candidate_id)
@@ -893,3 +911,76 @@ class TestApplicationInterviewBridge:
         application = asyncio.run(application_repo.get("app_bridge_4"))
         assert application.status == Status.INTERVIEW_LINKED
         assert application.session_id == body["session_id"]
+
+
+class TestSemanticScoreWithoutRubric:
+    """A job with no approved rubric must still produce a ranking signal.
+
+    Before semantic screening existed, an application to such a job was
+    parked as SCORING_PENDING with nothing on it at all, and the resume
+    leaderboard had literally nothing to order by.
+    """
+
+    @pytest.mark.asyncio
+    async def test_no_rubric_still_stores_a_semantic_score(self):
+        job_repo, candidate_repo = InMemoryJobRepository(), InMemoryCandidateRepository()
+        application_repo = InMemoryApplicationRepository()
+        job = await _seed_job(job_repo)
+        candidate = await _seed_candidate(candidate_repo)
+
+        service = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
+            rubric_repository=None,  # no approved rubric for this job
+            semantic_screening_service=_StubSemanticScreening(0.71),
+        )
+        application = await service.apply(
+            job_id=job.job_id, candidate_id=candidate.candidate_id
+        )
+
+        await service.run_matching_for_job(job.job_id)
+
+        stored = await application_repo.get(application.application_id)
+        # Parked for rubric scoring, but no longer empty-handed.
+        assert stored.status == ApplicationStatus.SCORING_PENDING
+        assert stored.semantic_score == 0.71
+        # The semantic score is emphatically not a decision.
+        assert stored.matching_score is None
+
+    @pytest.mark.asyncio
+    async def test_scoring_pending_applications_are_scored_once_a_rubric_is_approved(self):
+        """The no-rubric branch promises these get picked up later.
+
+        `pending` used to filter on SUBMITTED alone, so an application parked
+        as SCORING_PENDING was stranded there permanently and approving a
+        rubric never rescued it.
+        """
+        job_repo, candidate_repo = InMemoryJobRepository(), InMemoryCandidateRepository()
+        application_repo = InMemoryApplicationRepository()
+        job = await _seed_job(job_repo)
+        candidate = await _seed_candidate(candidate_repo)
+
+        without_rubric = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo, rubric_repository=None,
+        )
+        application = await without_rubric.apply(
+            job_id=job.job_id, candidate_id=candidate.candidate_id
+        )
+        await without_rubric.run_matching_for_job(job.job_id)
+        assert (await application_repo.get(application.application_id)).status == (
+            ApplicationStatus.SCORING_PENDING
+        )
+
+        # A recruiter now approves a rubric; the parked application is picked up.
+        with_rubric = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
+        )
+        result = await with_rubric.run_matching_for_job(job.job_id)
+
+        assert result.attempted == 1
+        stored = await application_repo.get(application.application_id)
+        assert stored.status != ApplicationStatus.SCORING_PENDING
+        assert stored.matching_score is not None
