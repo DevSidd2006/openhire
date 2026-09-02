@@ -667,3 +667,68 @@ def _seed_http(app, candidate_id, job_id, application_id, *, run_eval, seal=True
         return session_id, job.evaluation_id
 
     return asyncio.run(_seed())
+
+
+class TestLeaderboardOpeningsSelection:
+    @pytest.mark.asyncio
+    async def test_leaderboard_selects_exact_number_of_openings(self):
+        from agents.leaderboard.agent import LeaderboardAgent
+        from schemas.scoring import CandidateReport, CandidateScores
+
+        reports = [
+            CandidateReport(
+                report_id="rep_1", candidate_id="cand_1", candidate_name="Alice", job_id="job_openings",
+                technical_summary="Strong", behavioral_summary="Good", job_fit_summary="Fit",
+                explanation="Recommended",
+                scores=CandidateScores(
+                    score_id="s1", candidate_id="cand_1", job_id="job_openings",
+                    technical_score=9.5, behavioral_score=9.0, job_fit_score=9.2, weighted_final_score=9.3,
+                    explanation="Top score", confidence=0.95,
+                ),
+                recommendation="strong_candidate",
+            ),
+            CandidateReport(
+                report_id="rep_2", candidate_id="cand_2", candidate_name="Bob", job_id="job_openings",
+                technical_summary="Solid", behavioral_summary="Good", job_fit_summary="Fit",
+                explanation="Recommended",
+                scores=CandidateScores(
+                    score_id="s2", candidate_id="cand_2", job_id="job_openings",
+                    technical_score=8.5, behavioral_score=8.0, job_fit_score=8.2, weighted_final_score=8.3,
+                    explanation="Solid score", confidence=0.9,
+                ),
+                recommendation="candidate",
+            ),
+            CandidateReport(
+                report_id="rep_3", candidate_id="cand_3", candidate_name="Charlie", job_id="job_openings",
+                technical_summary="Fair", behavioral_summary="Average", job_fit_summary="OK",
+                explanation="Under review",
+                scores=CandidateScores(
+                    score_id="s3", candidate_id="cand_3", job_id="job_openings",
+                    technical_score=7.0, behavioral_score=7.5, job_fit_score=7.2, weighted_final_score=7.2,
+                    explanation="Average score", confidence=0.85,
+                ),
+                recommendation="candidate",
+            ),
+        ]
+
+        agent = LeaderboardAgent()
+        result = await agent.execute(reports=reports, job_id="job_openings", openings=2)
+        leaderboard = result["leaderboard"]
+
+        assert leaderboard.openings == 2
+        assert len(leaderboard.entries) == 3
+        assert len(leaderboard.selected_candidates) == 2
+        assert leaderboard.selected_candidate_ids == ["cand_1", "cand_2"]
+
+        assert leaderboard.entries[0].candidate_id == "cand_1"
+        assert leaderboard.entries[0].is_selected is True
+        assert leaderboard.entries[0].selection_status == "selected"
+
+        assert leaderboard.entries[1].candidate_id == "cand_2"
+        assert leaderboard.entries[1].is_selected is True
+        assert leaderboard.entries[1].selection_status == "selected"
+
+        assert leaderboard.entries[2].candidate_id == "cand_3"
+        assert leaderboard.entries[2].is_selected is False
+        assert leaderboard.entries[2].selection_status == "waitlisted"
+

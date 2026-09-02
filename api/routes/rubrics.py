@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agents.rubric_generator.agent import RubricGeneratorAgent
 from core.dependencies import (
@@ -66,6 +66,11 @@ class LeaderboardRowView(BaseModel):
     # rather than an opaque id. Falls back to the candidate_id when no
     # resume is on file - never a blank cell.
     candidate_name: str
+    email: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    total_experience_years: Optional[float] = None
+    education: List[str] = Field(default_factory=list)
+    session_id: Optional[str] = None
     status: str
     match_score: Optional[float] = None
     # Rubric-free resume-to-JD embedding similarity in [0, 1]. Present even
@@ -269,10 +274,23 @@ async def _build_row(application, candidates: CandidateRepository) -> Leaderboar
 
     span_text = {}
     candidate_name = application.candidate_id
+    email = None
+    skills: List[str] = []
+    total_experience_years = None
+    education: List[str] = []
+
     candidate_record = await candidates.get(application.candidate_id)
     if candidate_record is not None and candidate_record.resume is not None:
-        span_text = {s.span_id: s for s in extract_spans(candidate_record.resume)}
-        candidate_name = candidate_record.resume.candidate_name or candidate_name
+        r = candidate_record.resume
+        span_text = {s.span_id: s for s in extract_spans(r)}
+        candidate_name = r.candidate_name or candidate_name
+        email = r.email
+        skills = list(r.skills) if r.skills else []
+        total_experience_years = r.total_experience_years
+        education = [
+            f"{e.degree} ({e.institution})" if e.institution else e.degree
+            for e in r.education
+        ] if r.education else []
 
     verdict_views: List[CompetencyVerdictView] = []
     for verdict in (score.competency_verdicts if score else []):
@@ -297,6 +315,11 @@ async def _build_row(application, candidates: CandidateRepository) -> Leaderboar
         application_id=application.application_id,
         candidate_id=application.candidate_id,
         candidate_name=candidate_name,
+        email=email,
+        skills=skills,
+        total_experience_years=total_experience_years,
+        education=education,
+        session_id=application.session_id,
         status=application.status.value,
         match_score=score.match_score if score else None,
         semantic_score=application.semantic_score,

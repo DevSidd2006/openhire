@@ -207,7 +207,8 @@ class RecruiterService:
         over the FULL ranked population first, so they stay meaningful
         regardless of which page or filter is requested.
         """
-        await self._require_job(job_id)
+        job_record = await self._require_job(job_id)
+        openings = getattr(job_record.job, 'openings', 1) or 1
         applications = await self._applications.list_for_job(job_id)
         pool = [a for a in applications if a.status in _RANKING_STATUSES]
 
@@ -234,7 +235,7 @@ class RecruiterService:
         # Explicit, deterministic tie-break (Step 9) - see module docstring.
         reports.sort(key=lambda r: r.candidate_id)
 
-        leaderboard = await self._rank(job_id, reports, incomplete_candidate_ids)
+        leaderboard = await self._rank(job_id, reports, incomplete_candidate_ids, openings=openings)
 
         entries = leaderboard.entries
         if recommendation is not None:
@@ -256,12 +257,13 @@ class RecruiterService:
         )
 
     async def _rank(
-        self, job_id: str, reports: list, incomplete_candidate_ids: List[str]
+        self, job_id: str, reports: list, incomplete_candidate_ids: List[str], openings: int = 1
     ) -> CandidateLeaderboard:
         agent = self._leaderboard_factory() if self._leaderboard_factory else LeaderboardAgent()
         agent_result = await agent.run(
             run_id=f"leaderboard_{job_id}", reports=reports, job_id=job_id,
             incomplete_candidates=incomplete_candidate_ids,
+            openings=openings,
         )
         result = (agent_result or {}).get("result") or {}
         leaderboard = result.get("leaderboard")
@@ -283,7 +285,7 @@ class RecruiterService:
     # Internals
     # ------------------------------------------------------------------
 
-    async def _require_job(self, job_id: str) -> None:
+    async def _require_job(self, job_id: str) -> JobRecord:
         """Confirms the job exists so an unknown job_id 404s instead of
         silently returning an empty list/leaderboard indistinguishable from
         "this job genuinely has zero applicants"."""
@@ -293,6 +295,7 @@ class RecruiterService:
                 "No job found for the given job_id",
                 internal_detail=f"job_id={job_id!r} not found",
             )
+        return record
 
 
 __all__ = ["ApplicationOverviewData", "LeaderboardResult", "RecruiterService"]

@@ -116,7 +116,7 @@ async def create_session(
             )
         # Fails fast, before the session (and any LLM call it makes) is
         # created, rather than creating a session that then can't be linked.
-        if application.status.value != "shortlisted":
+        if application.status.value not in ("shortlisted", "interview_linked"):
             raise ConflictError(
                 "An application must be shortlisted before an interview can be linked to it",
                 internal_detail=f"application_id={payload.application_id!r} status={application.status.value!r}",

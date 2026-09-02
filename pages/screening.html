@@ -9,17 +9,23 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  /* Evidence disclosure: the cited resume text behind a competency score.
-     Collapsed by default so the table stays scannable, because the common
-     action is comparing rows, not auditing one. */
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.75rem; margin-bottom:1.25rem; }
+  .stat-card { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius); padding:0.85rem 1rem; }
+  .stat-num { font-size:1.4rem; font-weight:700; color:var(--text-main); font-family:var(--font-mono); }
+  .stat-label { font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-family:var(--font-mono); }
+  .filter-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .filter-tab { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius); padding:0.4rem 0.85rem; font-size:12.5px; font-weight:500; cursor:pointer; color:var(--text-muted); transition:all 0.15s; }
+  .filter-tab:hover { color:var(--text-main); border-color:var(--primary); }
+  .filter-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
   .evidence { margin-top:0.6rem; border-top:1px solid var(--border, rgba(0,0,0,0.08)); padding-top:0.6rem; }
-  .evidence summary { cursor:pointer; font-family:var(--font-mono); font-size:11px;
-    text-transform:uppercase; color:var(--text-muted); }
+  .evidence summary { cursor:pointer; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); }
   .competency { margin:0.6rem 0 0.8rem; }
   .competency-head { display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; }
-  .quote { border-left:2px solid var(--primary); padding:0.2rem 0 0.2rem 0.6rem; margin:0.35rem 0;
-    font-size:0.82rem; color:var(--text-main); line-height:1.5; }
-  .bucket-note { font-size:0.85rem; }
+  .quote { border-left:2px solid var(--primary); padding:0.2rem 0 0.2rem 0.6rem; margin:0.35rem 0; font-size:0.82rem; color:var(--text-main); line-height:1.5; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:1rem; }
+  .modal-box { background:var(--surface, #fff); border:1px solid var(--surface-border); border-radius:var(--radius, 8px); max-width:700px; width:100%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 25px -5px rgba(0,0,0,0.2); }
+  .modal-header { padding:1rem 1.25rem; border-bottom:1px solid var(--surface-border); display:flex; justify-content:space-between; align-items:center; }
+  .modal-body { padding:1.25rem; overflow-y:auto; flex:1; font-size:0.9rem; }
 </style>
 </head>
 <body>
@@ -28,53 +34,76 @@
 <main class="container">
   <div class="card-header" style="margin-bottom:1.5rem;">
     <div>
-      <h2 class="card-title">Resume Screening</h2>
-      <p class="card-sub" id="screeningMeta">Applicants ranked by resume, before any interview.</p>
+      <h2 class="card-title">Resume Screening & Candidate Resumes</h2>
+      <p class="card-sub" id="screeningMeta">Review all applicant resumes, automated shortlisting statuses, and match fit.</p>
     </div>
-    <div style="display:flex; gap:0.5rem;">
-      <button class="btn-secondary" onclick="runMatching()">⚡ Run Matcher</button>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="runMatching()">⚡ Run Auto-Matcher</button>
+      <button class="btn-outline" onclick="goToLeaderboard()">🏆 Final Leaderboard</button>
       <button class="btn-outline" onclick="window.history.back()">Back</button>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="screeningStats">
+    <div class="stat-card">
+      <div class="stat-num" id="statTotal">0</div>
+      <div class="stat-label">Total Applicants</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statShortlisted" style="color:#059669;">0</div>
+      <div class="stat-label">Auto-Shortlisted</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statReview" style="color:#d97706;">0</div>
+      <div class="stat-label">Needs Review</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statRejected" style="color:#64748b;">0</div>
+      <div class="stat-label">Rejected</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statPending">0</div>
+      <div class="stat-label">Awaiting Scoring</div>
     </div>
   </div>
 
   <div class="card" id="rubricBanner" style="margin-bottom:1.25rem; display:none;"></div>
 
-  <!-- Ranked: scored against an approved rubric, every score backed by cited
-       resume text. This is the only bucket that carries a rank. -->
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <div class="filter-tabs" id="filterTabs">
+      <button class="filter-tab active" onclick="setFilter('all')">All (<span id="countAll">0</span>)</button>
+      <button class="filter-tab" onclick="setFilter('shortlisted')">Shortlisted (<span id="countShortlisted">0</span>)</button>
+      <button class="filter-tab" onclick="setFilter('needs_review')">Needs Review (<span id="countReview">0</span>)</button>
+      <button class="filter-tab" onclick="setFilter('rejected')">Rejected (<span id="countRejected">0</span>)</button>
+      <button class="filter-tab" onclick="setFilter('pending')">Pending (<span id="countPending">0</span>)</button>
+    </div>
+    <div style="min-width:220px;">
+      <input type="text" id="applicantSearch" class="form-control" placeholder="Search applicant, skill, email..." oninput="filterApplicants()" style="padding:0.4rem 0.75rem; font-size:12.5px;">
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:1.25rem;">
-    <div class="card-header" style="margin-bottom:0.75rem;">
-      <div>
-        <h3 class="card-title" style="font-size:1.05rem;">Ranked Applicants</h3>
-        <p class="card-sub">Scored against the job's approved rubric, with the resume evidence behind every score.</p>
-      </div>
+    <div id="applicantListContainer">
+      <!-- Dynamic list -->
     </div>
-    <div id="rankedList"></div>
-  </div>
-
-  <!-- Deliberately separate and unranked: too little resume evidence to place
-       fairly. An unknown, not a bottom rank. -->
-  <div class="card" style="margin-bottom:1.25rem;" id="reviewCard">
-    <div class="card-header" style="margin-bottom:0.75rem;">
-      <div>
-        <h3 class="card-title" style="font-size:1.05rem;">Needs Human Review</h3>
-        <p class="card-sub">Scored, but with too little resume evidence to rank fairly. Not a rejection — read these yourself.</p>
-      </div>
-    </div>
-    <div id="reviewList"></div>
-  </div>
-
-  <!-- Not scored against reviewed criteria at all. Ordered by semantic
-       similarity so the bucket is still usable while a rubric is pending. -->
-  <div class="card" id="pendingCard">
-    <div class="card-header" style="margin-bottom:0.75rem;">
-      <div>
-        <h3 class="card-title" style="font-size:1.05rem;">Awaiting Rubric Scoring</h3>
-        <p class="card-sub">Not yet scored against reviewed criteria — ordered by semantic match to the job description.</p>
-      </div>
-    </div>
-    <div id="pendingList"></div>
   </div>
 </main>
+
+<!-- Resume Inspection Modal -->
+<div class="modal-overlay" id="resumeModal" onclick="closeResumeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <h3 id="modalCandidateName" style="font-weight:700; font-size:1.15rem; margin:0;">Candidate Resume</h3>
+        <p id="modalCandidateMeta" class="card-sub" style="margin:0; font-size:12px; font-family:var(--font-mono);"></p>
+      </div>
+      <button class="btn-outline" style="padding:0.25rem 0.5rem; font-size:12px;" onclick="closeResumeModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="modalResumeBody">
+      Loading resume details…
+    </div>
+  </div>
+</div>
 
 <script src="js/auth.js"></script>
 <script src="js/app.js"></script>
@@ -85,22 +114,24 @@
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
 
+  let allRows = [];
+  let currentFilter = 'all';
+
   function pct(value) {
     return value == null ? null : Math.round(value * 100);
   }
 
-  /** A null score means "not computed", never zero - render it as unknown. */
   function scorePill(value, label) {
     const p = pct(value);
     if (p === null) {
-      return `<span class="tag" title="Not computed — no rubric yet, or the embedding provider was unavailable.">${label} —</span>`;
+      return `<span class="tag" title="Not computed">${label} —</span>`;
     }
     const band = p >= 70 ? 'high' : (p >= 45 ? 'med' : 'low');
     return `<span class="score-pill ${band}">${label} ${p}%</span>`;
   }
 
   function competencyBlock(verdict) {
-    const quotes = verdict.cited_spans.length
+    const quotes = (verdict.cited_spans || []).length
       ? verdict.cited_spans.map(s => `<div class="quote">“${escapeHtml(s.text)}”</div>`).join('')
       : '<div class="card-sub" style="margin-top:0.3rem;">No resume text was cited for this competency.</div>';
     return `
@@ -122,31 +153,58 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  /** One applicant card. `showRank` is false for the unranked buckets, where
-      a position would imply a comparison the score cannot support. */
-  function applicantRow(row, showRank) {
-    const rankLabel = showRank && row.rank
-      ? `<span style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">#${row.rank}</span> `
+  function getStatusBadge(status) {
+    if (status === 'shortlisted') {
+      return '<span class="tag" style="background:#ecfdf5; color:#059669; border-color:#a7f3d0; font-weight:600;">✨ Auto-Shortlisted</span>';
+    } else if (status === 'interview_linked') {
+      return '<span class="tag" style="background:#eff6ff; color:#2563eb; border-color:#bfdbfe; font-weight:600;">🎙️ Interview Linked</span>';
+    } else if (status === 'rejected') {
+      return '<span class="tag" style="background:#f1f5f9; color:#64748b; border-color:#cbd5e1;">Rejected</span>';
+    } else if (status === 'needs_human_review') {
+      return '<span class="tag" style="background:#fffbeb; color:#d97706; border-color:#fde68a;">Needs Review</span>';
+    }
+    return `<span class="tag">${escapeHtml((status || 'pending').replace(/_/g, ' '))}</span>`;
+  }
+
+  function applicantRow(row) {
+    const rankLabel = row.rank
+      ? `<span style="font-family:var(--font-mono); font-weight:700; color:var(--primary); margin-right:0.4rem;">#${row.rank}</span>`
       : '';
-    const evidence = row.competency_verdicts.length ? `
+    
+    const skillsList = (row.skills || []).slice(0, 5).map(s => `<span class="tag" style="font-size:11px;">${escapeHtml(s)}</span>`).join(' ');
+    const expText = row.total_experience_years != null ? ` · ${row.total_experience_years} yrs exp` : '';
+    const emailText = row.email ? ` · ${escapeHtml(row.email)}` : '';
+
+    const verdicts = row.competency_verdicts || [];
+    const evidence = verdicts.length ? `
       <details class="evidence">
-        <summary>Evidence — ${row.competency_verdicts.length} competenc${row.competency_verdicts.length === 1 ? 'y' : 'ies'}, ${pct(row.coverage)}% coverage</summary>
-        ${row.competency_verdicts.map(competencyBlock).join('')}
+        <summary>Evidence — ${verdicts.length} competenc${verdicts.length === 1 ? 'y' : 'ies'}, ${pct(row.coverage)}% coverage</summary>
+        ${verdicts.map(competencyBlock).join('')}
       </details>` : '';
 
     return `
-      <div style="padding:0.9rem 0; border-bottom:1px solid var(--border, rgba(0,0,0,0.08));">
+      <div style="padding:1rem 0; border-bottom:1px solid var(--border, rgba(0,0,0,0.08));">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
-          <div style="min-width:0;">
-            <div style="font-weight:600; color:var(--text-main);">
-              ${rankLabel}${escapeHtml(row.candidate_name)}
+          <div style="min-width:240px; flex:1;">
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.25rem;">
+              <span style="font-weight:600; font-size:1.05rem; color:var(--text-main);">
+                ${rankLabel}${escapeHtml(row.candidate_name)}
+              </span>
+              ${getStatusBadge(row.status)}
             </div>
-            <div class="card-sub" style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(row.candidate_id)} · ${escapeHtml(row.status.replace(/_/g, ' '))}</div>
+            <div class="card-sub" style="font-size:12px; margin-bottom:0.4rem;">
+              <span style="font-family:var(--font-mono);">${escapeHtml(row.candidate_id)}</span>${emailText}${expText}
+            </div>
+            <div style="display:flex; gap:0.3rem; flex-wrap:wrap; margin-bottom:0.3rem;">
+              ${skillsList}
+            </div>
           </div>
           <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
             ${scorePill(row.match_score, 'Rubric')}
             ${scorePill(row.semantic_score, 'Semantic')}
             ${row.band ? `<span class="tag">${escapeHtml(row.band)}</span>` : ''}
+            <button class="btn-primary" style="padding:0.25rem 0.65rem; font-size:11.5px;"
+              onclick="viewResume('${row.candidate_id}')">📄 View Resume</button>
             <button class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:11.5px;"
               onclick="decide('${row.application_id}', 'shortlist')">Shortlist</button>
             <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;"
@@ -158,44 +216,174 @@
       </div>`;
   }
 
-  function renderBucket(elementId, rows, showRank, emptyMessage) {
-    const el = document.getElementById(elementId);
-    el.innerHTML = rows.length
-      ? rows.map(r => applicantRow(r, showRank)).join('')
-      : `<p class="card-sub bucket-note">${emptyMessage}</p>`;
-  }
-
   async function loadScreening() {
     if (!jobId) {
       document.getElementById('screeningMeta').textContent = 'No job selected.';
-      renderBucket('rankedList', [], true, 'Open this page from a specific job to see its applicants.');
+      document.getElementById('applicantListContainer').innerHTML = '<p class="card-sub">Open this page from a specific job posting to view its applicants.</p>';
       return;
     }
     document.getElementById('screeningMeta').textContent = `Applicants for role: ${jobId}`;
-    renderBucket('rankedList', [], true, 'Loading…');
+    document.getElementById('applicantListContainer').innerHTML = '<p class="card-sub">Loading applicants & resumes…</p>';
 
     try {
       const data = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match-leaderboard`);
 
-      // The rubric state is the single most useful thing to know here: with
-      // no approved rubric nothing can be ranked, and saying so beats an
-      // unexplained empty table.
       const banner = document.getElementById('rubricBanner');
       banner.style.display = 'block';
       banner.innerHTML = data.rubric_version
-        ? `<p class="card-sub" style="margin:0;">Scoring against <strong>rubric v${data.rubric_version}</strong>.</p>`
+        ? `<p class="card-sub" style="margin:0;">Automated scoring active against <strong>rubric v${data.rubric_version}</strong>.</p>`
         : `<p class="card-sub" style="margin:0;">
-             This job has <strong>no approved rubric</strong>, so no applicant can be scored against reviewed
-             criteria yet. Only semantic match is available below.
-             <a href="job-detail.html?job_id=${encodeURIComponent(jobId)}">Draft and approve a rubric →</a>
+             This job has <strong>no approved rubric yet</strong>. Semantic screening is active.
+             <a href="job-detail.html?job_id=${encodeURIComponent(jobId)}">Draft and approve a rubric for deeper evidence-bound matching →</a>
            </p>`;
 
-      renderBucket('rankedList', data.rows, true, 'No applicants have been scored against the rubric yet.');
-      renderBucket('reviewList', data.needs_review, false, 'Nothing is waiting on human review.');
-      renderBucket('pendingList', data.scoring_pending, false, 'Nothing is awaiting rubric scoring.');
+      const rows = data.rows || [];
+      const needsReview = data.needs_review || [];
+      const pending = data.scoring_pending || [];
+
+      // Consolidate all rows with category tag
+      allRows = [];
+      rows.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'ranked' })); });
+      needsReview.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'needs_review' })); });
+      pending.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'pending' })); });
+
+      const shortlistedCount = allRows.filter(r => r.status === 'shortlisted' || r.status === 'interview_linked').length;
+      const reviewCount = allRows.filter(r => r.status === 'needs_human_review' || r.bucket === 'needs_review').length;
+      const rejectedCount = allRows.filter(r => r.status === 'rejected').length;
+      const pendingCount = allRows.filter(r => r.status === 'scoring_pending' || r.bucket === 'pending').length;
+
+      document.getElementById('statTotal').textContent = allRows.length;
+      document.getElementById('statShortlisted').textContent = shortlistedCount;
+      document.getElementById('statReview').textContent = reviewCount;
+      document.getElementById('statRejected').textContent = rejectedCount;
+      document.getElementById('statPending').textContent = pendingCount;
+
+      document.getElementById('countAll').textContent = allRows.length;
+      document.getElementById('countShortlisted').textContent = shortlistedCount;
+      document.getElementById('countReview').textContent = reviewCount;
+      document.getElementById('countRejected').textContent = rejectedCount;
+      document.getElementById('countPending').textContent = pendingCount;
+
+      renderFilteredApplicants();
     } catch (err) {
-      renderBucket('rankedList', [], true, `Could not load screening results: ${escapeHtml(err.message)}`);
+      document.getElementById('applicantListContainer').innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load screening results: ${escapeHtml(err.message)}</p>`;
     }
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    renderFilteredApplicants();
+  }
+
+  function filterApplicants() {
+    renderFilteredApplicants();
+  }
+
+  function renderFilteredApplicants() {
+    const q = (document.getElementById('applicantSearch').value || '').toLowerCase().trim();
+    let filtered = allRows.filter(row => {
+      // Category filter
+      if (currentFilter === 'shortlisted') {
+        if (row.status !== 'shortlisted' && row.status !== 'interview_linked') return false;
+      } else if (currentFilter === 'needs_review') {
+        if (row.status !== 'needs_human_review' && row.bucket !== 'needs_review') return false;
+      } else if (currentFilter === 'rejected') {
+        if (row.status !== 'rejected') return false;
+      } else if (currentFilter === 'pending') {
+        if (row.status !== 'scoring_pending' && row.bucket !== 'pending') return false;
+      }
+
+      // Text search
+      if (q) {
+        const name = (row.candidate_name || '').toLowerCase();
+        const id = (row.candidate_id || '').toLowerCase();
+        const email = (row.email || '').toLowerCase();
+        const skills = (row.skills || []).join(' ').toLowerCase();
+        if (!name.includes(q) && !id.includes(q) && !email.includes(q) && !skills.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const container = document.getElementById('applicantListContainer');
+    if (!filtered.length) {
+      container.innerHTML = '<p class="card-sub" style="padding:1rem 0;">No applicants match the selected filter.</p>';
+      return;
+    }
+    container.innerHTML = filtered.map(applicantRow).join('');
+  }
+
+  async function viewResume(candidateId) {
+    const modal = document.getElementById('resumeModal');
+    const body = document.getElementById('modalResumeBody');
+    document.getElementById('modalCandidateName').textContent = 'Candidate Profile';
+    document.getElementById('modalCandidateMeta').textContent = candidateId;
+    body.innerHTML = '<p class="card-sub">Fetching resume data…</p>';
+    modal.style.display = 'flex';
+
+    try {
+      const data = await apiRequest(`/candidates/${encodeURIComponent(candidateId)}`);
+      const c = data.candidate || data;
+      const r = c.resume || {};
+
+      document.getElementById('modalCandidateName').textContent = r.candidate_name || c.candidate_name || candidateId;
+      document.getElementById('modalCandidateMeta').textContent = `${candidateId} · ${r.email || 'No email'} · ${r.phone || 'No phone'}`;
+
+      let skillsHtml = (r.skills || []).map(s => `<span class="tag">${escapeHtml(s)}</span>`).join(' ');
+      let workHtml = (r.work_experience || []).map(w => `
+        <div style="margin-bottom:0.75rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border, rgba(0,0,0,0.06));">
+          <div style="font-weight:600;">${escapeHtml(w.role || 'Role')} · ${escapeHtml(w.company || 'Company')}</div>
+          <div class="card-sub" style="font-size:12px;">${escapeHtml(w.duration || '')} ${w.location ? '· ' + escapeHtml(w.location) : ''}</div>
+          <p style="font-size:0.85rem; margin:0.3rem 0 0;">${escapeHtml(w.description || '')}</p>
+        </div>
+      `).join('') || '<p class="card-sub">No work experience entries parsed.</p>';
+
+      let eduHtml = (r.education || []).map(e => `
+        <div style="margin-bottom:0.5rem;">
+          <strong>${escapeHtml(e.degree || 'Degree')}</strong> — ${escapeHtml(e.institution || '')} ${e.year ? '(' + escapeHtml(e.year) + ')' : ''}
+        </div>
+      `).join('') || '<p class="card-sub">No education entries parsed.</p>';
+
+      body.innerHTML = `
+        <div style="margin-bottom:1rem;">
+          <h4 style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted); margin-bottom:0.35rem;">Overview</h4>
+          <div><strong>Total Experience:</strong> ${r.total_experience_years != null ? r.total_experience_years + ' years' : 'Not specified'}</div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h4 style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted); margin-bottom:0.35rem;">Extracted Skills</h4>
+          <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">${skillsHtml || '<span class="card-sub">No skills detected.</span>'}</div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h4 style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted); margin-bottom:0.35rem;">Work History</h4>
+          ${workHtml}
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <h4 style="font-size:11px; font-family:var(--font-mono); text-transform:uppercase; color:var(--text-muted); margin-bottom:0.35rem;">Education</h4>
+          ${eduHtml}
+        </div>
+
+        ${r.raw_text ? `
+          <div style="margin-top:1.25rem;">
+            <details>
+              <summary style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); cursor:pointer;">Raw Resume Text</summary>
+              <pre style="background:var(--bg); border:1px solid var(--surface-border); border-radius:var(--radius); padding:0.75rem; font-size:11.5px; white-space:pre-wrap; max-height:220px; overflow-y:auto; margin-top:0.4rem;">${escapeHtml(r.raw_text)}</pre>
+            </details>
+          </div>
+        ` : ''}
+      `;
+    } catch (err) {
+      body.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load candidate details: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function closeResumeModal(e) {
+    document.getElementById('resumeModal').style.display = 'none';
   }
 
   async function runMatching() {
@@ -205,24 +393,29 @@
     }
     try {
       const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
-      alert(`Matcher ran: ${result.matched} scored against the rubric, ${result.failed_candidate_ids.length} failed.`);
+      alert(`Auto-Matcher ran: ${result.matched} scored, ${result.shortlisted} auto-shortlisted, ${result.rejected} rejected.`);
       loadScreening();
     } catch (err) {
       alert(`Could not run the matcher: ${err.message}`);
     }
   }
 
-  /** Shortlisting and rejecting are the recruiter's decision, and the only
-      way an application ever leaves the screening stage. Scoring never
-      decides on its own. */
   async function decide(applicationId, action) {
     const verb = action === 'shortlist' ? 'Shortlist' : 'Reject';
-    if (!confirm(`${verb} this applicant?`)) return;
+    if (!confirm(`${verb} this applicant manually?`)) return;
     try {
       await apiRequest(`/applications/${encodeURIComponent(applicationId)}/${action}`, { method: 'POST' });
       loadScreening();
     } catch (err) {
       alert(`Could not ${action} this applicant: ${err.message}`);
+    }
+  }
+
+  function goToLeaderboard() {
+    if (jobId) {
+      window.location.href = `leaderboard.html?job_id=${encodeURIComponent(jobId)}`;
+    } else {
+      window.location.href = 'leaderboard.html';
     }
   }
 

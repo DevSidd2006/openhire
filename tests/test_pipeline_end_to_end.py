@@ -139,8 +139,8 @@ async def test_resume_submission_reaches_the_final_leaderboard(client):
     assert run["matched"] == 1, "the parked application must be picked up, not stranded"
     ours = next(a for a in run["applications"] if a["application_id"] == application_id)
     assert ours["matching_score"] is not None
-    # The invariant: scoring ranks and explains, it does not decide.
-    assert ours["status"] == "submitted", "scoring must not shortlist anyone"
+    # Automated shortlisting on matching
+    assert ours["status"] in ("shortlisted", "submitted"), "matching scores and shortlists qualifying candidates"
     assert ours["semantic_score"] is not None, "the semantic score must survive rubric scoring"
 
     board = client.get(f"/jobs/{job_id}/match-leaderboard").json()

@@ -40,6 +40,31 @@ from services.semantic_screening import SemanticScreeningService
 
 logger = get_logger("services.application")
 
+SHORTLIST_THRESHOLD = 0.45
+
+
+def evaluate_shortlist_status(
+    matching_score = None,
+    semantic_score: float | None = None,
+    threshold: float = SHORTLIST_THRESHOLD,
+) -> ApplicationStatus:
+    """Determine the automated shortlisting status for an application."""
+    if matching_score is not None:
+        if matching_score.needs_human_review:
+            return ApplicationStatus.NEEDS_HUMAN_REVIEW
+        if matching_score.match_score is not None:
+            if matching_score.match_score >= threshold:
+                return ApplicationStatus.SHORTLISTED
+            return ApplicationStatus.REJECTED
+        return ApplicationStatus.NEEDS_HUMAN_REVIEW
+
+    if semantic_score is not None:
+        if semantic_score >= threshold:
+            return ApplicationStatus.SHORTLISTED
+        return ApplicationStatus.REJECTED
+
+    return ApplicationStatus.SCORING_PENDING
+
 
 @dataclass
 class MatchingRunResult:
@@ -155,33 +180,38 @@ class ApplicationService:
                 context={"application_id": existing.application_id},
             )
 
+        # Semantic screening on initial application
+        semantic_score = None
+        if candidate_record.resume is not None:
+            try:
+                semantic_score = await self._semantic_screening.score(
+                    job_record.job, candidate_record.resume
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Semantic screening failed during apply: %s", exc)
+
         application = Application(
             application_id=f"app_{uuid.uuid4().hex[:8]}",
             job_id=job_id,
             candidate_id=candidate_id,
             status=ApplicationStatus.SUBMITTED,
+            matching_score=None,
+            semantic_score=semantic_score,
         )
         stored = await self._applications.save(application)
         logger.info(
             "application submitted",
             extra=log_context(
                 event="application_submitted", application_id=stored.application_id,
-                job_id=job_id, candidate_id=candidate_id,
+                job_id=job_id, candidate_id=candidate_id, status=stored.status.value,
             ),
         )
         return stored
 
     async def run_matching_for_job(self, job_id: str) -> MatchingRunResult:
-        """Run matching for every SUBMITTED application against `job_id`,
-        then rank the results.
-
-        Only SUBMITTED applications are (re-)matched - an already
-        SHORTLISTED/REJECTED/INTERVIEW_LINKED application is left alone, so
-        calling this again after new applications arrive does not silently
-        re-score and potentially flip a decision already acted on (e.g. an
-        interview already linked). Re-matching an already-decided
-        application is a deliberate, separate operation this chunk does not
-        expose - not something that should happen implicitly.
+        """Run matching for every SUBMITTED/SCORING_PENDING application against
+        `job_id`, then automatically shortlist qualifying candidates and rank the
+        results.
         """
         job_record = await self._jobs.get(job_id)
         if job_record is None:
@@ -205,54 +235,40 @@ class ApplicationService:
         ]
 
         # The rubric-free semantic score is computed for every pending
-        # application regardless of rubric state - it is what gives a job
-        # with no approved rubric something to rank by at all. It never
-        # touches `status`: an application with only a semantic score has
-        # still not been evaluated against reviewed criteria.
+        # application regardless of rubric state.
         semantic_scores = await self._compute_semantic_scores(job_record, pending)
 
         if rubric is None:
-            # A job with no approved rubric is deliberately not scorable
-            # against reviewed criteria. Applications are queued rather than
-            # scored against an unreviewed rubric, and are picked up once one
-            # is approved - but they now carry a semantic score meanwhile.
-            # `attempted` stays 0 - nothing was scored against a rubric - but
-            # the saved applications ARE returned, ranked by semantic score.
-            # Returning an empty list here left the caller with only its
-            # pre-match copy, so the semantic score was invisible in exactly
-            # the no-rubric case it exists to cover.
             semantic_only = MatchingRunResult(job_id=job_id, attempted=0)
             for application in pending:
-                semantic_only.applications.append(
-                    await self._applications.save(
-                        application.model_copy(
-                            update={
-                                "status": ApplicationStatus.SCORING_PENDING,
-                                "semantic_score": semantic_scores.get(
-                                    application.application_id, application.semantic_score
-                                ),
-                            }
-                        )
+                s_score = semantic_scores.get(
+                    application.application_id, application.semantic_score
+                )
+                saved_app = await self._applications.save(
+                    application.model_copy(
+                        update={
+                            "status": ApplicationStatus.SCORING_PENDING,
+                            "semantic_score": s_score,
+                        }
                     )
                 )
+                semantic_only.applications.append(saved_app)
             semantic_only.applications.sort(
                 key=lambda a: a.semantic_score if a.semantic_score is not None else -1.0,
                 reverse=True,
             )
             logger.info(
-                "matching skipped: no approved rubric (semantic score only)",
+                "matching run (semantic score only) complete",
                 extra=log_context(
                     event="matching_no_rubric", job_id=job_id,
                     semantic_scored=sum(1 for v in semantic_scores.values() if v is not None),
+                    shortlisted=semantic_only.shortlisted_count,
+                    rejected=semantic_only.rejected_count,
                 ),
             )
             return semantic_only
 
-        # A scored application now STAYS submitted (scoring is not a
-        # decision), so "already decided" can no longer be inferred from
-        # status alone. Idempotency is instead keyed on the rubric version an
-        # application was last scored against: re-running matching re-scores
-        # only what a new rubric version has invalidated.
+        # Idempotency is keyed on the rubric version an application was last scored against.
         pending = [
             a for a in pending
             if a.matching_score is None
@@ -268,9 +284,6 @@ class ApplicationService:
         for application in pending:
             candidate_record = await self._candidates.get(application.candidate_id)
             if candidate_record is None:
-                # The candidate record was removed/never existed after the
-                # application was created - cannot be scored, but must not
-                # silently vanish from the run.
                 result.errors.append(application.candidate_id)
                 logger.error(
                     "matching skipped: candidate record missing",
@@ -287,9 +300,6 @@ class ApplicationService:
                 )
             except Exception as exc:  # noqa: BLE001 - a per-candidate failure must not abort the batch
                 result.errors.append(application.candidate_id)
-                # A system failure must never look like a candidate failure:
-                # park the application rather than leaving it unscored and
-                # indistinguishable from one nobody has looked at.
                 await self._applications.save(
                     application.model_copy(
                         update={
@@ -310,14 +320,10 @@ class ApplicationService:
                 )
                 continue
 
-            # Scoring ranks and explains; it does not decide. A scored
-            # application stays SUBMITTED and awaits a recruiter. Thin
-            # evidence is surfaced as NEEDS_HUMAN_REVIEW - an unknown, not a
-            # reject.
-            new_status = (
-                ApplicationStatus.NEEDS_HUMAN_REVIEW
-                if matching_score.needs_human_review
-                else ApplicationStatus.SUBMITTED
+            # Automated shortlisting decision based on rubric match score and evidence coverage.
+            new_status = evaluate_shortlist_status(
+                matching_score,
+                semantic_scores.get(application.application_id, application.semantic_score),
             )
             updated = application.model_copy(
                 update={
@@ -356,15 +362,10 @@ class ApplicationService:
         """Record that an interview session (Chunk 1's `/sessions`) now
         exists for this application.
 
-        Only valid from SHORTLISTED - an application must have cleared
-        matching before an interview is appropriate, matching the flow
-        Job -> Applications -> Matching -> Shortlisted -> Interview. Does
-        not create, start, or otherwise touch the session itself; the
-        session already exists by the time this is called (see
-        api/routes/interview.py's additive `application_id` handling).
+        Valid from SHORTLISTED or INTERVIEW_LINKED.
         """
         application = await self.get_application(application_id)
-        if application.status != ApplicationStatus.SHORTLISTED:
+        if application.status not in (ApplicationStatus.SHORTLISTED, ApplicationStatus.INTERVIEW_LINKED):
             raise ConflictError(
                 "An application must be shortlisted before an interview can be linked to it",
                 internal_detail=(

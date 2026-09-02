@@ -47,7 +47,7 @@ class JobService:
         self._jd_analyzer_factory = jd_analyzer_factory
 
     async def create_job(
-        self, *, description: str, job_id: Optional[str] = None
+        self, *, description: str, job_id: Optional[str] = None, openings: Optional[int] = None
     ) -> JobRecord:
         """Analyze raw job-description text into a structured `JobDescription`
         and store it.
@@ -83,6 +83,9 @@ class JobService:
                 internal_detail=f"JDAnalyzerAgent failed for job_id={job_id!r}: {error_reason}",
                 context={"job_id": job_id},
             )
+
+        if openings is not None and openings >= 1:
+            job_description = job_description.model_copy(update={"openings": openings})
 
         record = JobRecord(job_id=job_id, job=job_description, is_active=True)
         stored = await self._jobs.save(record)

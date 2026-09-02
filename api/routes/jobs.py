@@ -54,7 +54,9 @@ async def create_job(
     needs real role persistence, which is blocked on the database/auth
     teammate; see the Chunk 2 handoff.
     """
-    record = await service.create_job(description=payload.description, job_id=payload.job_id)
+    record = await service.create_job(
+        description=payload.description, job_id=payload.job_id, openings=payload.openings
+    )
     return JobResponse.from_record(record)
 
 

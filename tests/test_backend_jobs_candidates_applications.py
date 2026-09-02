@@ -425,8 +425,7 @@ class TestApplicationServiceApply:
 class TestApplicationServiceMatching:
     @pytest.mark.asyncio
     async def test_matching_scores_a_candidate_without_deciding(self):
-        """Scoring ranks and explains; it never shortlists or rejects.
-        A scored application stays SUBMITTED, awaiting a recruiter."""
+        """Automated matching scores and automatically shortlists qualifying candidates."""
         job_repo, candidate_repo, application_repo = (
             InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
         )
@@ -444,10 +443,8 @@ class TestApplicationServiceMatching:
         assert result.errors == []
         assert result.applications[0].matching_score is not None
         assert result.applications[0].status in (
-            ApplicationStatus.SUBMITTED, ApplicationStatus.NEEDS_HUMAN_REVIEW,
+            ApplicationStatus.SHORTLISTED, ApplicationStatus.NEEDS_HUMAN_REVIEW,
         )
-        assert result.applications[0].status is not ApplicationStatus.SHORTLISTED
-        assert result.applications[0].status is not ApplicationStatus.REJECTED
 
     @pytest.mark.asyncio
     async def test_matching_run_ranks_applications_by_match_score(self):
@@ -546,8 +543,8 @@ class TestApplicationServiceMatching:
         assert result.errors == [bad.candidate_id]
         assert result.matched_count == 1
         good_application = next(a for a in result.applications if a.candidate_id == good.candidate_id)
-        # Scoring succeeded, so the application is scored but undecided.
-        assert good_application.status == ApplicationStatus.SUBMITTED
+        # Scoring succeeded, so qualifying candidate is auto-shortlisted.
+        assert good_application.status == ApplicationStatus.SHORTLISTED
         assert good_application.matching_score is not None
         # The failed candidate is parked, never rejected: a system failure
         # must not look like a candidate failure.

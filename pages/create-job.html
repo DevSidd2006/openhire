@@ -28,6 +28,14 @@
     </div>
 
     <div class="form-group">
+      <label class="form-label">Target Number of Openings / Vacancies</label>
+      <input type="number" id="jobOpenings" class="form-control" placeholder="1" value="1" min="1" max="100">
+      <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+        After AI interviews, exactly this number of top-ranked candidates will be automatically selected for hire/offer on the leaderboard.
+      </p>
+    </div>
+
+    <div class="form-group">
       <label class="form-label">Job Description Text</label>
       <textarea id="jobDescription" class="form-control" rows="8" placeholder="We are seeking an engineer experienced in Python, high-throughput microservices, PostgreSQL, and distributed caching..."></textarea>
     </div>
@@ -45,6 +53,7 @@
   async function handleJobCreate() {
     const title = document.getElementById('jobTitle').value.trim();
     const desc = document.getElementById('jobDescription').value.trim();
+    const openingsVal = parseInt(document.getElementById('jobOpenings').value, 10) || 1;
     if (!desc) {
       alert('Please provide a job description.');
       return;
@@ -54,18 +63,14 @@
     btn.disabled = true;
     btn.textContent = 'Analyzing JD...';
 
-    // The backend extracts title/skills/competencies itself from the raw
-    // description via JDAnalyzerAgent (POST /jobs takes only free text -
-    // see api/models_jobs.py:CreateJobRequest); folding an explicit title
-    // into the text just gives the analyzer stronger signal for it.
     const fullDescription = title ? `Position: ${title}\n\n${desc}` : desc;
 
     try {
       const job = await apiRequest('/jobs', {
         method: 'POST',
-        body: { description: fullDescription },
+        body: { description: fullDescription, openings: openingsVal },
       });
-      alert(`Job successfully parsed and published! (${job.job.title})`);
+      alert(`Job successfully parsed and published! (${job.job.title} - ${job.job.openings || openingsVal} Openings)`);
       window.location.href = `job-detail.html?job_id=${encodeURIComponent(job.job_id)}`;
     } catch (err) {
       alert(`Could not publish this job: ${err.message}`);

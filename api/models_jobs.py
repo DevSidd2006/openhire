@@ -35,6 +35,7 @@ class CreateJobRequest(BaseModel):
     # Optional caller-supplied id. Generated (job_<uuid8>) if omitted - see
     # JobService.create_job.
     job_id: Optional[str] = Field(default=None, min_length=1)
+    openings: Optional[int] = Field(default=1, ge=1, description="Number of openings/vacancies")
 
 
 class JobResponse(BaseModel):
@@ -84,6 +85,7 @@ class UpdateJobRequest(BaseModel):
     description: Optional[str] = None
     department: Optional[str] = None
     level: Optional[str] = None
+    openings: Optional[int] = Field(default=None, ge=1)
     required_skills: Optional[List[str]] = None
     preferred_skills: Optional[List[str]] = None
     required_qualifications: Optional[List[str]] = None

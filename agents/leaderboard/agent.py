@@ -37,9 +37,13 @@ class LeaderboardAgent(BaseAgent):
             CandidateLeaderboard with ranked entries
         """
         incomplete_candidates = incomplete_candidates or []
+        openings = int(kwargs.get("openings") or 1)
+        if openings < 1:
+            openings = 1
+
         self.logger.info(
             f"Creating leaderboard for {len(reports)} candidates for job {job_id} "
-            f"({len(incomplete_candidates)} incomplete)"
+            f"(openings: {openings}, {len(incomplete_candidates)} incomplete)"
         )
 
         try:
@@ -54,7 +58,10 @@ class LeaderboardAgent(BaseAgent):
             entries = []
             for rank, report in enumerate(sorted_reports, 1):
                 # Calculate percentile
-                percentile = ((len(sorted_reports) - rank) / len(sorted_reports)) * 100
+                percentile = ((len(sorted_reports) - rank) / len(sorted_reports)) * 100 if sorted_reports else 0.0
+
+                is_selected = rank <= openings
+                selection_status = "selected" if is_selected else "waitlisted"
 
                 entry = LeaderboardEntry(
                     entry_id=f"entry_{uuid.uuid4().hex[:8]}",
@@ -70,21 +77,29 @@ class LeaderboardAgent(BaseAgent):
                     has_integrity_issues=len(report.integrity_flags) > 0,
                     has_bias_concerns=len(report.bias_flags) > 0,
                     requires_human_review=report.requires_human_review,
+                    is_selected=is_selected,
+                    selection_status=selection_status,
                 )
                 entries.append(entry)
+
+            selected_candidates = [e for e in entries if e.is_selected]
+            selected_candidate_ids = [e.candidate_id for e in selected_candidates]
 
             # Create leaderboard
             leaderboard = CandidateLeaderboard(
                 leaderboard_id=f"leaderboard_{uuid.uuid4().hex[:8]}",
                 job_id=job_id,
+                openings=openings,
                 total_candidates=len(reports),
                 strong_candidates=len([e for e in entries if e.recommendation == "strong_candidate"]),
                 candidates=len([e for e in entries if e.recommendation == "candidate"]),
                 requires_review=len([e for e in entries if e.requires_human_review]),
                 entries=entries,
                 top_candidates=[e for e in entries[:3]],
+                selected_candidates=selected_candidates,
+                selected_candidate_ids=selected_candidate_ids,
                 incomplete_candidates=incomplete_candidates,
-                explanation=self._generate_summary(entries, incomplete_candidates),
+                explanation=self._generate_summary(entries, incomplete_candidates, openings),
             )
 
             return {"leaderboard": leaderboard}
@@ -93,7 +108,9 @@ class LeaderboardAgent(BaseAgent):
             self.logger.error(f"Leaderboard generation failed: {str(e)}")
             return {"leaderboard": None, "error": str(e)}
 
-    def _generate_summary(self, entries: List[LeaderboardEntry], incomplete_candidates: List[str] = None) -> str:
+    def _generate_summary(
+        self, entries: List[LeaderboardEntry], incomplete_candidates: List[str] = None, openings: int = 1
+    ) -> str:
         """Generate leaderboard summary."""
         incomplete_candidates = incomplete_candidates or []
 
@@ -108,7 +125,9 @@ class LeaderboardAgent(BaseAgent):
                 )
             return "No candidates were shortlisted for this job."
 
+        selected = [e for e in entries if e.is_selected]
         lines = [
+            f"Target Openings: {openings} | Selected Candidates: {len(selected)}",
             f"Total candidates ranked: {len(entries)}",
             f"Top candidate: {entries[0].candidate_name} (Score: {entries[0].weighted_score:.1f}/10)",
         ]

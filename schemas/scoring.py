@@ -89,11 +89,15 @@ class LeaderboardEntry(BaseModel):
     has_bias_concerns: bool
     requires_human_review: bool
 
+    is_selected: bool = Field(default=False, description="Whether this candidate is selected for one of the job openings")
+    selection_status: str = Field(default="pending", description="selected, waitlisted, or rejected")
+
 
 class CandidateLeaderboard(BaseModel):
     """Ranked candidate leaderboard, produced by the LeaderboardAgent."""
     leaderboard_id: str
     job_id: str
+    openings: int = Field(default=1, description="Number of job openings/vacancies")
 
     total_candidates: int
     strong_candidates: int
@@ -102,6 +106,8 @@ class CandidateLeaderboard(BaseModel):
 
     entries: List[LeaderboardEntry] = Field(default_factory=list)
     top_candidates: List[LeaderboardEntry] = Field(default_factory=list)
+    selected_candidates: List[LeaderboardEntry] = Field(default_factory=list)
+    selected_candidate_ids: List[str] = Field(default_factory=list)
 
     # Candidate IDs that were shortlisted but never produced a scored report
     # (e.g. a technical/behavioral evaluation failed or was never returned).

@@ -147,51 +147,126 @@
       });
       const applicationId = appResult.application.application_id;
 
-      // 3. Run matching for this job (ResumeMatcherAgent) - this scores
-      //    every SUBMITTED application for the job, including ours.
-      btn.textContent = 'Matching against rubric...';
+      // 3. Run matching for this job (ResumeMatcherAgent) - scores
+      //    every SUBMITTED/SCORING_PENDING application for the job, including ours.
+      btn.textContent = 'Analyzing fit & shortlisting...';
       const matchResult = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
-      const ourApplication = matchResult.applications.find(a => a.application_id === applicationId) || appResult.application;
+      const ourApplication = (matchResult.applications && matchResult.applications.find(a => a.application_id === applicationId)) || appResult.application;
 
-      // Two independent scores, and neither one is a decision:
-      //  - matching_score: the evidence-bound rubric score. Absent until a
-      //    recruiter has approved a rubric for this job.
-      //  - semantic_score: rubric-free resume-to-JD similarity, computed for
-      //    every application. Present even with no rubric.
-      // A null score means "not computed" (no rubric yet, or an embedding
-      // outage) - it must never be shown as 0% or read as a rejection.
       const rubricPct = ourApplication.matching_score && ourApplication.matching_score.match_score != null
         ? Math.round(ourApplication.matching_score.match_score * 100)
         : null;
       const semanticPct = ourApplication.semantic_score != null
         ? Math.round(ourApplication.semantic_score * 100)
         : null;
+      const displayPct = rubricPct !== null ? rubricPct : semanticPct;
 
-      const scoreLine = rubricPct !== null
-        ? ` Your resume scored ${rubricPct}% against this role's rubric.`
-        : (semanticPct !== null
-            ? ` Your resume is a ${semanticPct}% semantic match to this job description.`
-            : '');
+      const isShortlisted = ourApplication.status === 'shortlisted' || ourApplication.status === 'interview_linked';
+      const isRejected = ourApplication.status === 'rejected';
 
-      // Scoring ranks and explains; a recruiter decides who advances. Every
-      // status below is "received, awaiting a human" - none of them is a
-      // rejection, and this page must not invent one.
-      let statusLine;
-      if (ourApplication.status === 'scoring_pending') {
-        statusLine = " We're still finishing the full review of your application.";
-      } else if (ourApplication.status === 'needs_human_review') {
-        statusLine = ' A recruiter will review your application personally.';
+      // Render the result card dynamically in place of the form
+      const cardEl = document.querySelector('.card');
+      if (isShortlisted) {
+        cardEl.innerHTML = `
+          <div style="text-align:center; padding:1.5rem 0.5rem;">
+            <div style="font-size:3rem; margin-bottom:0.75rem;">🎉</div>
+            <h2 style="font-weight:700; color:var(--text-main); margin-bottom:0.5rem;">Resume Shortlisted!</h2>
+            <p class="card-sub" style="font-size:1rem; margin-bottom:1.25rem;">
+              Congratulations <strong>${escapeHtml(name)}</strong>, your qualifications have been automatically verified and shortlisted for <strong>${escapeHtml(jobId)}</strong>.
+            </p>
+
+            <div style="background:var(--bg); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1.25rem; margin-bottom:1.5rem; text-align:left;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="font-weight:600;">Match Evaluation Score</span>
+                <span class="score-pill high" style="font-size:0.9rem;">${displayPct !== null ? displayPct + '%' : 'Qualified'}</span>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                ${escapeHtml(ourApplication.matching_score && ourApplication.matching_score.explanation || 'Strong alignment with role competencies and requirements.')}
+              </p>
+            </div>
+
+            <div style="background:var(--primary-subtle, #eff6ff); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem; text-align:left;">
+              <strong style="color:var(--primary); font-size:0.9rem;">🎙️ On-Demand AI Voice Interview</strong>
+              <p style="font-size:0.85rem; color:var(--text-main); margin:0.3rem 0 0;">
+                You can give your structured interview <strong>right now</strong>, or <strong>whenever you want</strong> by logging into your Candidate Dashboard.
+              </p>
+            </div>
+
+            <div style="display:flex; gap:0.75rem; flex-direction:column;">
+              <button class="btn-primary" style="padding:0.75rem; font-size:1rem;" onclick="startInterviewNow('${ourApplication.application_id}')">
+                🎙️ Start Interview Now →
+              </button>
+              <button class="btn-outline" style="padding:0.6rem; font-size:0.9rem;" onclick="window.location.href='candidate.html'">
+                Go to Candidate Dashboard (Take Later)
+              </button>
+            </div>
+          </div>
+        `;
+      } else if (isRejected) {
+        cardEl.innerHTML = `
+          <div style="text-align:center; padding:1.5rem 0.5rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.75rem;">📋</div>
+            <h2 style="font-weight:700; color:var(--text-main); margin-bottom:0.5rem;">Application Evaluated</h2>
+            <p class="card-sub" style="font-size:0.95rem; margin-bottom:1.25rem;">
+              Thank you for applying to <strong>${escapeHtml(jobId)}</strong>.
+            </p>
+            <div style="background:var(--bg); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem; text-align:left;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="font-weight:600;">Match Score</span>
+                <span class="score-pill low">${displayPct !== null ? displayPct + '%' : 'Under threshold'}</span>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                ${escapeHtml(ourApplication.matching_score && ourApplication.matching_score.explanation || 'Your profile did not meet the auto-shortlisting criteria for this specific role at this time.')}
+              </p>
+            </div>
+            <button class="btn-primary" style="width:100%;" onclick="window.location.href='candidate.html'">
+              Browse Other Open Positions
+            </button>
+          </div>
+        `;
       } else {
-        statusLine = ' Your application is now with the hiring team for review.';
+        cardEl.innerHTML = `
+          <div style="text-align:center; padding:1.5rem 0.5rem;">
+            <div style="font-size:2.5rem; margin-bottom:0.75rem;">⏳</div>
+            <h2 style="font-weight:700; color:var(--text-main); margin-bottom:0.5rem;">Application Under Review</h2>
+            <p class="card-sub" style="font-size:0.95rem; margin-bottom:1.25rem;">
+              Your resume has been parsed and queued for review for <strong>${escapeHtml(jobId)}</strong>.
+            </p>
+            <div style="background:var(--bg); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem; text-align:left;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="font-weight:600;">Status</span>
+                <span class="tag">${escapeHtml(ourApplication.status.replace(/_/g, ' '))}</span>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">
+                ${displayPct !== null ? `Match score: ${displayPct}%. ` : ''}A recruiter will review your application. You will be able to launch your interview from your dashboard once approved.
+              </p>
+            </div>
+            <button class="btn-primary" style="width:100%;" onclick="window.location.href='candidate.html'">
+              Go to Candidate Dashboard
+            </button>
+          </div>
+        `;
       }
-
-      alert(`Thanks for applying!${scoreLine}${statusLine} You'll hear from us if you're invited to interview.`);
-      window.location.href = 'candidate.html';
-      return;
     } catch (err) {
       alert(`Could not submit your application: ${err.message}`);
       btn.disabled = false;
       btn.textContent = 'Submit Resume & Match Fit';
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function startInterviewNow(applicationId) {
+    try {
+      const record = await apiRequest(`/applications/${encodeURIComponent(applicationId)}`);
+      const sessionId = await ensureInterviewSession(record.application);
+      window.location.href = `interview.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(applicationId)}`;
+    } catch (err) {
+      alert(`Could not start the interview: ${err.message}`);
     }
   }
 </script>
