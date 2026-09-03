@@ -19,12 +19,14 @@ from api.models_recruiter import (
 )
 from core.dependencies import (
     get_application_service,
+    get_candidate_service,
     get_evaluation_service,
     get_interview_service,
 )
 from core.errors import BadRequestError
 from core.security import Principal, require_authenticated, require_scopes
 from services.application_service import ApplicationService
+from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
 
@@ -41,9 +43,15 @@ async def create_application(
 
     Errors: 404 `not_found` if the job or candidate doesn't exist; 409
     `conflict` if the job is archived, or if this candidate has already
-    applied to this job (Chunk 2 Step 9's duplicate-application case).
+    applied to this job (Chunk 2 Step 9's duplicate-application case); 403
+    `forbidden` if the candidate does not belong to the authenticated user.
     """
-    application = await service.apply(job_id=payload.job_id, candidate_id=payload.candidate_id)
+    user_id = principal.subject_id or "user_anonymous"
+    application = await service.apply(
+        job_id=payload.job_id,
+        candidate_id=payload.candidate_id,
+        user_id=user_id,
+    )
     return ApplicationResponse.from_domain(application)
 
 
@@ -51,10 +59,16 @@ async def create_application(
 async def get_application(
     application_id: str,
     service: ApplicationService = Depends(get_application_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> ApplicationResponse:
-    """GET /applications/{application_id}. Errors: 404 `not_found`."""
+    """GET /applications/{application_id}. Errors: 404 `not_found`, 403 `forbidden`
+    if the application's candidate does not belong to the authenticated user."""
+    user_id = principal.subject_id or "user_anonymous"
     application = await service.get_application(application_id)
+    await candidate_service.validate_candidate_ownership(
+        application.candidate_id, user_id
+    )
     return ApplicationResponse.from_domain(application)
 
 
@@ -63,6 +77,7 @@ async def list_applications(
     job_id: str | None = Query(default=None),
     candidate_id: str | None = Query(default=None),
     service: ApplicationService = Depends(get_application_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> ApplicationListResponse:
     """GET /applications?job_id=... or ?candidate_id=... - exactly one of
@@ -72,15 +87,21 @@ async def list_applications(
     (Chunk 1): an unbounded "list every application" is how one job's or one
     candidate's applications end up visible to an unrelated caller, so no
     such listing is offered.
+
+    When filtering by candidate_id, validates that the candidate belongs to
+    the authenticated user (403 if not).
     """
     if bool(job_id) == bool(candidate_id):
         raise BadRequestError(
             "Provide exactly one of job_id or candidate_id",
             internal_detail=f"job_id={job_id!r} candidate_id={candidate_id!r}",
         )
+    user_id = principal.subject_id or "user_anonymous"
     if job_id:
         applications = await service.list_for_job(job_id)
     else:
+        # Validate that the candidate belongs to the authenticated user
+        await candidate_service.validate_candidate_ownership(candidate_id, user_id)
         applications = await service.list_for_candidate(candidate_id)
     return ApplicationListResponse.from_domain(applications)
 

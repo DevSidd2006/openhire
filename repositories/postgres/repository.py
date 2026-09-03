@@ -76,6 +76,7 @@ def _job_record_from_row(row: asyncpg.Record) -> JobRecord:
 def _candidate_record_from_row(row: asyncpg.Record) -> CandidateRecord:
     return CandidateRecord(
         candidate_id=row["candidate_id"],
+        user_id=row["user_id"],
         resume=ParsedResume.model_validate(row["resume"]),
         used_fallback=row["used_fallback"],
         parse_warning=row["parse_warning"],
@@ -252,16 +253,17 @@ class PostgresCandidateRepository(CandidateRepository):
             row = await conn.fetchrow(
                 """
                 INSERT INTO candidates
-                    (candidate_id, resume, used_fallback, parse_warning, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, now())
+                    (candidate_id, user_id, resume, used_fallback, parse_warning, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, now())
                 ON CONFLICT (candidate_id) DO UPDATE
                     SET resume = EXCLUDED.resume,
                         used_fallback = EXCLUDED.used_fallback,
                         parse_warning = EXCLUDED.parse_warning,
                         updated_at = now()
-                RETURNING candidate_id, resume, used_fallback, parse_warning, created_at, updated_at
+                RETURNING candidate_id, user_id, resume, used_fallback, parse_warning, created_at, updated_at
                 """,
                 record.candidate_id,
+                record.user_id,
                 record.resume.model_dump(mode="json"),
                 record.used_fallback,
                 record.parse_warning,
@@ -291,6 +293,15 @@ class PostgresCandidateRepository(CandidateRepository):
             rows = await conn.fetch(
                 "SELECT * FROM candidates WHERE candidate_id = ANY($1::text[])",
                 candidate_ids,
+            )
+        return [_candidate_record_from_row(row) for row in rows]
+
+    async def list_for_user(self, user_id: str) -> List[CandidateRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM candidates WHERE user_id = $1 ORDER BY created_at DESC",
+                user_id,
             )
         return [_candidate_record_from_row(row) for row in rows]
 

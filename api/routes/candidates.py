@@ -46,11 +46,17 @@ async def register_candidate(
     deterministic fallback fails (a genuine unexpected error - see
     agents/resume_parser/agent.py's module docstring); 422 for a missing
     `resume_text`/`candidate_name`.
+
+    The candidate is linked to the authenticated user (principal.subject_id).
+    When AUTH_ENABLED=false (tests/dev), subject_id is None, so we use a
+    default test user_id.
     """
+    user_id = principal.subject_id or "user_anonymous"
     record = await service.register_candidate(
         resume_text=payload.resume_text,
         candidate_name=payload.candidate_name,
         candidate_id=payload.candidate_id,
+        user_id=user_id,
     )
     return CandidateResponse.from_record(record)
 
@@ -112,8 +118,10 @@ async def get_candidate(
     service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> CandidateResponse:
-    """GET /candidates/{candidate_id}. Errors: 404 `not_found`."""
-    record = await service.get_candidate(candidate_id)
+    """GET /candidates/{candidate_id}. Errors: 404 `not_found`, 403 `forbidden`
+    if the candidate does not belong to the authenticated user."""
+    user_id = principal.subject_id or "user_anonymous"
+    record = await service.validate_candidate_ownership(candidate_id, user_id)
     return CandidateResponse.from_record(record)
 
 
@@ -145,9 +153,12 @@ async def update_candidate(
     direct field edit; see services/candidate_service.py:update_candidate
     for exactly how the two combine.
 
-    Errors: 404 `not_found`; 503 `dependency_unavailable` if a supplied
+    Errors: 404 `not_found`, 403 `forbidden` if the candidate does not belong
+    to the authenticated user; 503 `dependency_unavailable` if a supplied
     `resume_text` fails to parse even via the fallback.
     """
+    user_id = principal.subject_id or "user_anonymous"
+    await service.validate_candidate_ownership(candidate_id, user_id)
     data = payload.model_dump(exclude_unset=True)
     resume_text = data.pop("resume_text", None)
     record = await service.update_candidate(candidate_id, resume_text=resume_text, patch=data)

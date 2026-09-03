@@ -26,7 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List
 
-from core.errors import ConflictError, NotFoundError
+from core.errors import ConflictError, ForbiddenError, NotFoundError
 from core.logging import get_logger, log_context
 from repositories.interfaces import (
     ApplicationRepository,
@@ -142,13 +142,16 @@ class ApplicationService:
     # Commands
     # ------------------------------------------------------------------
 
-    async def apply(self, *, job_id: str, candidate_id: str) -> Application:
+    async def apply(self, *, job_id: str, candidate_id: str, user_id: str | None = None) -> Application:
         """Candidate applies to a job.
 
         Validates both ends of the link actually exist (job, candidate),
         that the job is still accepting applications (not archived), and
         that this exact pair hasn't already applied - a duplicate
         application is a 409, not a second row (Chunk 2 Step 9).
+
+        If `user_id` is provided, validates that the candidate belongs to
+        the authenticated user (ownership check for authorization).
         """
         job_record = await self._jobs.get(job_id)
         if job_record is None:
@@ -167,6 +170,12 @@ class ApplicationService:
             raise NotFoundError(
                 "No candidate found for the given candidate_id",
                 internal_detail=f"candidate_id={candidate_id!r} not found",
+            )
+
+        if user_id is not None and candidate_record.user_id != user_id:
+            raise ForbiddenError(
+                "You do not have permission to apply as this candidate",
+                internal_detail=f"candidate {candidate_id!r} owned by {candidate_record.user_id!r}, not {user_id!r}",
             )
 
         existing = await self._applications.get_for_job_and_candidate(job_id, candidate_id)

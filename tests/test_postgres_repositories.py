@@ -126,7 +126,9 @@ async def _seed_job_and_candidate(pool, job_id="job_pg_001", candidate_id="cand_
     job_repo = PostgresJobRepository(pool)
     candidate_repo = PostgresCandidateRepository(pool)
     await job_repo.save(JobRecord(job_id=job_id, job=_job(job_id)))
-    await candidate_repo.save(CandidateRecord(candidate_id=candidate_id, resume=_resume(candidate_id)))
+    await candidate_repo.save(CandidateRecord(
+        candidate_id=candidate_id, user_id="user_pg_001", resume=_resume(candidate_id)
+    ))
 
 
 class TestPostgresJobRepository:
@@ -171,7 +173,9 @@ class TestPostgresCandidateRepository:
     async def test_save_then_get_round_trips(self, pool):
         repo = PostgresCandidateRepository(pool)
         await repo.save(
-            CandidateRecord(candidate_id="cand_a", resume=_resume("cand_a"), used_fallback=True)
+            CandidateRecord(
+                candidate_id="cand_a", user_id="user_a", resume=_resume("cand_a"), used_fallback=True
+            )
         )
         fetched = await repo.get("cand_a")
         assert fetched is not None
@@ -180,7 +184,7 @@ class TestPostgresCandidateRepository:
 
     async def test_get_many_ignores_missing_ids(self, pool):
         repo = PostgresCandidateRepository(pool)
-        await repo.save(CandidateRecord(candidate_id="cand_b", resume=_resume("cand_b")))
+        await repo.save(CandidateRecord(candidate_id="cand_b", user_id="user_b", resume=_resume("cand_b")))
         result = await repo.get_many(["cand_b", "does-not-exist"])
         assert {r.candidate_id for r in result} == {"cand_b"}
 

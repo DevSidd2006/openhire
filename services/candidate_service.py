@@ -15,7 +15,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from agents.resume_parser.agent import ResumeParserAgent
-from core.errors import DependencyError, NotFoundError
+from core.errors import DependencyError, ForbiddenError, NotFoundError
 from core.logging import get_logger, log_context
 from repositories.interfaces import CandidateRecord, CandidateRepository
 from schemas.resume import ParsedResume
@@ -40,6 +40,7 @@ class CandidateService:
         *,
         resume_text: str,
         candidate_name: str,
+        user_id: str,
         candidate_id: Optional[str] = None,
     ) -> CandidateRecord:
         """Parse raw resume text into a `ParsedResume` and store it.
@@ -47,6 +48,8 @@ class CandidateService:
         `candidate_id` is generated (uuid4, matching `JobService.create_job`'s
         job_id generation) when not supplied - never invented by the parser,
         which takes it as an input.
+
+        `user_id` links the candidate to the authenticated user who owns it.
         """
         candidate_id = candidate_id or f"cand_{uuid.uuid4().hex[:8]}"
         parsed_resume, used_fallback, warning = await self._parse(
@@ -55,6 +58,7 @@ class CandidateService:
 
         record = CandidateRecord(
             candidate_id=candidate_id,
+            user_id=user_id,
             resume=parsed_resume,
             used_fallback=used_fallback,
             parse_warning=warning,
@@ -64,6 +68,7 @@ class CandidateService:
             "candidate registered",
             extra=log_context(
                 event="candidate_registered", candidate_id=candidate_id,
+                user_id=user_id,
                 used_fallback=used_fallback,
             ),
         )
@@ -95,6 +100,19 @@ class CandidateService:
             raise NotFoundError(
                 "No candidate found for the given candidate_id",
                 internal_detail=f"candidate record missing for candidate_id={candidate_id!r}",
+            )
+        return record
+
+    async def validate_candidate_ownership(self, candidate_id: str, user_id: str) -> CandidateRecord:
+        """Get a candidate and validate that it belongs to the authenticated user.
+
+        Raises ForbiddenError if the candidate does not belong to this user.
+        """
+        record = await self.get_candidate(candidate_id)
+        if record.user_id != user_id:
+            raise ForbiddenError(
+                "You do not have permission to access this candidate",
+                internal_detail=f"candidate {candidate_id!r} owned by {record.user_id!r}, not {user_id!r}",
             )
         return record
 

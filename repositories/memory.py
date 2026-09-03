@@ -237,6 +237,11 @@ class InMemoryCandidateRepository(CandidateRepository):
         async with self._lock:
             return [c for cid, c in self._candidates.items() if cid in wanted]
 
+    async def list_for_user(self, user_id: str) -> List[CandidateRecord]:
+        async with self._lock:
+            candidates = [c for c in self._candidates.values() if c.user_id == user_id]
+        return sorted(candidates, key=lambda r: r.created_at, reverse=True)
+
 
 class InMemoryApplicationRepository(ApplicationRepository):
     """Dict-backed `ApplicationRepository`. TEMPORARY - see module docstring."""

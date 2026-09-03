@@ -145,7 +145,9 @@ class RecruiterHarness:
     async def seed_candidate(self, candidate_id, name="Candidate"):
         from repositories.interfaces import CandidateRecord
 
-        await self.candidates.save(CandidateRecord(candidate_id=candidate_id, resume=_resume(candidate_id, name)))
+        await self.candidates.save(CandidateRecord(
+            candidate_id=candidate_id, user_id="user_rec", resume=_resume(candidate_id, name)
+        ))
 
     async def seed_application(
         self, *, application_id, candidate_id, job_id="job_rec", status=ApplicationStatus.SHORTLISTED,
@@ -590,7 +592,7 @@ def _seed_bare_application(app, *, status: str):
         container = app.state.container
         await container.job_repository.save(JobRecord(job_id=job_id, job=_job(job_id)))
         await container.candidate_repository.save(
-            CandidateRecord(candidate_id=candidate_id, resume=_resume(candidate_id, "Bare"))
+            CandidateRecord(candidate_id=candidate_id, user_id="user_test", resume=_resume(candidate_id, "Bare"))
         )
         await container.application_repository.save(Application(
             application_id=application_id, job_id=job_id, candidate_id=candidate_id,
@@ -621,7 +623,7 @@ def _seed_http(app, candidate_id, job_id, application_id, *, run_eval, seal=True
         container = app.state.container
         await container.job_repository.save(JobRecord(job_id=job_id, job=_job(job_id)))
         await container.candidate_repository.save(
-            CandidateRecord(candidate_id=candidate_id, resume=_resume(candidate_id, "HTTP Candidate"))
+            CandidateRecord(candidate_id=candidate_id, user_id="user_test", resume=_resume(candidate_id, "HTTP Candidate"))
         )
         await container.application_repository.save(Application(
             application_id=application_id, job_id=job_id, candidate_id=candidate_id,

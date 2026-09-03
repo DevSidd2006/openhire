@@ -394,6 +394,7 @@ class CandidateRecord(BaseModel):
     model_config = ConfigDict(frozen=False)
 
     candidate_id: str
+    user_id: str
     resume: ParsedResume
     used_fallback: bool = False
     parse_warning: Optional[str] = None
@@ -429,6 +430,11 @@ class CandidateRepository(ABC):
         missing ids are simply absent, never an error. See
         `SessionRepository.get_many`'s docstring for why this exists
         (Chunk 5's recruiter applications-for-a-job listing)."""
+
+    @abstractmethod
+    async def list_for_user(self, user_id: str) -> list[CandidateRecord]:
+        """All candidates owned by the given user, newest first. Used for
+        ownership validation when a candidate is accessed or updated."""
 
 
 class UserRecord(BaseModel):

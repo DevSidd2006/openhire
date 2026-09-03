@@ -140,15 +140,16 @@ async def _seed_job(job_repo: JobRepository, job_service: JobService = None) -> 
 
 async def _seed_candidate(
     candidate_repo: CandidateRepository, resume_text=_RESUME_TEXT_STRONG, name="Jane Doe",
-    candidate_service: CandidateService = None,
+    candidate_service: CandidateService = None, user_id: str | None = None,
 ) -> CandidateRecord:
     service = candidate_service or CandidateService(candidate_repository=candidate_repo)
-    return await service.register_candidate(resume_text=resume_text, candidate_name=name)
+    user_id = user_id or "user_test"
+    return await service.register_candidate(resume_text=resume_text, candidate_name=name, user_id=user_id)
 
 
 async def _seed_candidate_record(
     candidate_repo: CandidateRepository, *, candidate_id: str, name: str,
-    skills: list, total_experience_years: float,
+    skills: list, total_experience_years: float, user_id: str | None = None,
 ) -> CandidateRecord:
     """Seed a CandidateRecord with CONTROLLED skills/experience, bypassing
     ResumeParserAgent entirely.
@@ -163,11 +164,14 @@ async def _seed_candidate_record(
     """
     from schemas.resume import ParsedResume
 
+    user_id = user_id or f"user_{candidate_id[-8:]}"
     resume = ParsedResume(
         candidate_id=candidate_id, candidate_name=name, skills=skills,
         total_experience_years=total_experience_years,
     )
-    return await candidate_repo.save(CandidateRecord(candidate_id=candidate_id, resume=resume))
+    return await candidate_repo.save(CandidateRecord(
+        candidate_id=candidate_id, user_id=user_id, resume=resume
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +288,7 @@ class TestCandidateService:
     async def test_register_candidate_parses_raw_resume_text(self):
         service = _candidate_service()
         record = await service.register_candidate(
-            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane Doe"
+            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane Doe", user_id="user_test"
         )
         assert record.candidate_id.startswith("cand_")
         assert record.resume.candidate_name == "Jane Doe"
@@ -299,15 +303,15 @@ class TestCandidateService:
     async def test_list_candidates(self):
         repo = InMemoryCandidateRepository()
         service = CandidateService(candidate_repository=repo)
-        await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane")
-        await service.register_candidate(resume_text=_RESUME_TEXT_WEAK, candidate_name="John")
+        await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test")
+        await service.register_candidate(resume_text=_RESUME_TEXT_WEAK, candidate_name="John", user_id="user_test")
         assert len(await service.list_candidates()) == 2
 
     @pytest.mark.asyncio
     async def test_update_candidate_direct_field_patch(self):
         repo = InMemoryCandidateRepository()
         service = CandidateService(candidate_repository=repo)
-        record = await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane")
+        record = await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test")
 
         updated = await service.update_candidate(
             record.candidate_id, patch={"skills": ["Python", "Go"]}
@@ -320,7 +324,7 @@ class TestCandidateService:
     async def test_update_candidate_reparse_replaces_the_resume(self):
         repo = InMemoryCandidateRepository()
         service = CandidateService(candidate_repository=repo)
-        record = await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane")
+        record = await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test")
         original_skills = record.resume.skills
 
         updated = await service.update_candidate(
@@ -346,7 +350,7 @@ class TestCandidateService:
             resume_parser_factory=lambda: _BrokenParser(),
         )
         with pytest.raises(DependencyError):
-            await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane")
+            await service.register_candidate(resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test")
 
 
 # ---------------------------------------------------------------------------

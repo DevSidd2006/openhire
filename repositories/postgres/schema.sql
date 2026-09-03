@@ -88,9 +88,12 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)
 -- Same JSONB reasoning as `jobs.job`: education/work_experience/projects/
 -- certifications are never queried by an individual entry anywhere in the
 -- backend.
+-- user_id links the candidate to the authenticated user who owns this profile.
+-- Multiple candidates per user are allowed (e.g. using different resumes).
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS candidates (
     candidate_id    text PRIMARY KEY,
+    user_id         text NOT NULL REFERENCES users(user_id),
     resume          jsonb NOT NULL,
     used_fallback   boolean NOT NULL DEFAULT false,
     parse_warning   text,
@@ -101,6 +104,10 @@ CREATE TABLE IF NOT EXISTS candidates (
 -- Backs CandidateRepository.list_candidates(): "newest first".
 CREATE INDEX IF NOT EXISTS idx_candidates_created_at
     ON candidates (created_at DESC);
+
+-- Backs ownership validation: list a user's candidates.
+CREATE INDEX IF NOT EXISTS idx_candidates_user_id
+    ON candidates (user_id);
 
 -- ---------------------------------------------------------------------
 -- applications — Application (schemas/application.py), stored directly
