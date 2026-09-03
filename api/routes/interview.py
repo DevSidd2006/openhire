@@ -37,12 +37,14 @@ from api.models import (
 from api.models_evaluations import SessionEvaluationResponse
 from core.dependencies import (
     get_application_service,
+    get_candidate_service,
     get_evaluation_service,
     get_interview_service,
 )
 from core.security import Principal, require_authenticated
 from repositories.interfaces import EvaluationJob, EvaluationStatus
 from services.application_service import ApplicationService
+from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
 from utils.interview_session import SessionStatus
@@ -83,6 +85,7 @@ async def create_session(
     request: Request,
     service: InterviewService = Depends(get_interview_service),
     applications: ApplicationService = Depends(get_application_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> CreateSessionResponse:
     """POST /sessions - create an interview session and ask the first
@@ -114,6 +117,11 @@ async def create_session(
             raise InvalidRequestError(
                 "application_id does not match job_id/candidate_id"
             )
+        # Validate that the authenticated candidate owns this application
+        user_id = principal.subject_id or "user_anonymous"
+        await candidate_service.validate_candidate_ownership(
+            application.candidate_id, user_id
+        )
         # Fails fast, before the session (and any LLM call it makes) is
         # created, rather than creating a session that then can't be linked.
         if application.status.value not in ("shortlisted", "interview_linked"):
