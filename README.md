@@ -18,11 +18,13 @@ OpenHire automates campus hiring at scale by running structured voice interviews
 ## ✨ Key Features
 
 **Current (Stage 1):**
-- **Voice-Based Interviews** — Structured interview delivery via voice transcription
-- **Candidate Management** — Upload resumes, create applications, track interview status
+- **Voice-Based Interviews** — Structured interview delivery via voice transcription, on-demand anytime after shortlist
+- **Candidate Management** — Upload resumes, create applications, track interview status in real-time
+- **Application Status Tracking** — Candidates see application status (submitted → shortlisted → interviewed) and can schedule interviews on their own time
 - **Job Configuration** — Recruiters define jobs and fixed interview question sets
 - **LLM-Powered Evaluation** — Automatic scoring of interview transcripts against job requirements
 - **Explainable Reports** — Candidate rankings with scoring breakdown and evidence
+- **Authentication & Authorization** — JWT-based login, role-based access control (candidate/recruiter), ownership validation
 - **Multi-Provider Support** — Works with NVIDIA NIM, OpenAI, Groq, or Google Gemini as LLM backends
 
 **Planned (Stage 2+):**
@@ -32,12 +34,28 @@ OpenHire automates campus hiring at scale by running structured voice interviews
 - Multi-interview type support (technical, behavioral, aptitude)
 - Recruiter and candidate dashboards
 
+## 🎯 Candidate Workflow
+
+1. **Sign up** — Candidate creates account with email/password
+2. **Upload resume** — Resume is parsed and stored in profile
+3. **Browse & apply** — Candidate finds open jobs and applies (one application per job, per candidate)
+4. **Status tracking** — Candidate sees application status in their dashboard:
+   - 🔵 **SUBMITTED** — Application received, under review
+   - 🟢 **SHORTLISTED** — Qualified for interview, "Launch Interview" button appears
+   - 🟣 **INTERVIEW_LINKED** — Interview scheduled/in progress
+   - ✅ **COMPLETED** — Interview finished, evaluation report available
+5. **On-demand interview** — When shortlisted, candidate can start interview **anytime** via their dashboard (no fixed schedule)
+6. **View results** — After interview, candidate can view evaluation report with scores and feedback
+
 ## 📊 Project Status
 
 **Current Stage: 1 (Basic Prototype)** — Single-candidate linear interview loop with resume parsing, job configuration, and LLM-based evaluation.
 
 **Features Implemented:**
 - ✅ User authentication (signup/login with JWT)
+- ✅ Candidate ownership validation — one user per candidate profile, one application per job
+- ✅ Application status tracking (SUBMITTED → SHORTLISTED → INTERVIEW_LINKED → COMPLETED)
+- ✅ On-demand interview scheduling — candidates can take interviews anytime after shortlist
 - ✅ Resume upload and parsing
 - ✅ Job creation and management
 - ✅ Interview session creation and voice/text input
@@ -45,6 +63,7 @@ OpenHire automates campus hiring at scale by running structured voice interviews
 - ✅ Candidate and evaluation tracking
 - ✅ PostgreSQL data persistence
 - ✅ Multi-agent system foundation
+- ✅ Role-based access control (candidate/recruiter scopes)
 
 **In Progress:**
 - 🔄 Interview mediator and session management
