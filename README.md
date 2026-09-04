@@ -64,13 +64,14 @@ OpenHire automates campus hiring at scale by running structured voice interviews
 - ✅ PostgreSQL data persistence
 - ✅ Multi-agent system foundation
 - ✅ Role-based access control (candidate/recruiter scopes)
+- ✅ OpenBox — shared platform bug tracker (report, browse, recruiter-triaged status)
 
 **In Progress:**
 - 🔄 Interview mediator and session management
 - 🔄 Voice interview UI components
 - 🔄 Candidate dashboard
 
-**Roadmap:** See [`pages/roadmap.html`](pages/roadmap.html) for interactive progress tracker.
+**Bug tracking:** See [`pages/openbox.html`](pages/openbox.html) — OpenBox, a shared board of platform bugs reported by users, with recruiter-triaged status.
 
 ## 🎯 Development Stages
 
@@ -239,7 +240,7 @@ OpenHire/
 ├── pages/                      # Frontend (React)
 │   ├── js/                     # React components
 │   ├── css/                    # Stylesheets
-│   └── roadmap.html            # Interactive progress tracker
+│   └── openbox.html            # Community bug tracker
 │
 ├── prompts/                    # LLM prompt templates
 ├── design-system/              # UI design system
@@ -379,7 +380,7 @@ pytest --cov=. tests/
 
 ## 📚 Documentation
 
-- **[Interactive Roadmap](pages/roadmap.html)** — Live progress tracker and milestone checklist
+- **[OpenBox](pages/openbox.html)** — Shared, platform-wide bug tracker: any user can report; recruiters triage status
 - **[Multi-Agent System](docs/multi-agent-system.md)** — Agent architecture and flow
 - **[API Reference](docs/api.md)** — REST endpoint documentation
 - **[Stage 1 Project Flow](docs/roles/PROJECT_FLOW.md)** — Interview workflow and role responsibilities

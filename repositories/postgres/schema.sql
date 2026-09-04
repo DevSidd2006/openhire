@@ -352,3 +352,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_job_rubrics_one_approved
     ON job_rubrics (job_id) WHERE status = 'approved';
 
 CREATE INDEX IF NOT EXISTS ix_job_rubrics_job_id ON job_rubrics (job_id);
+
+-- ---------------------------------------------------------------------
+-- bug_reports — BugReportRecord (repositories/interfaces.py): OpenBox
+-- (pages/openbox.html), a shared, platform-wide feed of bugs users report.
+-- Every authenticated user can read every row (it is a public board, not a
+-- per-user inbox); only recruiter-scoped callers change `status` (see
+-- api/routes/bugs.py).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS bug_reports (
+    bug_id             text PRIMARY KEY,
+    reporter_user_id   text NOT NULL REFERENCES users (user_id),
+    title              text NOT NULL,
+    description        text NOT NULL,
+    -- Exact BugSeverity values (repositories/interfaces.py).
+    severity           text NOT NULL DEFAULT 'medium'
+                           CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    -- Exact BugStatus values (repositories/interfaces.py).
+    status             text NOT NULL DEFAULT 'open'
+                           CHECK (status IN ('open', 'in_progress', 'resolved', 'wont_fix')),
+    page               text,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    updated_at         timestamptz
+);
+
+-- Backs BugReportRepository.list_all(): "newest first".
+CREATE INDEX IF NOT EXISTS idx_bug_reports_created_at
+    ON bug_reports (created_at DESC);

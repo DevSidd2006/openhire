@@ -68,7 +68,7 @@
     document.getElementById('jobDescription').textContent = job.description;
 
     const compEl = document.getElementById('jobCompetencies');
-    const openingsTag = `<span class="tag" style="background:#ecfdf5; color:#059669; font-weight:600; padding:0.25rem 0.6rem; border-color:#a7f3d0;">💼 ${openingsCount} ${openingsCount === 1 ? 'Opening' : 'Openings'}</span>`;
+    const openingsTag = `<span class="tag" style="background:var(--success-subtle); color:var(--success-text); font-weight:600; padding:0.25rem 0.6rem; border-color:rgba(16,185,129,0.3);">${openingsCount} ${openingsCount === 1 ? 'Opening' : 'Openings'}</span>`;
     compEl.innerHTML = openingsTag + (job.competencies.length ? job.competencies : ['Technical Assessment', 'Communication']).map(c => `
       <span class="tag" style="background:var(--primary-subtle); color:var(--primary); font-weight:500; padding:0.25rem 0.6rem; border-color:rgba(59,130,246,0.2);">
         ✓ ${c}

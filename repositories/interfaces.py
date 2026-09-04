@@ -662,6 +662,10 @@ class EvaluationRepository(ABC):
 __all__ = [
     "Application",
     "ApplicationRepository",
+    "BugReportRecord",
+    "BugReportRepository",
+    "BugSeverity",
+    "BugStatus",
     "CandidateRecord",
     "CandidateRepository",
     "EvaluationJob",
@@ -711,3 +715,73 @@ class RubricRepository(ABC):
         Rejects a rubric that fails its own approval gate: a malformed rubric
         must not become active by bypassing the API layer.
         """
+
+
+class BugSeverity(str, Enum):
+    """How badly a reported bug affects a user - the reporter's own
+    assessment, not a triage verdict (a recruiter may re-open the report to
+    disagree, but there is no separate "triaged severity" field)."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class BugStatus(str, Enum):
+    """Lifecycle of one bug report - OpenBox's own state machine, distinct
+    from ApplicationStatus/SessionStatus/EvaluationStatus: a bug report is
+    neither a hiring decision, a conversation, nor a scheduled job.
+
+    OPEN         reported, not yet looked at.
+    IN_PROGRESS  a recruiter has picked it up.
+    RESOLVED     fixed. Kept (not deleted) so OpenBox stays an honest public
+                 record of what has actually shipped, not just an inbox.
+    WONT_FIX     acknowledged, deliberately not going to be addressed.
+    """
+
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    WONT_FIX = "wont_fix"
+
+
+class BugReportRecord(BaseModel):
+    """One bug report filed through OpenBox (pages/openbox.html).
+
+    `reporter_user_id` is always the authenticated caller who filed it
+    (never accepted from the request body) - the same ownership pattern
+    `CandidateRecord.user_id` established, though OpenBox has no per-report
+    ownership *restriction*: every authenticated user can read every report
+    (it is a shared, public-within-the-platform board), only status changes
+    are gated to recruiters (see `services/bug_report_service.py`).
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    bug_id: str
+    reporter_user_id: str
+    title: str
+    description: str
+    severity: BugSeverity = BugSeverity.MEDIUM
+    status: BugStatus = BugStatus.OPEN
+    page: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+
+class BugReportRepository(ABC):
+    """Durable storage for `BugReportRecord`."""
+
+    @abstractmethod
+    async def save(self, record: BugReportRecord) -> BugReportRecord:
+        """Insert or update by `bug_id`. Idempotent; preserves the original
+        `created_at` across an update."""
+
+    @abstractmethod
+    async def get(self, bug_id: str) -> Optional[BugReportRecord]:
+        """The record, or None. Never raises for absence."""
+
+    @abstractmethod
+    async def list_all(self) -> list[BugReportRecord]:
+        """Every report, newest first - OpenBox's own feed."""

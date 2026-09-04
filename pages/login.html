@@ -3,38 +3,135 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenHire — Login</title>
+<title>OpenHire — Log In</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<style>
+  .auth-shell {
+    min-height: calc(100vh - 64px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.25rem;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .auth-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary-subtle);
+    border: 1px solid var(--primary-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .auth-mark .brand-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 12px var(--primary-glow);
+  }
+  .auth-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+    margin: 0 0 0.4rem;
+  }
+  .auth-sub {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin: 0 0 1.9rem;
+  }
+  .auth-form {
+    width: 100%;
+    text-align: left;
+  }
+  .auth-form .form-group { margin-bottom: 0.9rem; }
+  .auth-form .form-label {
+    font-family: var(--font-sans);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+  }
+  .auth-form .form-control {
+    border-radius: 999px;
+    padding: 0.7rem 1.1rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    font-size: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .auth-form .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-subtle);
+  }
+  .auth-submit {
+    width: 100%;
+    border-radius: 999px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.6rem;
+    font-size: 14px;
+  }
+  .auth-error {
+    width: 100%;
+    border-radius: var(--radius);
+    text-align: left;
+  }
+  .auth-footer {
+    margin-top: 1.6rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .auth-footer a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .auth-footer a:hover { text-decoration: underline; }
+</style>
 </head>
 <body>
 <div id="navbarContainer"></div>
 
-<main class="container">
-  <div style="max-width: 420px; margin: 3.5rem auto;" class="card">
-    <div class="card-header" style="margin-bottom:0.5rem;">
-      <h2 class="card-title">Sign In</h2>
-    </div>
-    <p class="card-sub" style="margin-bottom:1.25rem;">Enter your credentials to access your account.</p>
-    
-    <div id="errorMessage" class="alert alert-danger" style="display:none; margin-bottom:1rem;"></div>
-    
-    <div class="form-group">
-      <label class="form-label">Email</label>
-      <input type="email" id="email" class="form-control" placeholder="e.g. user@example.com">
-    </div>
+<main class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-mark"><span class="brand-dot"></span></div>
+    <h1 class="auth-title">Log into OpenHire</h1>
+    <p class="auth-sub">Enter your credentials to access your account.</p>
 
-    <div class="form-group">
-      <label class="form-label">Password</label>
-      <input type="password" id="password" class="form-control" placeholder="Enter your password">
-    </div>
+    <div id="errorMessage" class="alert alert-danger auth-error" style="display:none; margin-bottom:1rem;"></div>
 
-    <button id="submitBtn" class="btn-primary" style="width:100%; margin-top:0.75rem;" onclick="handleLoginSubmit()">Sign In</button>
-    
-    <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem;">
-      Don't have an account? <a href="signup.html" style="color: #0070f3; text-decoration: none;">Sign up</a>
+    <form class="auth-form" onsubmit="event.preventDefault(); handleLoginSubmit();">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="email" class="form-control" placeholder="e.g. name@company.com" autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+
+      <button id="submitBtn" type="submit" class="btn-primary auth-submit">Log In</button>
+    </form>
+
+    <p class="auth-footer">
+      Don't have an account? <a href="signup.html">Create one</a>
     </p>
   </div>
 </main>
@@ -64,7 +161,7 @@
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Signing in...';
+    submitBtn.textContent = 'Logging in...';
     errorDiv.style.display = 'none';
 
     try {
@@ -89,7 +186,7 @@
       window.location.href = dashboard;
     } catch (error) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Sign In';
+      submitBtn.textContent = 'Log In';
       errorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
       errorDiv.style.display = 'block';
     }

@@ -31,6 +31,7 @@ from repositories.interfaces import (
 )
 from services.application_service import ApplicationService
 from services.auth_service import AuthService
+from services.bug_report_service import BugReportService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
@@ -159,6 +160,11 @@ def get_candidate_service(request: Request) -> CandidateService:
     )
 
 
+def get_bug_report_service(request: Request) -> BugReportService:
+    container = _container_from_app(request.app)
+    return BugReportService(bug_report_repository=container.bug_report_repository)
+
+
 def get_matching_service(request: Request) -> MatchingService:
     container = _container_from_app(request.app)
     return MatchingService(
@@ -235,6 +241,7 @@ __all__ = [
     "get_application_repository",
     "get_application_service",
     "get_auth_service",
+    "get_bug_report_service",
     "get_candidate_repository",
     "get_candidate_service",
     "get_container",

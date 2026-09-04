@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="css/style.css">
 <style>
   body {
-    background: #0a0e17;
+    background: var(--bg);
     overflow: hidden;
     margin: 0;
     padding: 0;
@@ -42,14 +42,15 @@
     gap: 0.5rem;
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-main);
+    font-family: var(--font-sans);
   }
 
   .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #10b981;
+    background: var(--success);
     animation: pulse 2s infinite;
   }
 
@@ -76,49 +77,55 @@
     gap: 1.5rem;
   }
 
-  .activity-dots {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    height: 8px;
-  }
-
-  .activity-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(107, 114, 128, 0.5);
-    animation: none;
-  }
-
-  .activity-dot.active {
-    background: #6366f1;
-    animation: dot-pulse 1.2s infinite;
-  }
-
-  @keyframes dot-pulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 1; }
-  }
-
   .avatar {
-    width: 160px;
-    height: 160px;
+    width: 140px;
+    height: 140px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 64px;
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
     position: relative;
   }
 
+  .avatar svg { width: 56px; height: 56px; }
+
   .avatar.ai {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-color: var(--primary-glow);
+    box-shadow: 0 0 32px var(--primary-subtle);
   }
+  .avatar.ai svg { color: var(--primary); }
 
   .avatar.user {
-    background: linear-gradient(135deg, #14b8a6, #06b6d4);
+    border-color: rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 32px var(--success-subtle);
+  }
+  .avatar.user svg { color: var(--success-text); }
+
+  /* Speaking waves: two rings expanding outward from the avatar, staggered
+     so a new ring launches every ~1s (2s duration, 1s delay on the 2nd). */
+  .avatar::before,
+  .avatar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--wave-color, var(--primary));
+    opacity: 0;
+    pointer-events: none;
+  }
+  .avatar.speaking::before,
+  .avatar.speaking::after {
+    animation: wave-ring 2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  }
+  .avatar.speaking::after { animation-delay: 1s; }
+  .avatar.ai { --wave-color: var(--primary); }
+  .avatar.user { --wave-color: var(--success-text); }
+
+  @keyframes wave-ring {
+    0% { transform: scale(1); opacity: 0.55; }
+    100% { transform: scale(1.35); opacity: 0; }
   }
 
   .participant-info {
@@ -128,13 +135,14 @@
   .participant-name {
     font-size: 16px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-main);
+    font-family: var(--font-sans);
     margin: 0;
   }
 
   .participant-status {
     font-size: 12px;
-    color: #9ca3af;
+    color: var(--text-muted);
     margin-top: 0.25rem;
   }
 
@@ -155,30 +163,27 @@
     .question-bar { right: 0; }
   }
 
-  .btn-end {
-    background: #dc2626;
-    color: #fff;
-    border: none;
+  .call-btn {
     padding: 0.75rem 1.5rem;
-    border-radius: 24px;
     font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
   }
 
-  .btn-end:hover {
-    background: #b91c1c;
-    transform: scale(1.05);
+  .btn-record {
+    background: var(--success);
+    color: #fff;
+    border-color: var(--success);
   }
-
-  .btn-end:disabled {
-    background: #6b7280;
-    cursor: not-allowed;
-    transform: none;
+  .btn-record:hover:not(:disabled) {
+    background: #0d9c6f;
+    border-color: #0d9c6f;
+  }
+  .btn-record.recording {
+    background: var(--danger);
+    border-color: var(--danger);
+  }
+  .btn-record.recording:hover:not(:disabled) {
+    background: #dc2626;
+    border-color: #dc2626;
   }
 
   .question-bar {
@@ -187,15 +192,16 @@
     left: 0;
     right: 300px;
     margin: 0 auto;
-    background: rgba(17, 24, 39, 0.9);
+    background: var(--surface);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(107, 114, 128, 0.2);
+    border: 1px solid var(--surface-border);
     padding: 1rem 1.5rem;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     max-width: 600px;
     text-align: center;
     font-size: 13px;
-    color: #d1d5db;
+    font-family: var(--font-sans);
+    color: var(--text-muted);
     line-height: 1.5;
   }
 
@@ -206,10 +212,10 @@
     }
 
     .avatar {
-      width: 120px;
-      height: 120px;
-      font-size: 48px;
+      width: 110px;
+      height: 110px;
     }
+    .avatar svg { width: 42px; height: 42px; }
 
     .participant-name {
       font-size: 14px;
@@ -233,15 +239,9 @@
   <div class="avatar-container">
     <!-- AI Interviewer -->
     <div class="participant">
-      <div class="activity-dots">
-        <span class="activity-dot active"></span>
-        <span class="activity-dot active"></span>
-        <span class="activity-dot active"></span>
-        <span class="activity-dot active"></span>
-        <span class="activity-dot active"></span>
-        <span class="activity-dot active"></span>
+      <div class="avatar ai">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/><path d="M9 16.5c1 .6 5 .6 6 0"/></svg>
       </div>
-      <div class="avatar ai">👨‍💼</div>
       <div class="participant-info">
         <p class="participant-name">Interviewer</p>
         <p class="participant-status" id="aiStatus">Listening</p>
@@ -250,15 +250,9 @@
 
     <!-- You (Candidate) -->
     <div class="participant">
-      <div class="activity-dots">
-        <span class="activity-dot"></span>
-        <span class="activity-dot"></span>
-        <span class="activity-dot"></span>
-        <span class="activity-dot"></span>
-        <span class="activity-dot"></span>
-        <span class="activity-dot"></span>
+      <div class="avatar user">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/></svg>
       </div>
-      <div class="avatar user">👤</div>
       <div class="participant-info">
         <p class="participant-name">You</p>
         <p class="participant-status" id="userStatus">Mic on</p>
@@ -267,15 +261,9 @@
   </div>
 
   <div class="controls">
-    <button id="micBtn" style="background:#16a34a; color:#fff; border:none; padding:0.75rem 1.5rem; border-radius:24px; font-size:14px; font-weight:600; cursor:pointer;">
-      🎤 Tap to speak
-    </button>
-    <button class="btn-end" id="endBtn" onclick="window.history.back()">
-      ✕ End interview
-    </button>
-    <button id="replayBtn" style="display:none; background:#4f46e5; color:#fff; border:none; padding:0.75rem 1.5rem; border-radius:24px; font-size:14px; font-weight:600; cursor:pointer; align-items:center; gap:0.5rem;">
-      🔊 Tap to hear question
-    </button>
+    <button id="micBtn" class="btn-record call-btn">Tap to speak</button>
+    <button class="btn-danger call-btn" id="endBtn" onclick="window.history.back()">End interview</button>
+    <button id="replayBtn" class="btn-secondary call-btn" style="display:none;">Tap to hear question</button>
   </div>
 
   <div class="question-bar" id="questionBar">
@@ -283,18 +271,16 @@
   </div>
 </main>
 
-<div id="transcriptPanel" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:rgba(17,24,39,0.95); border-left:1px solid rgba(107,114,128,0.2); padding:1rem; overflow-y:auto; box-sizing:border-box; z-index:20;">
-  <h3 style="color:#fff; font-size:14px; margin:0 0 1rem 0;">Transcript</h3>
+<div id="transcriptPanel" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:var(--surface); border-left:1px solid var(--surface-border); padding:1.25rem 1rem; overflow-y:auto; scroll-behavior:smooth; box-sizing:border-box; z-index:20; font-family:var(--font-sans);">
+  <h3 style="color:var(--text-main); font-size:13px; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; margin:0 0 1rem 0;">Transcript</h3>
   <div id="transcriptLog"></div>
 </div>
 
-<div id="startOverlay" style="position:fixed; inset:0; background:rgba(10,14,23,0.95); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; z-index:100;">
-  <div style="color:#fff; font-size:16px; text-align:center; max-width:400px; padding:0 1rem;">
-    Click below to start - your browser blocks audio from playing automatically, so this gets things going.
+<div id="startOverlay" style="position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; z-index:100;">
+  <div style="color:var(--text-main); font-family:var(--font-sans); font-size:15px; text-align:center; max-width:400px; padding:0 1rem;">
+    Click below to start — your browser blocks audio from playing automatically, so this gets things going.
   </div>
-  <button id="startBtn" style="background:#4f46e5; color:#fff; border:none; padding:1rem 2rem; border-radius:24px; font-size:16px; font-weight:600; cursor:pointer;">
-    ▶ Start Interview
-  </button>
+  <button id="startBtn" class="btn-primary call-btn">Start Interview</button>
 </div>
 
 <script>
@@ -369,6 +355,19 @@ function b64(buf) {
 
 let lastAudioBlobUrl = null;
 
+// Toggles the expanding-wave animation (see .avatar.speaking in <style>)
+// around whichever avatar is currently producing sound/speech.
+function setSpeaking(who, on) {
+  document.querySelector('.avatar.' + who).classList.toggle('speaking', on);
+}
+
+function playAudioEl(url) {
+  const audio = new Audio(url);
+  audio.addEventListener('ended', () => setSpeaking('ai', false));
+  audio.addEventListener('pause', () => setSpeaking('ai', false));
+  return audio;
+}
+
 function play(b64audio, format) {
   if (!b64audio) return;
   const bin = atob(b64audio);
@@ -376,18 +375,24 @@ function play(b64audio, format) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
   lastAudioBlobUrl = URL.createObjectURL(blob);
-  new Audio(lastAudioBlobUrl).play().catch(() => {
+  setSpeaking('ai', true);
+  playAudioEl(lastAudioBlobUrl).play().catch(() => {
     // The browser blocked this specific playback (e.g. it decided the page
     // hasn't "really" been interacted with recently enough) - show a
     // visible, clickable way to hear it instead of failing silently.
     console.log('[voice] Autoplay blocked by browser - showing replay button');
+    setSpeaking('ai', false);
     document.getElementById('replayBtn').style.display = 'inline-flex';
   });
 }
 
 document.getElementById('replayBtn').onclick = () => {
   if (!lastAudioBlobUrl) return;
-  new Audio(lastAudioBlobUrl).play().catch((e) => console.error('[voice] Replay failed:', e));
+  setSpeaking('ai', true);
+  playAudioEl(lastAudioBlobUrl).play().catch((e) => {
+    console.error('[voice] Replay failed:', e);
+    setSpeaking('ai', false);
+  });
   document.getElementById('replayBtn').style.display = 'none';
 };
 
@@ -402,14 +407,18 @@ function addTranscriptEntry(speaker, text) {
   entry.style.marginBottom = '1rem';
   const label = document.createElement('div');
   label.textContent = speaker;
-  label.style.cssText = 'font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; color:' + (speaker === 'Interviewer' ? '#818cf8' : '#34d399');
+  label.style.cssText = 'font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; font-family:var(--font-sans); color:' + (speaker === 'Interviewer' ? 'var(--primary)' : 'var(--success-text)');
   const body = document.createElement('div');
   body.textContent = text;
-  body.style.cssText = 'font-size:13px; color:#d1d5db; line-height:1.4;';
+  body.style.cssText = 'font-size:13px; font-family:var(--font-sans); color:var(--text-muted); line-height:1.4;';
   entry.appendChild(label);
   entry.appendChild(body);
   log.appendChild(entry);
-  log.scrollTop = log.scrollHeight;
+  // #transcriptLog itself doesn't scroll - #transcriptPanel (its parent)
+  // is the actual overflow:auto container. requestAnimationFrame ensures
+  // the new entry has been laid out before we measure scrollHeight.
+  const panel = document.getElementById('transcriptPanel');
+  requestAnimationFrame(() => { panel.scrollTop = panel.scrollHeight; });
 }
 
 function updateAIStatus(text) {
@@ -649,13 +658,9 @@ function stopRecordingServerAudio() {
 // SpeechRecognition mid-sentence).
 function updateMicButton() {
   const btn = document.getElementById('micBtn');
-  if (capturing) {
-    btn.textContent = '🔴 Tap to stop';
-    btn.style.background = '#dc2626';
-  } else {
-    btn.textContent = '🎤 Tap to speak';
-    btn.style.background = '#16a34a';
-  }
+  btn.classList.toggle('recording', capturing);
+  btn.textContent = capturing ? 'Tap to stop' : 'Tap to speak';
+  setSpeaking('user', capturing);
 }
 
 document.getElementById('micBtn').onclick = () => {

@@ -43,6 +43,8 @@ from repositories.interfaces import (
     RubricRepository,
     Application,
     ApplicationRepository,
+    BugReportRecord,
+    BugReportRepository,
     CandidateRecord,
     CandidateRepository,
     EvaluationJob,
@@ -432,3 +434,30 @@ class InMemoryRubricRepository(RubricRepository):
         approved = rubric.model_copy(update={"status": RubricStatus.APPROVED})
         self._rubrics[rubric_id] = approved
         return approved
+
+
+class InMemoryBugReportRepository(BugReportRepository):
+    """Dict-backed `BugReportRepository`. TEMPORARY - see module docstring."""
+
+    def __init__(self) -> None:
+        self._reports: Dict[str, BugReportRecord] = {}
+        self._lock = asyncio.Lock()
+
+    async def save(self, record: BugReportRecord) -> BugReportRecord:
+        async with self._lock:
+            existing = self._reports.get(record.bug_id)
+            created_at = existing.created_at if existing else record.created_at
+            stored = record.model_copy(
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+            )
+            self._reports[record.bug_id] = stored
+            return stored
+
+    async def get(self, bug_id: str) -> Optional[BugReportRecord]:
+        async with self._lock:
+            return self._reports.get(bug_id)
+
+    async def list_all(self) -> List[BugReportRecord]:
+        async with self._lock:
+            reports = list(self._reports.values())
+        return sorted(reports, key=lambda r: r.created_at, reverse=True)

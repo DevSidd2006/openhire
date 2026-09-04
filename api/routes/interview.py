@@ -79,6 +79,47 @@ async def _trigger_evaluation_if_ready(
     return await evaluations.trigger_evaluation(session_id)
 
 
+async def _enforce_session_ownership(
+    session_id: str, candidate_id: str, principal: Principal, *,
+    service: InterviewService, candidate_service: CandidateService,
+    allow_recruiter: bool = True,
+) -> None:
+    """Reject callers who neither own this session's candidate nor hold
+    recruiter:read, but ONLY once this session is linked to an application -
+    mirroring `create_session`'s existing gate (only application-linked
+    sessions carry an owning `principal.subject_id` to check against).
+
+    A session created via the original, still-supported `/sessions` contract
+    (no `application_id`, `candidate_id`/`parsed_resume` supplied directly -
+    see api/models.py) never had a candidate/user relationship to enforce in
+    the first place, so it is left exactly as inert as before this check
+    existed.
+    """
+    if allow_recruiter and principal.has_scopes(["recruiter:read"]):
+        return
+    try:
+        record = await service.get_record(session_id)
+    except NotFoundError:
+        # No durable record (e.g. registry-only test double, or a restart
+        # boundary get_record itself would 404 on) - nothing to check
+        # linkage against, so fail open exactly as before this check
+        # existed rather than turning an unrelated lookup miss into a 403.
+        return
+    if record.application_id is None:
+        return
+    user_id = principal.subject_id or "user_anonymous"
+    try:
+        await candidate_service.validate_candidate_ownership(candidate_id, user_id)
+    except NotFoundError:
+        # The linked application names a candidate_id with no registered
+        # CandidateRecord (e.g. an application seeded directly against the
+        # repository in a test, bypassing POST /candidates) - there is no
+        # owner on file to enforce against, so this falls open rather than
+        # turning a data gap into a spurious 404 on an otherwise-valid
+        # session/evaluation read.
+        return
+
+
 @router.post("", response_model=CreateSessionResponse, status_code=201)
 async def create_session(
     payload: CreateSessionRequest,
@@ -160,6 +201,7 @@ async def get_session_state(
     request: Request,
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> SessionStateResponse:
     """GET /sessions/{id} - a controlled snapshot of session state. Never
@@ -172,9 +214,17 @@ async def get_session_state(
     services/interview_service.py). Chunk 4: the same read is also the
     retry point for evaluation itself, in case it could not be triggered
     at seal time because the transcript write had not yet succeeded.
+
+    Only the candidate who owns this session (or a recruiter) may read it -
+    session_id alone is not treated as sufficient authorization here, unlike
+    the WebSocket voice transport (see api/routes/voice.py).
     """
     runner = await service.get_runner(session_id)
     request.state.runner = runner
+    await _enforce_session_ownership(
+        session_id, runner.candidate_id, principal,
+        service=service, candidate_service=candidate_service,
+    )
     state = runner.get_state()
 
     transcript_persisted = await service.retry_transcript_persistence(session_id, runner)
@@ -202,6 +252,7 @@ async def submit_answer(
     request: Request,
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> SubmitAnswerResponse:
     """POST /sessions/{id}/answers - the candidate's answer is untrusted
@@ -214,11 +265,18 @@ async def submit_answer(
     successfully, evaluation is triggered here (Step 12) - scheduled in the
     background (Step 5), never awaited, so this request never waits on the
     multi-agent evaluation pipeline.
+
+    Only the owning candidate may answer their own interview - a recruiter
+    (or any other authenticated user) may not drive someone else's session.
     """
     # Resolved before submitting so the error handler has the runner even if
     # submit_answer() is what fails.
     runner = await service.get_runner(session_id)
     request.state.runner = runner
+    await _enforce_session_ownership(
+        session_id, runner.candidate_id, principal,
+        service=service, candidate_service=candidate_service, allow_recruiter=False,
+    )
 
     result = await service.submit_answer(session_id, payload.answer_text)
 
@@ -244,6 +302,7 @@ async def finish_session(
     request: Request,
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> FinishSessionResponse:
     """POST /sessions/{id}/finish - request explicit termination. Delegates
@@ -254,9 +313,15 @@ async def finish_session(
     Chunk 4: same evaluation trigger as `submit_answer` above, for the case
     where the interview ends via an explicit finish rather than
     auto-termination.
+
+    Only the owning candidate may terminate their own interview.
     """
     runner = await service.get_runner(session_id)
     request.state.runner = runner
+    await _enforce_session_ownership(
+        session_id, runner.candidate_id, principal,
+        service=service, candidate_service=candidate_service, allow_recruiter=False,
+    )
 
     state = await service.finish_session(session_id)
 
@@ -281,6 +346,7 @@ async def get_session_evaluation(
     session_id: str,
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> SessionEvaluationResponse:
     """GET /sessions/{id}/evaluation - this session's evaluation job, if one
@@ -299,8 +365,15 @@ async def get_session_evaluation(
     progress, or its transcript has not finished persisting), this is a
     200 with `evaluation: null` - a normal, valid state, not an error (see
     api/models_evaluations.py:SessionEvaluationResponse).
+
+    Recruiters may read any session's evaluation; a candidate may only read
+    their own.
     """
-    await service.get_runner(session_id)  # 404s if the session itself is unknown
+    runner = await service.get_runner(session_id)  # 404s if the session itself is unknown
+    await _enforce_session_ownership(
+        session_id, runner.candidate_id, principal,
+        service=service, candidate_service=candidate_service,
+    )
     evaluation_job = await evaluations.get_evaluation_for_session(session_id)
     return SessionEvaluationResponse(session_id=session_id, evaluation=evaluation_job)
 
@@ -310,14 +383,22 @@ async def get_evaluation_report(
     session_id: str,
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
+    candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ):
     """GET /sessions/{session_id}/evaluation/report - Get the completed evaluation report for a session.
 
     Returns the CandidateReport once evaluation is COMPLETED.
     Returns 404 if session not found or evaluation not completed yet.
+
+    Recruiters may read any session's report; a candidate may only read
+    their own.
     """
-    await service.get_runner(session_id)  # 404s if session unknown
+    runner = await service.get_runner(session_id)  # 404s if session unknown
+    await _enforce_session_ownership(
+        session_id, runner.candidate_id, principal,
+        service=service, candidate_service=candidate_service,
+    )
     evaluation_job = await evaluations.get_evaluation_for_session(session_id)
 
     if not evaluation_job:

@@ -219,6 +219,7 @@ function renderNavbar(activePage = '') {
         ${isRecruiter ? `<a href="create-job.html" class="${activePage === 'create-job' ? 'active' : ''}">+ Job</a>` : ''}
         ${isRecruiter ? `<a href="screening.html" class="${activePage === 'screening' ? 'active' : ''}">Screening</a>` : ''}
         <a href="leaderboard.html" class="${activePage === 'leaderboard' ? 'active' : ''}">Leaderboard</a>
+        <a href="openbox.html" class="${activePage === 'openbox' ? 'active' : ''}">OpenBox</a>
       </nav>
 
       <div class="nav-right">

@@ -47,6 +47,7 @@ from core.security import AnonymousAuthProvider, AuthProvider, JWTAuthProvider
 from repositories.interfaces import (
     RubricRepository,
     ApplicationRepository,
+    BugReportRepository,
     CandidateRepository,
     EvaluationRepository,
     JobRepository,
@@ -98,6 +99,8 @@ class ServiceContainer:
     evaluation_dispatcher: EvaluationDispatcher
     # Chunk 5: user repository for authentication
     user_repository: UserRepository
+    # OpenBox: platform-wide, user-reported bug tracker (pages/openbox.html).
+    bug_report_repository: BugReportRepository
     auth_provider: AuthProvider = field(default_factory=AnonymousAuthProvider)
 
     # True while any repository above is one of the temporary in-process
@@ -183,6 +186,7 @@ class ServiceContainer:
             "rubric_repository",
             "evaluation_repository",
             "evaluation_dispatcher",
+            "bug_report_repository",
             "auth_provider",
             "database_pool",
         ):
@@ -228,6 +232,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             POSTGRES_BACKEND_NAME,
             PostgresApplicationRepository,
     PostgresRubricRepository,
+            PostgresBugReportRepository,
             PostgresCandidateRepository,
             PostgresConnectionPool,
             PostgresEvaluationRepository,
@@ -255,6 +260,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             rubric_repository=PostgresRubricRepository(pool),
             evaluation_repository=PostgresEvaluationRepository(pool),
             user_repository=user_repo,
+            bug_report_repository=PostgresBugReportRepository(pool),
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
             auth_provider=auth_provider,
             persistence_is_ephemeral=False,
@@ -265,6 +271,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         EPHEMERAL_BACKEND_NAME,
         InMemoryApplicationRepository,
     InMemoryRubricRepository,
+        InMemoryBugReportRepository,
         InMemoryCandidateRepository,
         InMemoryEvaluationRepository,
         InMemoryJobRepository,
@@ -291,6 +298,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         rubric_repository=InMemoryRubricRepository(),
         evaluation_repository=InMemoryEvaluationRepository(),
         user_repository=InMemoryUserRepository(),
+        bug_report_repository=InMemoryBugReportRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
         auth_provider=AnonymousAuthProvider(),
         persistence_is_ephemeral=True,

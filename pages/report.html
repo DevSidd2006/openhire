@@ -61,7 +61,7 @@
         <div style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.25rem;">
           RECOMMENDATION
         </div>
-        <div style="font-size:1.5rem; font-weight:700; color:#34d399;" id="recommendationText">Loading…</div>
+        <div style="font-size:1.5rem; font-weight:700; color:var(--success-text);" id="recommendationText">Loading…</div>
         <p class="card-sub" style="margin-top:0.35rem; max-width: 520px;" id="recommendationExplanation"></p>
       </div>
       <div style="text-align:right;">
@@ -149,12 +149,12 @@
   function setRecommendationColor(rec) {
     const el = document.getElementById('recommendationText');
     const colors = {
-      strong_candidate: '#34d399',
-      candidate: '#34d399',
-      human_review: '#f59e0b',
-      insufficient_evidence: '#ef4444',
+      strong_candidate: 'var(--success-text)',
+      candidate: 'var(--success-text)',
+      human_review: 'var(--warning-text)',
+      insufficient_evidence: 'var(--danger-text)',
     };
-    el.style.color = colors[rec] || '#34d399';
+    el.style.color = colors[rec] || 'var(--success-text)';
     el.textContent = (rec || 'pending').replace(/_/g, ' ').toUpperCase();
   }
 
@@ -189,7 +189,7 @@
   function renderPending(status) {
     document.getElementById('recommendationText').textContent =
       status === 'failed' ? 'EVALUATION FAILED' : 'EVALUATION IN PROGRESS';
-    document.getElementById('recommendationText').style.color = status === 'failed' ? '#ef4444' : 'var(--text-muted)';
+    document.getElementById('recommendationText').style.color = status === 'failed' ? 'var(--danger-text)' : 'var(--text-muted)';
     document.getElementById('recommendationExplanation').textContent =
       status === 'failed'
         ? 'The multi-agent evaluation pipeline could not complete for this interview.'
@@ -262,7 +262,7 @@
       renderReport(evaluation, null);
     } catch (err) {
       document.getElementById('recommendationText').textContent = 'COULD NOT LOAD REPORT';
-      document.getElementById('recommendationText').style.color = '#ef4444';
+      document.getElementById('recommendationText').style.color = 'var(--danger-text)';
       document.getElementById('recommendationExplanation').textContent = err.message;
     }
   }

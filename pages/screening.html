@@ -9,10 +9,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.75rem; margin-bottom:1.25rem; }
-  .stat-card { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius); padding:0.85rem 1rem; }
-  .stat-num { font-size:1.4rem; font-weight:700; color:var(--text-main); font-family:var(--font-mono); }
-  .stat-label { font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-family:var(--font-mono); }
+  .stats-strip {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));
+    background:var(--surface);
+    border:1px solid var(--surface-border);
+    border-radius:var(--radius-lg);
+    margin-bottom:1.5rem;
+    overflow:hidden;
+  }
+  .stat-cell { padding:1rem 1.25rem; border-right:1px solid var(--surface-border); }
+  .stat-cell:last-child { border-right:none; }
+  .stat-num { font-size:1.5rem; font-weight:700; color:var(--text-main); font-family:var(--font-mono); line-height:1.1; }
+  .stat-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-top:0.3rem; }
   .filter-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; }
   .filter-tab { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius); padding:0.4rem 0.85rem; font-size:12.5px; font-weight:500; cursor:pointer; color:var(--text-muted); transition:all 0.15s; }
   .filter-tab:hover { color:var(--text-main); border-color:var(--primary); }
@@ -38,30 +47,30 @@
       <p class="card-sub" id="screeningMeta">Review all applicant resumes, automated shortlisting statuses, and match fit.</p>
     </div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <button class="btn-secondary" onclick="runMatching()">⚡ Run Auto-Matcher</button>
-      <button class="btn-outline" onclick="goToLeaderboard()">🏆 Final Leaderboard</button>
+      <button class="btn-secondary" onclick="runMatching()">Run Auto-Matcher</button>
+      <button class="btn-outline" onclick="goToLeaderboard()">Final Leaderboard</button>
       <button class="btn-outline" onclick="window.history.back()">Back</button>
     </div>
   </div>
 
-  <div class="stats-grid" id="screeningStats">
-    <div class="stat-card">
+  <div class="stats-strip" id="screeningStats">
+    <div class="stat-cell">
       <div class="stat-num" id="statTotal">0</div>
       <div class="stat-label">Total Applicants</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-num" id="statShortlisted" style="color:#059669;">0</div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statShortlisted" style="color:var(--success-text);">0</div>
       <div class="stat-label">Auto-Shortlisted</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-num" id="statReview" style="color:#d97706;">0</div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statReview" style="color:var(--warning-text);">0</div>
       <div class="stat-label">Needs Review</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-num" id="statRejected" style="color:#64748b;">0</div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statRejected" style="color:var(--text-faint);">0</div>
       <div class="stat-label">Rejected</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-cell">
       <div class="stat-num" id="statPending">0</div>
       <div class="stat-label">Awaiting Scoring</div>
     </div>
@@ -155,13 +164,13 @@
 
   function getStatusBadge(status) {
     if (status === 'shortlisted') {
-      return '<span class="tag" style="background:#ecfdf5; color:#059669; border-color:#a7f3d0; font-weight:600;">✨ Auto-Shortlisted</span>';
+      return '<span class="tag" style="background:var(--success-subtle); color:var(--success-text); border-color:rgba(16,185,129,0.3); font-weight:600;">Auto-Shortlisted</span>';
     } else if (status === 'interview_linked') {
-      return '<span class="tag" style="background:#eff6ff; color:#2563eb; border-color:#bfdbfe; font-weight:600;">🎙️ Interview Linked</span>';
+      return '<span class="tag" style="background:var(--primary-subtle); color:var(--primary); border-color:var(--primary-glow); font-weight:600;">Interview Linked</span>';
     } else if (status === 'rejected') {
-      return '<span class="tag" style="background:#f1f5f9; color:#64748b; border-color:#cbd5e1;">Rejected</span>';
+      return '<span class="tag">Rejected</span>';
     } else if (status === 'needs_human_review') {
-      return '<span class="tag" style="background:#fffbeb; color:#d97706; border-color:#fde68a;">Needs Review</span>';
+      return '<span class="tag" style="background:var(--warning-subtle); color:var(--warning-text); border-color:rgba(245,158,11,0.3);">Needs Review</span>';
     }
     return `<span class="tag">${escapeHtml((status || 'pending').replace(/_/g, ' '))}</span>`;
   }

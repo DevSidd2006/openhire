@@ -31,6 +31,10 @@ from repositories.interfaces import (
     RubricRepository,
     Application,
     ApplicationRepository,
+    BugReportRecord,
+    BugReportRepository,
+    BugSeverity,
+    BugStatus,
     CandidateRecord,
     CandidateRepository,
     EvaluationJob,
@@ -68,6 +72,20 @@ def _job_record_from_row(row: asyncpg.Record) -> JobRecord:
         job_id=row["job_id"],
         job=JobDescription.model_validate(row["job"]),
         is_active=row["is_active"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _bug_report_from_row(row: asyncpg.Record) -> BugReportRecord:
+    return BugReportRecord(
+        bug_id=row["bug_id"],
+        reporter_user_id=row["reporter_user_id"],
+        title=row["title"],
+        description=row["description"],
+        severity=BugSeverity(row["severity"]),
+        status=BugStatus(row["status"]),
+        page=row["page"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -806,3 +824,53 @@ class PostgresRubricRepository(RubricRepository):
                     rubric_id,
                 )
         return _rubric_from_row(row)
+
+
+class PostgresBugReportRepository(BugReportRepository):
+    """Durable storage for `BugReportRecord`. See
+    repositories/postgres/schema.sql's `bug_reports` table."""
+
+    def __init__(self, pool: PostgresConnectionPool) -> None:
+        self._pool = pool
+
+    async def save(self, record: BugReportRecord) -> BugReportRecord:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO bug_reports
+                    (bug_id, reporter_user_id, title, description, severity, status, page, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                ON CONFLICT (bug_id) DO UPDATE
+                    SET title = EXCLUDED.title,
+                        description = EXCLUDED.description,
+                        severity = EXCLUDED.severity,
+                        status = EXCLUDED.status,
+                        page = EXCLUDED.page,
+                        updated_at = now()
+                RETURNING bug_id, reporter_user_id, title, description, severity, status, page, created_at, updated_at
+                """,
+                record.bug_id,
+                record.reporter_user_id,
+                record.title,
+                record.description,
+                record.severity.value,
+                record.status.value,
+                record.page,
+                record.created_at,
+            )
+        return _bug_report_from_row(row)
+
+    async def get(self, bug_id: str) -> Optional[BugReportRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM bug_reports WHERE bug_id = $1", bug_id
+            )
+        return _bug_report_from_row(row) if row is not None else None
+
+    async def list_all(self) -> List[BugReportRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM bug_reports ORDER BY created_at DESC")
+        return [_bug_report_from_row(row) for row in rows]

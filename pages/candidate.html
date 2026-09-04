@@ -99,13 +99,13 @@
         
         let statusBadge;
         if (app.status === 'shortlisted') {
-          statusBadge = '<span class="tag" style="background:#ecfdf5; color:#059669; border-color:#a7f3d0; font-weight:600;">✨ Shortlisted (Interview Ready)</span>';
+          statusBadge = '<span class="tag" style="background:var(--success-subtle); color:var(--success-text); border-color:rgba(16,185,129,0.3); font-weight:600;">Shortlisted — Interview Ready</span>';
         } else if (app.status === 'interview_linked') {
-          statusBadge = '<span class="tag" style="background:#eff6ff; color:#2563eb; border-color:#bfdbfe; font-weight:600;">🎙️ Interview Linked</span>';
+          statusBadge = '<span class="tag" style="background:var(--primary-subtle); color:var(--primary); border-color:var(--primary-glow); font-weight:600;">Interview Linked</span>';
         } else if (app.status === 'rejected') {
-          statusBadge = '<span class="tag" style="background:#f1f5f9; color:#64748b; border-color:#cbd5e1;">Not Shortlisted</span>';
+          statusBadge = '<span class="tag">Not Shortlisted</span>';
         } else if (app.status === 'needs_human_review') {
-          statusBadge = '<span class="tag" style="background:#fffbeb; color:#d97706; border-color:#fde68a;">Under Review</span>';
+          statusBadge = '<span class="tag" style="background:var(--warning-subtle); color:var(--warning-text); border-color:rgba(245,158,11,0.3);">Under Review</span>';
         } else {
           statusBadge = `<span class="tag">${app.status.replace(/_/g, ' ')}</span>`;
         }
@@ -119,13 +119,13 @@
             </div>
             <p class="card-sub" style="margin:0;">
               ${matchLabel}: <strong style="color:var(--primary); font-family:var(--font-mono);">${matchPct !== null ? matchPct + '%' : 'pending'}</strong>
-              ${canInterview ? ' · <span style="color:#059669; font-weight:500;">Eligible for on-demand interview</span>' : ''}
+              ${canInterview ? ' · <span style="color:var(--success-text); font-weight:500;">Eligible for on-demand interview</span>' : ''}
             </p>
           </div>
           <div style="display:flex; gap:0.5rem; align-items:center;">
             ${canInterview ? `
               <button class="btn-primary" style="padding:0.45rem 1rem; font-size:13px;" onclick="launchInterview('${app.application_id}')">
-                🎙️ ${app.status === 'interview_linked' ? 'Resume Interview' : 'Launch Interview'}
+                ${app.status === 'interview_linked' ? 'Resume Interview' : 'Launch Interview'}
               </button>
             ` : ''}
             <button class="btn-outline" style="padding:0.45rem 0.8rem; font-size:12.5px;" onclick="window.location.href='report.html?app_id=${encodeURIComponent(app.application_id)}'">

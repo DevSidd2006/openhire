@@ -24,6 +24,7 @@ from repositories.postgres.pool import PostgresConnectionPool
 from repositories.postgres.repository import (
     PostgresRubricRepository,
     PostgresApplicationRepository,
+    PostgresBugReportRepository,
     PostgresCandidateRepository,
     PostgresEvaluationRepository,
     PostgresJobRepository,
@@ -41,6 +42,7 @@ __all__ = [
     "POSTGRES_BACKEND_NAME",
     "PostgresConnectionPool",
     "PostgresApplicationRepository",
+    "PostgresBugReportRepository",
     "PostgresCandidateRepository",
     "PostgresEvaluationRepository",
     "PostgresJobRepository",
