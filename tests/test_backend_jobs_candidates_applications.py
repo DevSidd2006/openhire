@@ -855,13 +855,23 @@ class TestApplicationInterviewBridge:
         assert response.json()["error"] == "invalid_request"
 
     def test_application_must_be_shortlisted_before_linking(self, client, app):
-        from repositories.interfaces import Application
+        from repositories.interfaces import Application, CandidateRecord
         from schemas.application import ApplicationStatus as Status
+        from schemas.resume import ParsedResume
         import asyncio
 
         application_repo = app.state.container.application_repository
+        candidate_repo = app.state.container.candidate_repository
 
         async def _seed():
+            # create_session's ownership check needs a CandidateRecord to
+            # exist (AUTH_ENABLED=false always resolves the request
+            # principal to "user_anonymous") - without one it 404s before
+            # ever reaching the shortlist-status check this test targets.
+            await candidate_repo.save(CandidateRecord(
+                candidate_id="cand_bridge_3", user_id="user_anonymous",
+                resume=ParsedResume(candidate_id="cand_bridge_3", candidate_name="Test Candidate", skills=["Python"]),
+            ))
             return await application_repo.save(
                 Application(
                     application_id="app_bridge_3", job_id="job_bridge_3",
@@ -882,13 +892,19 @@ class TestApplicationInterviewBridge:
         assert response.json()["error"] == "conflict"
 
     def test_shortlisted_application_is_linked_on_session_creation(self, client, app):
-        from repositories.interfaces import Application
+        from repositories.interfaces import Application, CandidateRecord
         from schemas.application import ApplicationStatus as Status
+        from schemas.resume import ParsedResume
         import asyncio
 
         application_repo = app.state.container.application_repository
+        candidate_repo = app.state.container.candidate_repository
 
         async def _seed():
+            await candidate_repo.save(CandidateRecord(
+                candidate_id="cand_bridge_4", user_id="user_anonymous",
+                resume=ParsedResume(candidate_id="cand_bridge_4", candidate_name="Test Candidate", skills=["Python"]),
+            ))
             return await application_repo.save(
                 Application(
                     application_id="app_bridge_4", job_id="job_bridge_4",

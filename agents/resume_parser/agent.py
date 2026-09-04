@@ -248,17 +248,64 @@ class ResumeParserAgent(BaseAgent):
         return built
 
     def _build_work_experience(self, entries: List[ResumeWorkExperienceExtract]) -> List[WorkExperience]:
+        """Keeps an entry as long as it identifies WHERE and WHAT (company,
+        position) - `start_year` alone is no longer an all-or-nothing gate.
+
+        Before this fix, a real entry the LLM correctly identified (company,
+        position, description, achievements all present) was silently
+        dropped in its ENTIRETY whenever the model left `start_year` null -
+        which the prompt's own "if unclear, leave it out" instruction
+        actively encourages for anything less than an explicit year (e.g.
+        "since early 2021", a season instead of a month, an ambiguous
+        "3 years at X"). The drop was also only ever logged at DEBUG, so in
+        production this looked exactly like "the resume had no experience
+        section" with no visible signal that anything had gone wrong -
+        the bug a candidate reported: their real experience entries vanished
+        with the resume's own text sitting right there.
+
+        The fix recovers a best-effort start_year from the entry's own
+        `description` (the LLM's own summary of THIS job, itself grounded in
+        the source resume) via the same "grab a real substring, never
+        fabricate" pattern `_extract_email`/`_extract_skills` already use -
+        only a genuinely unrecoverable entry (no company/position at all,
+        or no year findable anywhere in its own description) is still
+        dropped, now at WARNING so it is visible in production logs.
+        """
         built = []
         for w in entries:
-            if not (w.company and w.position and w.start_year is not None):
-                self.logger.debug(f"Dropping work experience entry missing a required field: {w}")
+            if not (w.company and w.position):
+                self.logger.debug(f"Dropping work experience entry missing company/position: {w}")
+                continue
+            start_year = w.start_year
+            if start_year is None:
+                start_year = self._recover_year(w.description)
+            if start_year is None:
+                self.logger.warning(
+                    f"Dropping work experience entry for {w.company!r}/{w.position!r}: "
+                    f"no start_year and none recoverable from its description"
+                )
                 continue
             built.append(WorkExperience(
-                company=w.company, position=w.position, start_year=w.start_year,
+                company=w.company, position=w.position, start_year=start_year,
                 end_year=w.end_year, is_current=w.is_current, duration_months=w.duration_months,
                 description=w.description, responsibilities=w.responsibilities, achievements=w.achievements,
             ))
         return built
+
+    @staticmethod
+    def _recover_year(text: Optional[str]) -> Optional[int]:
+        """The earliest plausible (1970-current+1) 4-digit year literally
+        present in `text`, or None. Never guesses - only ever a real
+        substring of text the LLM itself already returned."""
+        if not text:
+            return None
+        import re
+        from datetime import datetime as _dt
+
+        current_year = _dt.now().year
+        years = [int(y) for y in re.findall(r"\b(19[7-9]\d|20\d{2})\b", text)]
+        years = [y for y in years if y <= current_year + 1]
+        return min(years) if years else None
 
     def _build_projects(self, entries: List[ResumeProjectExtract]) -> List[Project]:
         built = []

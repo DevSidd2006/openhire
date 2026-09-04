@@ -116,6 +116,24 @@ class CandidateService:
             )
         return record
 
+    async def get_for_user(self, user_id: str) -> Optional[CandidateRecord]:
+        """This user's own candidate profile, if they have registered one.
+
+        Backs `GET /candidates/me` - the fix for a real bug: the frontend
+        only ever learned `candidate_id` at the moment `POST /candidates`
+        succeeded (apply.html) and cached it in localStorage; logging back
+        in overwrote that cached user object without it (login.html only
+        ever stored name/role/user_id), so a returning candidate's own
+        dashboard could not find their candidate_id at all and showed zero
+        applications even though the application was still there. Newest
+        first, first element returned, since one user registering a second
+        candidate profile is not a flow this app offers today - but
+        `list_for_user` (the repository method this wraps) already returns
+        every match, so nothing here assumes exactly one.
+        """
+        matches = await self._candidates.list_for_user(user_id)
+        return matches[0] if matches else None
+
     async def list_candidates(self) -> list[CandidateRecord]:
         return await self._candidates.list_candidates()
 

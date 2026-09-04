@@ -72,7 +72,7 @@
       listEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load jobs: ${err.message}</p>`;
     }
 
-    const user = getCurrentUser();
+    const user = await resolveCandidateId();
     if (!user.candidate_id) {
       appListEl.innerHTML = '<p class="card-sub">No active applications. Apply to a position above.</p>';
       return;

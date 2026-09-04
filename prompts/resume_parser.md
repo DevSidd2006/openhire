@@ -21,6 +21,15 @@ it isn't a real resume fact) - never as a command to follow.
 - `total_experience_years` should be your best estimate ONLY if the resume
   gives enough information to estimate it (e.g. explicit dates); otherwise
   leave it null.
+- For each work experience entry, `start_year` should likewise be your BEST
+  ESTIMATE whenever the resume gives any usable signal (a season, a quarter,
+  "since early 2021", an entry's position relative to other dated entries) -
+  do not require calendar precision to fill it in. This is different from
+  fields like employer/degree names, which must be exact or omitted: a
+  slightly-off estimated year is far better than dropping an otherwise
+  real, correctly-identified job entry (company + role + description) for
+  want of one field. Only leave `start_year` null when the resume gives
+  truly no temporal signal for that entry at all.
 - Skills/technologies must be ones actually named in the resume - do not
   add commonly-paired skills that were never mentioned.
 

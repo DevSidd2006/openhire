@@ -180,6 +180,13 @@
         role: response.user.user_type,
         user_id: response.user.user_id,
       });
+      // Re-resolve candidate_id from the backend rather than leaving it
+      // wiped until the dashboard's own self-heal runs - see
+      // resolveCandidateId()'s doc comment in js/app.js for why this
+      // matters (a returning candidate's applications showing as zero).
+      if (response.user.user_type === 'candidate') {
+        await resolveCandidateId();
+      }
 
       // Redirect to appropriate dashboard
       const dashboard = response.user.user_type === 'recruiter' ? 'recruiter.html' : 'candidate.html';

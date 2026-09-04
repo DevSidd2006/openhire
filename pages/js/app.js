@@ -192,6 +192,35 @@ function setCurrentUser(user) {
   renderNavbar();
 }
 
+/**
+ * Re-resolves this candidate's candidate_id from the backend (GET
+ * /candidates/me, keyed off the authenticated user_id) and merges it into
+ * the stored user object if found.
+ *
+ * Fixes a real bug: candidate_id used to be knowable to the frontend ONLY
+ * as a side effect of apply.html's POST /candidates succeeding, which
+ * cached it into the stored user object right there. Logging back in later
+ * called setCurrentUser({name, role, user_id}) with no candidate_id,
+ * silently wiping the cached value - so a returning candidate's own
+ * dashboard had nothing to query applications with and showed zero, even
+ * though the application still existed server-side. Safe to call whenever
+ * a candidate page loads and candidate_id might be missing; a 404 (no
+ * candidate profile registered yet - a normal state before a first resume
+ * upload) is swallowed, not surfaced as an error.
+ */
+async function resolveCandidateId() {
+  const user = getCurrentUser();
+  if (user.candidate_id) return user;
+  try {
+    const data = await apiRequest('/candidates/me');
+    const updated = Object.assign({}, user, { candidate_id: data.candidate_id });
+    setCurrentUser(updated);
+    return updated;
+  } catch (err) {
+    return user;
+  }
+}
+
 function logoutUser() {
   localStorage.removeItem('openhire_user');
   localStorage.removeItem('openhire_access_token');

@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 
 from api.app import create_app
 from core.errors import ConflictError, NotFoundError
-from repositories.interfaces import Application, EvaluationStatus
+from repositories.interfaces import Application, CandidateRecord, EvaluationStatus
 from repositories.memory import (
     InMemoryApplicationRepository,
     InMemoryEvaluationRepository,
@@ -557,10 +557,18 @@ class TestBackgroundExecutionIsReal:
         # Seed an already-shortlisted application directly through the
         # container's repository, exactly as a real ApplicationService run
         # would leave it (bypassing the LLM-driven job/candidate creation
-        # endpoints here, which is not what this test is about).
+        # endpoints here, which is not what this test is about). A
+        # CandidateRecord is seeded too - create_session's ownership check
+        # (candidate_service.validate_candidate_ownership) 404s without one,
+        # and AUTH_ENABLED=false always resolves the request principal to
+        # "user_anonymous".
         import asyncio as _asyncio
 
         async def _seed():
+            await app.state.container.candidate_repository.save(CandidateRecord(
+                candidate_id=candidate_id, user_id="user_anonymous",
+                resume=ParsedResume(candidate_id=candidate_id, candidate_name="Test Candidate", skills=["Python"]),
+            ))
             await app.state.container.application_repository.save(Application(
                 application_id="app_http_eval", job_id=job_id, candidate_id=candidate_id,
                 status=ApplicationStatus.SHORTLISTED,

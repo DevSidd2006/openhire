@@ -15,7 +15,7 @@ from api.models_candidates import (
     UpdateCandidateRequest,
 )
 from core.dependencies import get_candidate_service
-from core.errors import BadRequestError
+from core.errors import BadRequestError, NotFoundError
 from core.security import Principal, require_authenticated
 from services.candidate_service import CandidateService
 from utils.resume_documents import (
@@ -112,14 +112,57 @@ async def parse_resume_file(
     )
 
 
+@router.get("/me", response_model=CandidateResponse)
+async def get_my_candidate(
+    service: CandidateService = Depends(get_candidate_service),
+    principal: Principal = Depends(require_authenticated),
+) -> CandidateResponse:
+    """GET /candidates/me - the authenticated caller's own candidate
+    profile, resolved by `user_id` rather than a remembered `candidate_id`.
+
+    The real fix for a real bug: `candidate_id` used to be knowable to the
+    frontend ONLY as a side effect of `POST /candidates` succeeding
+    (apply.html cached it into the browser's stored user object right
+    there); logging back in later overwrote that cached object without it
+    (login.html only ever stored name/role/user_id), so a returning
+    candidate's own dashboard had no candidate_id to query applications
+    with and showed zero even though the application still existed
+    server-side. This endpoint lets the frontend re-resolve it from the
+    one thing that IS always available after login - the authenticated
+    user_id - instead of only ever caching a value handed to it once.
+
+    Registered ahead of `/{candidate_id}` below so "me" is never captured
+    as a candidate_id.
+
+    Errors: 404 `not_found` if this user has not registered a candidate
+    profile yet (a normal, valid state - e.g. between signup and their
+    first resume upload).
+    """
+    user_id = principal.subject_id or "user_anonymous"
+    record = await service.get_for_user(user_id)
+    if record is None:
+        raise NotFoundError(
+            "No candidate profile registered for this user yet",
+            internal_detail=f"user_id={user_id!r}",
+        )
+    return CandidateResponse.from_record(record)
+
+
 @router.get("/{candidate_id}", response_model=CandidateResponse)
 async def get_candidate(
     candidate_id: str,
     service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> CandidateResponse:
-    """GET /candidates/{candidate_id}. Errors: 404 `not_found`, 403 `forbidden`
-    if the candidate does not belong to the authenticated user."""
+    """GET /candidates/{candidate_id} - a recruiter reviewing an applicant
+    (e.g. screening.html's "View Resume") may read ANY candidate; a
+    candidate may only read their own.
+
+    Errors: 404 `not_found`, 403 `forbidden` if a non-recruiter caller does
+    not own this candidate.
+    """
+    if principal.has_scopes(["recruiter:read"]):
+        return CandidateResponse.from_record(await service.get_candidate(candidate_id))
     user_id = principal.subject_id or "user_anonymous"
     record = await service.validate_candidate_ownership(candidate_id, user_id)
     return CandidateResponse.from_record(record)

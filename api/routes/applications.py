@@ -62,13 +62,18 @@ async def get_application(
     candidate_service: CandidateService = Depends(get_candidate_service),
     principal: Principal = Depends(require_authenticated),
 ) -> ApplicationResponse:
-    """GET /applications/{application_id}. Errors: 404 `not_found`, 403 `forbidden`
-    if the application's candidate does not belong to the authenticated user."""
-    user_id = principal.subject_id or "user_anonymous"
+    """GET /applications/{application_id} - a recruiter may read any
+    application; a candidate may only read their own.
+
+    Errors: 404 `not_found`, 403 `forbidden` if a non-recruiter caller does
+    not own the application's candidate.
+    """
     application = await service.get_application(application_id)
-    await candidate_service.validate_candidate_ownership(
-        application.candidate_id, user_id
-    )
+    if not principal.has_scopes(["recruiter:read"]):
+        user_id = principal.subject_id or "user_anonymous"
+        await candidate_service.validate_candidate_ownership(
+            application.candidate_id, user_id
+        )
     return ApplicationResponse.from_domain(application)
 
 
