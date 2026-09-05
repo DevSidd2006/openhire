@@ -1,0 +1,197 @@
+{
+  "generated_at": "20260825T144559Z",
+  "results": [
+    {
+      "case_id": "tech_strong_answer_grounded",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'supported', got 'supported'"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence[0].question_id: expected 'q1', got 'q1'"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_weak_answer_insufficient",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'insufficient'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores[0].evidence) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_unrelated_answer_no_fabricated_competency",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_out_of_range_citation_never_grounded",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'insufficient'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores[0].evidence) = 0, expected 0"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_evidence_text_never_exceeds_transcript",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence[0].text: expected 'I have managed 500 engineers.', got 'I have managed 500 engineers.'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_prompt_injection_inert",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.technical_score = 2.0, expected [0, 3]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.competency_scores[0].evidence_status: expected 'insufficient', got 'insufficient'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_partial_correctness",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.technical_score = 5.5, expected [4, 7]"
+        },
+        {
+          "metric": "evidence_grounded",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "tech_empty_transcript_no_fabrication",
+      "agent": "technical_evaluator",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.evidence) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

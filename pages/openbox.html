@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — OpenBox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .stats-strip {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));
+    background:var(--surface);
+    border:1px solid var(--surface-border);
+    border-radius:var(--radius-lg);
+    margin-bottom:1.5rem;
+    overflow:hidden;
+  }
+  .stat-cell { padding:1rem 1.25rem; border-right:1px solid var(--surface-border); }
+  .stat-cell:last-child { border-right:none; }
+  .stat-num { font-size:1.5rem; font-weight:700; color:var(--text-main); font-family:var(--font-mono); line-height:1.1; }
+  .stat-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-top:0.3rem; }
+
+  .filter-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .filter-tab { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius-pill); padding:0.4rem 0.9rem; font-size:12.5px; font-weight:500; cursor:pointer; color:var(--text-muted); transition:all 0.15s; }
+  .filter-tab:hover { color:var(--text-main); border-color:var(--primary); }
+  .filter-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .bug-card { padding:1.1rem 1.25rem; }
+  .bug-card + .bug-card { margin-top:0.75rem; }
+  .bug-title-row { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.35rem; }
+  .bug-title { font-weight:600; font-size:0.98rem; color:var(--text-main); }
+  .bug-desc { color:var(--text-muted); font-size:0.87rem; line-height:1.5; margin-bottom:0.6rem; white-space:pre-wrap; }
+  .bug-meta { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; }
+  .bug-meta-left { font-family:var(--font-mono); font-size:11px; color:var(--text-faint); }
+
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:1rem; }
+  .modal-box { background:var(--surface); border:1px solid var(--surface-border); border-radius:var(--radius-lg); max-width:520px; width:100%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 25px -5px rgba(0,0,0,0.4); }
+  .modal-header { padding:1rem 1.25rem; border-bottom:1px solid var(--surface-border); display:flex; justify-content:space-between; align-items:center; }
+  .modal-body { padding:1.25rem; overflow-y:auto; flex:1; }
+</style>
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.75rem; align-items:flex-start;">
+    <div>
+      <h2 class="card-title">OpenBox</h2>
+      <p class="card-sub">Bugs reported by the community, tracked in the open.</p>
+    </div>
+    <button class="btn-primary" onclick="openReportModal()">Report a Bug</button>
+  </div>
+
+  <div class="stats-strip" id="bugStats">
+    <div class="stat-cell">
+      <div class="stat-num" id="statOpen" style="color:var(--danger-text);">0</div>
+      <div class="stat-label">Open</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statInProgress" style="color:var(--primary);">0</div>
+      <div class="stat-label">In Progress</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statResolved" style="color:var(--success-text);">0</div>
+      <div class="stat-label">Resolved</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statTotal">0</div>
+      <div class="stat-label">Total</div>
+    </div>
+  </div>
+
+  <div class="filter-tabs" id="filterTabs">
+    <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">All</button>
+    <button class="filter-tab" data-filter="open" onclick="setFilter('open')">Open</button>
+    <button class="filter-tab" data-filter="in_progress" onclick="setFilter('in_progress')">In Progress</button>
+    <button class="filter-tab" data-filter="resolved" onclick="setFilter('resolved')">Resolved</button>
+    <button class="filter-tab" data-filter="wont_fix" onclick="setFilter('wont_fix')">Won't Fix</button>
+  </div>
+
+  <div id="bugList"></div>
+</main>
+
+<div class="modal-overlay" id="reportModal" onclick="closeReportModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="card-title" style="font-size:1rem; margin:0;">Report a Bug</h3>
+      <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:12px;" onclick="closeReportModal()">Close</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportError" class="alert alert-danger" style="display:none; margin-bottom:1rem;"></div>
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" id="bugTitle" class="form-control" placeholder="Short summary of the bug" maxlength="200">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea id="bugDescription" class="form-control" placeholder="What happened? What did you expect instead? Steps to reproduce help a lot." maxlength="5000"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Severity</label>
+        <select id="bugSeverity" class="form-control" style="cursor:pointer;">
+          <option value="low">Low — cosmetic, minor annoyance</option>
+          <option value="medium" selected>Medium — affects a feature</option>
+          <option value="high">High — blocks a core workflow</option>
+          <option value="critical">Critical — the platform is broken</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Page (optional)</label>
+        <input type="text" id="bugPage" class="form-control" placeholder="e.g. leaderboard.html">
+      </div>
+      <button id="submitBugBtn" class="btn-primary" style="width:100%;" onclick="submitBugReport()">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  guardAuthenticatedPage();
+  renderNavbar('openbox');
+
+  const STATUS_LABELS = {
+    open: 'Open',
+    in_progress: 'In Progress',
+    resolved: 'Resolved',
+    wont_fix: "Won't Fix",
+  };
+  const SEVERITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
+
+  let allReports = [];
+  let activeFilter = 'all';
+  const isRecruiter = (getCurrentUser() || {}).role === 'recruiter';
+
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function severityBadge(sev) {
+    const styles = {
+      critical: 'color:var(--danger-text); border-color:rgba(239,68,68,0.3);',
+      high: 'color:var(--warning-text); border-color:rgba(245,158,11,0.3);',
+      medium: 'color:var(--primary); border-color:var(--primary-glow);',
+      low: 'color:var(--text-faint);',
+    };
+    return `<span class="tag" style="${styles[sev] || ''}">${SEVERITY_LABELS[sev] || sev}</span>`;
+  }
+
+  function statusBadge(status) {
+    const styles = {
+      open: 'color:var(--danger-text); border-color:rgba(239,68,68,0.3);',
+      in_progress: 'color:var(--primary); border-color:var(--primary-glow);',
+      resolved: 'background:var(--success-subtle); color:var(--success-text); border-color:rgba(16,185,129,0.3);',
+      wont_fix: 'color:var(--text-faint);',
+    };
+    return `<span class="tag" style="${styles[status] || ''}">${STATUS_LABELS[status] || status}</span>`;
+  }
+
+  async function loadReports() {
+    const listEl = document.getElementById('bugList');
+    listEl.innerHTML = '<p class="card-sub">Loading reports…</p>';
+    try {
+      const data = await apiRequest('/bugs');
+      allReports = data.bug_reports || [];
+      updateStats();
+      renderList();
+    } catch (err) {
+      listEl.innerHTML = `<p class="card-sub" style="color:var(--danger-text);">Could not load OpenBox: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function updateStats() {
+    document.getElementById('statOpen').textContent = allReports.filter(r => r.status === 'open').length;
+    document.getElementById('statInProgress').textContent = allReports.filter(r => r.status === 'in_progress').length;
+    document.getElementById('statResolved').textContent = allReports.filter(r => r.status === 'resolved').length;
+    document.getElementById('statTotal').textContent = allReports.length;
+  }
+
+  function setFilter(filter) {
+    activeFilter = filter;
+    document.querySelectorAll('.filter-tab').forEach(el => {
+      el.classList.toggle('active', el.dataset.filter === filter);
+    });
+    renderList();
+  }
+
+  function renderList() {
+    const listEl = document.getElementById('bugList');
+    const rows = activeFilter === 'all' ? allReports : allReports.filter(r => r.status === activeFilter);
+
+    if (!rows.length) {
+      listEl.innerHTML = '<p class="card-sub">No reports here yet.</p>';
+      return;
+    }
+
+    listEl.innerHTML = rows.map(r => {
+      const statusControl = isRecruiter ? `
+        <select class="form-control" style="padding:0.3rem 0.6rem; font-size:12px; width:auto;" onchange="changeStatus('${r.bug_id}', this.value)">
+          ${Object.keys(STATUS_LABELS).map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
+        </select>
+      ` : '';
+
+      return `
+      <div class="card bug-card">
+        <div class="bug-title-row">
+          <span class="bug-title">${escapeHtml(r.title)}</span>
+          ${severityBadge(r.severity)}
+          ${statusBadge(r.status)}
+        </div>
+        <p class="bug-desc">${escapeHtml(r.description)}</p>
+        <div class="bug-meta">
+          <span class="bug-meta-left">${escapeHtml(r.bug_id)}${r.page ? ' · ' + escapeHtml(r.page) : ''} · ${new Date(r.created_at).toLocaleDateString()}</span>
+          ${statusControl}
+        </div>
+      </div>
+    `;
+    }).join('');
+  }
+
+  async function changeStatus(bugId, status) {
+    try {
+      await apiRequest(`/bugs/${encodeURIComponent(bugId)}/status`, {
+        method: 'PATCH',
+        body: { status },
+      });
+      await loadReports();
+    } catch (err) {
+      alert(`Could not update status: ${err.message}`);
+    }
+  }
+
+  function openReportModal() {
+    document.getElementById('reportModal').style.display = 'flex';
+  }
+
+  function closeReportModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('reportModal').style.display = 'none';
+    document.getElementById('reportError').style.display = 'none';
+  }
+
+  async function submitBugReport() {
+    const title = document.getElementById('bugTitle').value.trim();
+    const description = document.getElementById('bugDescription').value.trim();
+    const severity = document.getElementById('bugSeverity').value;
+    const page = document.getElementById('bugPage').value.trim();
+    const errorDiv = document.getElementById('reportError');
+    const submitBtn = document.getElementById('submitBugBtn');
+
+    if (!title || !description) {
+      errorDiv.textContent = 'Please fill in a title and description.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+    errorDiv.style.display = 'none';
+
+    try {
+      await apiRequest('/bugs', {
+        method: 'POST',
+        body: { title, description, severity, page: page || null },
+      });
+      document.getElementById('bugTitle').value = '';
+      document.getElementById('bugDescription').value = '';
+      document.getElementById('bugPage').value = '';
+      document.getElementById('bugSeverity').value = 'medium';
+      closeReportModal();
+      await loadReports();
+    } catch (err) {
+      errorDiv.textContent = err.message || 'Could not submit report.';
+      errorDiv.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Report';
+    }
+  }
+
+  loadReports();
+</script>
+</body>
+</html>

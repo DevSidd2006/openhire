@@ -28,23 +28,32 @@ class MockLLMProvider(LLMProvider):
         self.call_count += 1
         prompt_lower = prompt.lower()
 
-        if "structured information from this resume" in prompt_lower:
-            # Built inline in ResumeParserAgent, not loaded from a prompts/*.md file.
+        if "# resume parser agent prompt" in prompt_lower:
             return self._mock_resume_parse_response(prompt)
         elif "# jd analyzer agent prompt" in prompt_lower:
             return self._mock_jd_response(prompt)
+        elif "# adaptive interview question prompt" in prompt_lower:
+            return self._mock_adaptive_question(prompt)
+        elif "# interview introduction prompt" in prompt_lower:
+            return self._mock_interview_introduction(prompt)
+        elif "# answer evaluation agent prompt" in prompt_lower:
+            return self._mock_answer_evaluation(prompt)
+        elif "# interview question generation prompt" in prompt_lower:
+            return self._mock_interview_question(prompt)
         elif "# technical evaluator agent prompt" in prompt_lower:
             return self._mock_technical_evaluation(prompt)
         elif "# behavioral evaluator agent prompt" in prompt_lower:
             return self._mock_behavioral_evaluation(prompt)
-        elif "# interview question generation prompt" in prompt_lower:
-            return self._mock_interview_question(prompt)
         elif "# resume auditor agent prompt" in prompt_lower:
             return self._mock_claim_verification(prompt)
         elif "# integrity agent prompt" in prompt_lower:
             return self._mock_integrity_check(prompt)
         elif "# bias checker agent prompt" in prompt_lower:
             return self._mock_bias_check(prompt)
+        elif "# competency verifier agent prompt" in prompt_lower:
+            return self._mock_competency_verdicts(prompt)
+        elif "# rubric generator agent prompt" in prompt_lower:
+            return self._mock_rubric(prompt)
         elif "score" in prompt_lower or "ranking" in prompt_lower:
             return self._mock_scoring(prompt)
         elif "report" in prompt_lower or "summary" in prompt_lower:
@@ -62,6 +71,88 @@ class MockLLMProvider(LLMProvider):
             return json.loads(response)
         except json.JSONDecodeError:
             return self._create_mock_structure(schema, prompt)
+
+    def _mock_rubric(self, prompt: str) -> str:
+        """Mock an anchored rubric.
+
+        Weights sum to exactly 1.0 and all five anchors are present, so the
+        drafted rubric passes its own approval gate - a mock that produced an
+        unapprovable rubric would make every job permanently unscorable.
+        """
+        anchors = {
+            "1": "No evidence of this on the resume.",
+            "2": "Mentioned, but not demonstrated in any role.",
+            "3": "Applied in real work with visible outcomes.",
+            "4": "Led or owned work depending on this.",
+            "5": "Recognised depth: scope, scale or authorship.",
+        }
+        return json.dumps(
+            {
+                "competencies": [
+                    {
+                        "name": "Backend engineering",
+                        "definition": "Builds and ships production services.",
+                        "weight": 0.4,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Systems and operations",
+                        "definition": "Runs what they build in production.",
+                        "weight": 0.35,
+                        "anchors": anchors,
+                    },
+                    {
+                        "name": "Ownership",
+                        "definition": "Drives ambiguous work to completion.",
+                        "weight": 0.25,
+                        "anchors": anchors,
+                    },
+                ]
+            }
+        )
+
+    def _mock_competency_verdicts(self, prompt: str) -> str:
+        """Mock competency verdicts for the evidence-bound matcher.
+
+        Cites real span_ids lifted from the prompt, because the matcher
+        validates citations against what was actually retrieved and discards
+        any verdict citing a span that was not offered. A mock that invented
+        span ids would be silently thrown away and every competency would
+        come back insufficient.
+        """
+        import re
+
+        competencies = re.findall(r"^Name: (.+)$", prompt, flags=re.MULTILINE)
+        blocks = prompt.split("# Competency Verifier Agent Prompt")
+
+        verdicts = []
+        for name in competencies:
+            block = next((b for b in blocks if f"Name: {name}" in b), prompt)
+            spans = re.findall(
+                r"^\[(sp_[A-Za-z0-9_]+)\] \((\w+)\)", block, flags=re.MULTILINE
+            )
+            span_ids = [sid for sid, _ in spans]
+            # Encode the prompt's own rule rather than scoring on mere
+            # presence: a skill that is only LISTED supports at most level 2,
+            # while levels 3+ require evidence of applied work. A mock that
+            # scored 4 for any span at all would make a keyword-stuffed
+            # resume indistinguishable from a substantive one, hiding exactly
+            # the failure the adversarial cases exist to catch.
+            demonstrated = any(
+                span_type in ("achievement", "responsibility", "project")
+                for _, span_type in spans
+            )
+            verdicts.append(
+                {
+                    "competency_name": name,
+                    "score": 4 if demonstrated else (2 if span_ids else 1),
+                    "cited_span_ids": span_ids[:2],
+                    "rationale": f"Mock verdict for {name}",
+                    "evidence_sufficiency": "sufficient" if span_ids else "insufficient",
+                }
+            )
+
+        return json.dumps({"verdicts": verdicts})
 
     def _mock_resume_parse_response(self, prompt: str) -> str:
         """Mock resume parsing. Keys match schemas.resume field names
@@ -180,6 +271,56 @@ class MockLLMProvider(LLMProvider):
                 "competency": "Python",
                 "difficulty": "medium",
                 "reason": "To assess practical Python experience",
+            }
+        )
+
+    def _mock_answer_evaluation(self, prompt: str) -> str:
+        """Mock answer evaluation for prompts/answer_evaluator.md (P3/P5).
+        Confidently positive by design, matching this provider's existing
+        philosophy for every other mock evaluation response (e.g.
+        _mock_technical_evaluation) - confidence 0.75 clears
+        MIN_CONFIDENCE_FOR_COVERAGE (0.65), so a mock adaptive interview
+        run through MockLLMProvider actually progresses and terminates via
+        sufficient_evidence_collected rather than stalling."""
+        return json.dumps(
+            {
+                "score": 8.0,
+                "confidence": 0.75,
+                "evidence_status": "supported",
+                "is_vague": False,
+                "missing_detail": None,
+                "explanation": "Mock evaluation: answer addresses the target competency.",
+            }
+        )
+
+    def _mock_interview_introduction(self, prompt: str) -> str:
+        """Mock opening turn for prompts/interview_intro.md."""
+        return json.dumps(
+            {
+                "question_text": "Welcome! Could you briefly introduce yourself and your background?",
+                "question_type": "introduction",
+                "difficulty": "easy",
+                "reason": "Opening greeting before the interview begins",
+                "expected_duration_seconds": 45,
+            }
+        )
+
+    def _mock_adaptive_question(self, prompt: str) -> str:
+        """Mock question phrasing for prompts/adaptive_interviewer.md
+        (P3/P5). Unlike every other mock response in this provider, the
+        text MUST vary across calls: the adaptive engine calls this same
+        prompt template once per turn within ONE interview, and
+        utils.adaptive_interview.is_duplicate_question() would reject a
+        second identical question - `call_count` (already tracked for every
+        provider call) makes each call's text unique without needing to
+        actually parse the prompt's decision context."""
+        return json.dumps(
+            {
+                "question_text": f"Mock adaptive interview question #{self.call_count}.",
+                "question_type": "initial",
+                "difficulty": "medium",
+                "reason": "Mock adaptive question generation.",
+                "expected_duration_seconds": 60,
             }
         )
 

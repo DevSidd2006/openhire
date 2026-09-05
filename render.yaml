@@ -1,0 +1,39 @@
+services:
+  - type: pgsql
+    name: openhire-db
+    ipAllowList: []
+    databaseName: openhire
+    user: openhire
+    region: oregon
+
+  - type: web
+    name: openhire-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    depends_on:
+      - openhire-db
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          type: pgsql
+          name: openhire-db
+          property: connectionString
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_CREDENTIALS
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO

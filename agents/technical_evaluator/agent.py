@@ -50,6 +50,7 @@ class TechnicalEvaluatorAgent(BaseAgent):
             prompt = self.load_prompt("technical_evaluator.md")
             prompt = prompt.format(
                 job_description=job_description.description,
+                competencies=self._format_competencies(job_description),
                 transcript=transcript_text,
             )
 
@@ -132,3 +133,18 @@ class TechnicalEvaluatorAgent(BaseAgent):
             lines.append(f"Q{i}: {question.question_text}")
             lines.append(f"A{i}: {answer.answer_text}\n")
         return "\n".join(lines)
+
+    def _format_competencies(self, job_description: JobDescription) -> str:
+        """Render the job's exact competency names as a bullet list, so the
+        LLM has an authoritative source for the JSON keys it must use in
+        `competency_scores` - never left to infer/paraphrase a name from
+        free text alone. Without this, the prompt asked the LLM to score
+        "each technical competency in the rubric" without ever actually
+        transmitting the rubric's competency names, and this agent's own
+        lookup (`result.competency_scores.get(comp.name)`, below) is an
+        exact string match - any plausible-but-differently-worded key the
+        LLM chose on its own would silently resolve to no judgment at all
+        for that competency (P8B.2 finding)."""
+        if not job_description.competencies:
+            return "(none specified)"
+        return "\n".join(f"- {c.name}" for c in job_description.competencies)

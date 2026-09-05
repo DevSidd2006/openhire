@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Recruiter Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.5rem;">
+    <div>
+      <h2 class="card-title">Recruiter Dashboard</h2>
+      <p class="card-sub">Post positions, manage shortlists, and inspect candidate evaluation evidence.</p>
+    </div>
+    <button class="btn-primary" onclick="window.location.href='create-job.html'">+ Post Job</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Active Postings</h3>
+      <span class="tag">Live Roles</span>
+    </div>
+    <div id="recruiterJobList" class="grid-2" style="margin-top:0.25rem;">
+      <!-- Dynamic -->
+    </div>
+  </div>
+</main>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  guardAuthenticatedPage();
+  renderNavbar('dashboard');
+
+  const listEl = document.getElementById('recruiterJobList');
+  listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
+
+  (async () => {
+    let jobs;
+    try {
+      jobs = await fetchJobs();
+    } catch (err) {
+      listEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load jobs: ${err.message}</p>`;
+      return;
+    }
+
+    if (!jobs.length) {
+      listEl.innerHTML = '<p class="card-sub">No postings yet. Click "+ Post Job" to create one.</p>';
+      return;
+    }
+
+    listEl.innerHTML = jobs.map(job => `
+      <div class="job-card" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem;">
+          <h4 style="font-weight:600; font-size:1rem;">${job.title || job.job_id}</h4>
+          <span class="tag">${job.job_id}</span>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">
+          ${(job.description || '').substring(0, 100)}...
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+            ${(job.competencies || ['Technical']).slice(0, 3).map(c => `<span class="tag">${c}</span>`).join('')}
+          </div>
+          <div style="display:flex; gap:0.3rem;">
+            <button class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="event.stopPropagation(); window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'">
+              Resumes & Screening
+            </button>
+            <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="event.stopPropagation(); window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">
+              Leaderboard
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  })();
+</script>
+</body>
+</html>

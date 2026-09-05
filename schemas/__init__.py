@@ -39,6 +39,11 @@ from schemas.llm_outputs import (
     JDAnalysisResult,
     AnswerEvaluationResult,
     AdaptiveQuestionResult,
+    ResumeEducationExtract,
+    ResumeWorkExperienceExtract,
+    ResumeProjectExtract,
+    ResumeCertificationExtract,
+    ResumeParseResult,
 )
 
 __all__ = [
@@ -93,4 +98,9 @@ __all__ = [
     "JDAnalysisResult",
     "AnswerEvaluationResult",
     "AdaptiveQuestionResult",
+    "ResumeEducationExtract",
+    "ResumeWorkExperienceExtract",
+    "ResumeProjectExtract",
+    "ResumeCertificationExtract",
+    "ResumeParseResult",
 ]

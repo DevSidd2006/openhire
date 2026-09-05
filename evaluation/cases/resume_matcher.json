@@ -1,0 +1,448 @@
+[
+  {
+    "case_id": "matcher_demonstrated_experience_is_fully_covered",
+    "agent": "resume_matcher",
+    "description": "Candidate demonstrates the rubric competencies through real, outcome-bearing work.",
+    "input": {
+      "rubric": {
+        "rubric_id": "rub_job_m1",
+        "job_id": "job_m1",
+        "version": 1,
+        "status": "approved",
+        "competencies": [
+          {
+            "name": "Python engineering",
+            "definition": "Demonstrated capability in Python engineering.",
+            "weight": 0.4,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Systems and operations",
+            "definition": "Demonstrated capability in Systems and operations.",
+            "weight": 0.35,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Ownership",
+            "definition": "Demonstrated capability in Ownership.",
+            "weight": 0.25,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          }
+        ]
+      },
+      "resume": {
+        "candidate_id": "cand_m1",
+        "candidate_name": "Demonstrated",
+        "skills": [
+          "Python",
+          "Kubernetes",
+          "SQL"
+        ],
+        "total_experience_years": 6,
+        "work_experience": [
+          {
+            "company": "Acme",
+            "position": "Senior Backend Engineer",
+            "start_year": 2018,
+            "end_year": 2024,
+            "responsibilities": [
+              "Owned the Python services powering checkout"
+            ],
+            "achievements": [
+              "Cut p99 latency 40% by rewriting the async request path"
+            ]
+          }
+        ]
+      }
+    },
+    "expected_behavior": "Applied work satisfies the rubric at full coverage and every scored competency cites evidence. The exact band is the model's judgment and is deliberately not asserted - only the guarantees the system itself makes.",
+    "checks": [
+      {
+        "metric": "no_error"
+      },
+      {
+        "metric": "field_in_range",
+        "field": "output.coverage",
+        "min": 0.99,
+        "max": 1.0
+      },
+      {
+        "metric": "field_equals",
+        "field": "output.needs_human_review",
+        "value": false
+      },
+      {
+        "metric": "field_nonempty",
+        "field": "output.competency_verdicts"
+      },
+      {
+        "metric": "fact_true",
+        "fact": "every_scored_competency_is_cited"
+      }
+    ],
+    "metadata": {
+      "category": "strong_match"
+    }
+  },
+  {
+    "case_id": "matcher_keyword_stuffing_does_not_rank_strong",
+    "agent": "resume_matcher",
+    "description": "Resume lists every relevant keyword but demonstrates none of them in any role.",
+    "input": {
+      "rubric": {
+        "rubric_id": "rub_job_m2",
+        "job_id": "job_m2",
+        "version": 1,
+        "status": "approved",
+        "competencies": [
+          {
+            "name": "Python engineering",
+            "definition": "Demonstrated capability in Python engineering.",
+            "weight": 0.4,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Systems and operations",
+            "definition": "Demonstrated capability in Systems and operations.",
+            "weight": 0.35,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Ownership",
+            "definition": "Demonstrated capability in Ownership.",
+            "weight": 0.25,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          }
+        ]
+      },
+      "resume": {
+        "candidate_id": "cand_m2",
+        "candidate_name": "Keyword Stuffer",
+        "skills": [
+          "Python",
+          "Kubernetes",
+          "SQL",
+          "Go",
+          "Rust",
+          "Terraform",
+          "Kafka",
+          "gRPC"
+        ],
+        "total_experience_years": 1,
+        "work_experience": []
+      }
+    },
+    "expected_behavior": "A bare skills line cannot satisfy a level-3+ anchor, so keyword stuffing must not reach the strong band. This is the headline adversarial guarantee.",
+    "checks": [
+      {
+        "metric": "no_error"
+      },
+      {
+        "metric": "field_one_of",
+        "field": "output.band",
+        "values": [
+          "weak",
+          "potential"
+        ]
+      },
+      {
+        "metric": "fact_true",
+        "fact": "every_scored_competency_is_cited"
+      }
+    ],
+    "metadata": {
+      "category": "adversarial"
+    }
+  },
+  {
+    "case_id": "matcher_sparse_resume_is_unknown_not_rejected",
+    "agent": "resume_matcher",
+    "description": "Resume carries no usable evidence for any competency.",
+    "input": {
+      "rubric": {
+        "rubric_id": "rub_job_m3",
+        "job_id": "job_m3",
+        "version": 1,
+        "status": "approved",
+        "competencies": [
+          {
+            "name": "Python engineering",
+            "definition": "Demonstrated capability in Python engineering.",
+            "weight": 0.4,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Systems and operations",
+            "definition": "Demonstrated capability in Systems and operations.",
+            "weight": 0.35,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Ownership",
+            "definition": "Demonstrated capability in Ownership.",
+            "weight": 0.25,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          }
+        ]
+      },
+      "resume": {
+        "candidate_id": "cand_m3",
+        "candidate_name": "Sparse",
+        "skills": [],
+        "work_experience": [],
+        "projects": [],
+        "education": []
+      }
+    },
+    "expected_behavior": "With no evidence to cite, the candidate is routed to human review with no score at all - an unknown, not a confident zero.",
+    "checks": [
+      {
+        "metric": "no_error"
+      },
+      {
+        "metric": "field_equals",
+        "field": "output.needs_human_review",
+        "value": true
+      },
+      {
+        "metric": "field_equals",
+        "field": "output.match_score",
+        "value": null
+      },
+      {
+        "metric": "field_in_range",
+        "field": "output.coverage",
+        "min": 0.0,
+        "max": 0.5
+      }
+    ],
+    "metadata": {
+      "category": "insufficient_evidence"
+    }
+  },
+  {
+    "case_id": "matcher_partial_evidence_reports_partial_coverage",
+    "agent": "resume_matcher",
+    "description": "Candidate demonstrates work but the resume is thin relative to the rubric.",
+    "input": {
+      "rubric": {
+        "rubric_id": "rub_job_m4",
+        "job_id": "job_m4",
+        "version": 1,
+        "status": "approved",
+        "competencies": [
+          {
+            "name": "Python engineering",
+            "definition": "Demonstrated capability in Python engineering.",
+            "weight": 0.4,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Systems and operations",
+            "definition": "Demonstrated capability in Systems and operations.",
+            "weight": 0.35,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Ownership",
+            "definition": "Demonstrated capability in Ownership.",
+            "weight": 0.25,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          }
+        ]
+      },
+      "resume": {
+        "candidate_id": "cand_m4",
+        "candidate_name": "Partial",
+        "skills": [
+          "Python"
+        ],
+        "total_experience_years": 3,
+        "projects": [
+          {
+            "name": "Ledger",
+            "description": "Built a double-entry ledger service",
+            "technologies": [
+              "Python"
+            ]
+          }
+        ]
+      }
+    },
+    "expected_behavior": "Coverage is reported as a first-class figure alongside the score, so a thin resume is visibly thin rather than silently averaged.",
+    "checks": [
+      {
+        "metric": "no_error"
+      },
+      {
+        "metric": "field_in_range",
+        "field": "output.coverage",
+        "min": 0.0,
+        "max": 1.0
+      },
+      {
+        "metric": "fact_true",
+        "fact": "every_scored_competency_is_cited"
+      }
+    ],
+    "metadata": {
+      "category": "partial_evidence"
+    }
+  },
+  {
+    "case_id": "matcher_score_carries_its_rubric_version",
+    "agent": "resume_matcher",
+    "description": "Every score records which rubric version produced it.",
+    "input": {
+      "rubric": {
+        "rubric_id": "rub_job_m6",
+        "job_id": "job_m6",
+        "version": 3,
+        "status": "approved",
+        "competencies": [
+          {
+            "name": "Python engineering",
+            "definition": "Demonstrated capability in Python engineering.",
+            "weight": 0.4,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Systems and operations",
+            "definition": "Demonstrated capability in Systems and operations.",
+            "weight": 0.35,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          },
+          {
+            "name": "Ownership",
+            "definition": "Demonstrated capability in Ownership.",
+            "weight": 0.25,
+            "anchors": {
+              "1": "No evidence of this on the resume.",
+              "2": "Mentioned in a skills list, but never demonstrated in real work.",
+              "3": "Applied in real work with a visible outcome.",
+              "4": "Led or owned work that depended on it.",
+              "5": "Recognised depth: unusual scope, scale or authorship."
+            }
+          }
+        ]
+      },
+      "resume": {
+        "candidate_id": "cand_m6",
+        "candidate_name": "Versioned",
+        "skills": [
+          "Python"
+        ],
+        "total_experience_years": 5,
+        "work_experience": [
+          {
+            "company": "Gamma",
+            "position": "Engineer",
+            "start_year": 2019,
+            "end_year": 2024,
+            "achievements": [
+              "Ran the Python data platform"
+            ]
+          }
+        ]
+      }
+    },
+    "expected_behavior": "A leaderboard is only coherent if every row states the rubric version it was scored under.",
+    "checks": [
+      {
+        "metric": "no_error"
+      },
+      {
+        "metric": "field_equals",
+        "field": "output.rubric_version",
+        "value": 3
+      }
+    ],
+    "metadata": {
+      "category": "rubric_versioning"
+    }
+  }
+]

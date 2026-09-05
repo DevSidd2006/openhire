@@ -34,9 +34,17 @@ class PipelineState(TypedDict):
 
     # Intermediate results
     job_description: Optional[Any]
+    # The APPROVED rubric matching scores against. A job with no approved
+    # rubric is not scorable (see the design spec): matching is skipped
+    # rather than falling back to an unreviewed rubric.
+    job_rubric: Optional[Any]
     parsed_resumes: Dict[str, Any]  # candidate_id -> ParsedResume
     matching_scores: Dict[str, Any]  # candidate_id -> MatchingScore
     shortlisted_candidates: List[str]
+    # Candidates a recruiter has EXPLICITLY advanced to interview after
+    # reading the leaderboard. Empty by default and never populated by
+    # matching: a match score must not be sufficient to start an interview.
+    recruiter_advanced_candidates: List[str]
     interview_questions: Dict[str, Any]  # candidate_id -> list of questions
 
     # Evaluation results
@@ -53,6 +61,20 @@ class PipelineState(TypedDict):
     run_id: Optional[str]
     errors: List[str]
     audit_logs: List[Any]
+
+
+def route_after_matching(state: PipelineState) -> str:
+    """Decide whether the run may proceed from matching into interviewing.
+
+    Fails closed: unless a recruiter has explicitly advanced candidates, the
+    run ends after matching. A shortlist alone is NOT sufficient - shortlisting
+    is an output of matching, while advancing is a human decision made after
+    reading the leaderboard. Treating a missing field as "advance" would
+    reintroduce the auto-start this gate exists to prevent, so absence ends
+    the run too.
+    """
+    advanced = state.get("recruiter_advanced_candidates") or []
+    return "generate_questions" if advanced else END
 
 
 def _unwrap(agent_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -205,15 +227,29 @@ def create_pipeline_graph():
         }
 
     async def node_match_resumes(state: PipelineState) -> Dict[str, Any]:
-        """Match resumes to job."""
+        """Score resumes against the job's APPROVED rubric.
+
+        `shortlisted_candidates` here means "successfully scored and
+        rankable" - it is NOT a hire/no-hire judgment. The matcher no longer
+        emits a shortlist recommendation, because deciding is a recruiter's
+        job; candidates whose coverage was too thin to rank are excluded from
+        the ranking and surfaced for human review instead.
+        """
         if not state["job_description"]:
             return {"errors": state["errors"] + ["No job description; skipping resume matching"]}
+
+        rubric = state.get("job_rubric")
+        if not rubric:
+            return {
+                "errors": state["errors"]
+                + ["No approved rubric for this job; skipping resume matching"]
+            }
 
         candidate_ids = list(state["parsed_resumes"].keys())
         match_tasks = [
             resume_matcher.run(
                 run_id=state.get("run_id"),
-                job_description=state["job_description"],
+                job_rubric=rubric,
                 parsed_resume=state["parsed_resumes"][candidate_id],
             )
             for candidate_id in candidate_ids
@@ -222,20 +258,20 @@ def create_pipeline_graph():
         agent_results = await asyncio.gather(*match_tasks)
 
         matching_scores = {}
-        shortlisted = []
+        rankable = []
         errors = []
         for candidate_id, agent_result in zip(candidate_ids, agent_results):
             result = _unwrap(agent_result)
             if result.get("matching_score"):
                 matching_scores[candidate_id] = result["matching_score"]
-                if result.get("shortlist_recommendation"):
-                    shortlisted.append(candidate_id)
+                if not result.get("needs_human_review"):
+                    rankable.append(candidate_id)
             else:
                 errors.append(f"Matching failed for {candidate_id}")
 
         return {
             "matching_scores": {**state["matching_scores"], **matching_scores},
-            "shortlisted_candidates": state["shortlisted_candidates"] + shortlisted,
+            "shortlisted_candidates": state["shortlisted_candidates"] + rankable,
             "errors": state["errors"] + errors,
             "audit_logs": state["audit_logs"] + _audit_logs(agent_results),
         }
@@ -552,7 +588,15 @@ def create_pipeline_graph():
     graph.add_edge(START, "analyze_job")
     graph.add_edge("analyze_job", "parse_resumes")
     graph.add_edge("parse_resumes", "match_resumes")
-    graph.add_edge("match_resumes", "generate_questions")
+    # Matching does NOT flow unconditionally into interview generation. A
+    # match score must never auto-start an AI interview; a recruiter advances
+    # candidates explicitly after reading the leaderboard. See
+    # route_after_matching.
+    graph.add_conditional_edges(
+        "match_resumes",
+        route_after_matching,
+        {"generate_questions": "generate_questions", END: END},
+    )
     graph.add_edge("generate_questions", "parallel_evaluations")
     graph.add_edge("parallel_evaluations", "bias_check")
     graph.add_edge("bias_check", "score")

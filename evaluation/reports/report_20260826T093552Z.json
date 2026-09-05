@@ -1,0 +1,33 @@
+{
+  "generated_at": "20260826T093552Z",
+  "provider": "groq",
+  "results": [
+    {
+      "case_id": "interviewer_adaptive_sequence_differs_by_answer_quality",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "error",
+      "metrics": [],
+      "failures": [],
+      "explanation": "InterviewSessionError: Question generation failed: LLM call failed after 3 attempt(s): Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01m0xpjggjend85k8ed930bm2c` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199205, Requested 3011. Please try again in 15m57.312s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+      "skip_reason": null
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_max_questions",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "error",
+      "metrics": [],
+      "failures": [],
+      "explanation": "InterviewSessionError: Question generation failed: LLM call failed after 3 attempt(s): Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01m0xpjggjend85k8ed930bm2c` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199201, Requested 1647. Please try again in 6m6.336s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+      "skip_reason": null
+    },
+    {
+      "case_id": "interviewer_adaptive_termination_sufficient_evidence",
+      "agent": "interviewer_adaptive_sequence",
+      "verdict": "error",
+      "metrics": [],
+      "failures": [],
+      "explanation": "InterviewSessionError: Question generation failed: LLM call failed after 3 attempt(s): Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-20b` in organization `org_01m0xpjggjend85k8ed930bm2c` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199196, Requested 1320. Please try again in 3m42.911999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+      "skip_reason": null
+    }
+  ]
+}

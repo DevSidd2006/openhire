@@ -17,7 +17,7 @@ from config.settings import MAX_QUESTIONS_PER_INTERVIEW
 # label are unaffected.
 QuestionType = Literal[
     "initial", "follow_up", "probe", "clarification", "depth",
-    "behavioral", "technical", "role_specific",
+    "behavioral", "technical", "role_specific", "introduction",
 ]
 
 

@@ -1,0 +1,105 @@
+[
+  {
+    "case_id": "report_full_complete_candidate",
+    "agent": "report_generator",
+    "description": "A fully-evaluated candidate produces a complete report with all sections.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_01", "candidate_name": "Jordan Lee", "skills": ["Python"]},
+      "candidate_scores": {"score_id": "s1", "candidate_id": "cand_rg_01", "job_id": "job_rg_01", "technical_score": 9.0, "behavioral_score": 8.0, "job_fit_score": 8.5, "weighted_final_score": 9.0, "explanation": "x", "confidence": 0.9},
+      "technical_evaluation": {"evaluation_id": "te1", "candidate_id": "cand_rg_01", "job_id": "job_rg_01", "interview_id": "i1", "technical_score": 9.0, "strengths": ["Deep async knowledge"], "weaknesses": ["Limited SQL depth"], "explanation": "Strong technical showing.", "confidence": 0.9},
+      "behavioral_evaluation": {"evaluation_id": "be1", "candidate_id": "cand_rg_01", "job_id": "job_rg_01", "interview_id": "i1", "behavioral_score": 8.0, "communication": 8.0, "problem_solving": 8.0, "teamwork": 8.0, "adaptability": 8.0, "strengths": ["Clear communicator"], "weaknesses": [], "explanation": "Strong behavioral showing.", "confidence": 0.9}
+    },
+    "expected_behavior": "Report contains candidate/job/scores/strengths/weaknesses/recommendation, all traceable to the given evaluations.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.candidate_id", "value": "cand_rg_01"},
+      {"metric": "field_equals", "field": "output.candidate_name", "value": "Jordan Lee"},
+      {"metric": "field_nonempty", "field": "output.recommendation"},
+      {"metric": "list_subset_of", "field": "output.strengths", "allowed": ["Deep async knowledge", "Clear communicator"]},
+      {"metric": "list_subset_of", "field": "output.weaknesses", "allowed": ["Limited SQL depth"]},
+      {"metric": "field_equals", "field": "output.recommendation", "value": "strong_candidate"}
+    ],
+    "metadata": {"category": "complete"}
+  },
+  {
+    "case_id": "report_strong_score_recommendation",
+    "agent": "report_generator",
+    "description": "A high score (>=8.5) with no flags yields strong_candidate.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_02", "candidate_name": "Test", "skills": []},
+      "candidate_scores": {"score_id": "s2", "candidate_id": "cand_rg_02", "job_id": "job_rg_02", "technical_score": 9.0, "behavioral_score": 9.0, "job_fit_score": 9.0, "weighted_final_score": 9.0, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "recommendation == strong_candidate.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.recommendation", "value": "strong_candidate"},
+      {"metric": "field_equals", "field": "output.requires_human_review", "value": false}
+    ],
+    "metadata": {"category": "recommendation_logic"}
+  },
+  {
+    "case_id": "report_low_score_insufficient_evidence",
+    "agent": "report_generator",
+    "description": "A low score with no other issues yields insufficient_evidence, not a disguised pass.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_03", "candidate_name": "Test", "skills": []},
+      "candidate_scores": {"score_id": "s3", "candidate_id": "cand_rg_03", "job_id": "job_rg_03", "technical_score": 3.0, "behavioral_score": 3.0, "job_fit_score": 3.0, "weighted_final_score": 3.0, "explanation": "x", "confidence": 0.5}
+    },
+    "expected_behavior": "recommendation == insufficient_evidence for a genuinely low score.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.recommendation", "value": "insufficient_evidence"}
+    ],
+    "metadata": {"category": "recommendation_logic"}
+  },
+  {
+    "case_id": "report_integrity_flag_forces_human_review",
+    "agent": "report_generator",
+    "description": "A high score does not override a real integrity concern - human review is still required.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_04", "candidate_name": "Test", "skills": []},
+      "candidate_scores": {"score_id": "s4", "candidate_id": "cand_rg_04", "job_id": "job_rg_04", "technical_score": 9.0, "behavioral_score": 9.0, "job_fit_score": 9.0, "weighted_final_score": 9.0, "explanation": "x", "confidence": 0.9},
+      "integrity_evaluation": {"evaluation_id": "ie1", "candidate_id": "cand_rg_04", "job_id": "job_rg_04", "interview_id": "i1", "overall_integrity": "flagged", "explanation": "x", "confidence": 0.7, "requires_human_review": true, "flags": [{"flag_id": "f1", "flag_type": "answer_inconsistency", "severity": "medium", "confidence": 0.7, "description": "x", "requires_human_review": true}]}
+    },
+    "expected_behavior": "A high score does not suppress the integrity flag - recommendation is human_review, not strong_candidate.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.recommendation", "value": "human_review"},
+      {"metric": "field_equals", "field": "output.requires_human_review", "value": true},
+      {"metric": "length_equals", "field": "output.integrity_flags", "value": 1}
+    ],
+    "metadata": {"category": "integrity_overrides_score"}
+  },
+  {
+    "case_id": "report_incomplete_candidate_missing_evaluations",
+    "agent": "report_generator",
+    "description": "A candidate with missing technical/behavioral evaluations still produces a valid report, not a crash or invented content.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_05", "candidate_name": "Test", "skills": []},
+      "candidate_scores": {"score_id": "s5", "candidate_id": "cand_rg_05", "job_id": "job_rg_05", "technical_score": 5.0, "behavioral_score": 5.0, "job_fit_score": 5.0, "weighted_final_score": 5.0, "explanation": "x", "confidence": 0.5}
+    },
+    "expected_behavior": "technical_summary/behavioral_summary state explicitly that no evaluation was available, rather than inventing one.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "contains_text", "field": "output.technical_summary", "value": "no technical evaluation"},
+      {"metric": "contains_text", "field": "output.behavioral_summary", "value": "no behavioral evaluation"},
+      {"metric": "length_equals", "field": "output.strengths", "value": 0}
+    ],
+    "metadata": {"category": "incomplete_candidate"}
+  },
+  {
+    "case_id": "report_insufficient_evidence_score_triggers_review",
+    "agent": "report_generator",
+    "description": "A competency score marked evidence_status=insufficient must trigger human review even if the numeric score looks fine.",
+    "input": {
+      "resume": {"candidate_id": "cand_rg_06", "candidate_name": "Test", "skills": []},
+      "candidate_scores": {"score_id": "s6", "candidate_id": "cand_rg_06", "job_id": "job_rg_06", "technical_score": 9.0, "behavioral_score": 9.0, "job_fit_score": 9.0, "weighted_final_score": 9.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 9.0, "confidence": 0.2, "explanation": "x", "evidence_status": "insufficient"}]}
+    },
+    "expected_behavior": "requires_human_review is true because of the insufficient-evidence competency score, despite a high final score.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.requires_human_review", "value": true}
+    ],
+    "metadata": {"category": "insufficient_evidence_triggers_review"}
+  }
+]

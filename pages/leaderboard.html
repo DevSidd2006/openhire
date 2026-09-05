@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Candidate Leaderboard & Rankings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .stats-strip {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));
+    background:var(--surface);
+    border:1px solid var(--surface-border);
+    border-radius:var(--radius-lg);
+    margin-bottom:1.5rem;
+    overflow:hidden;
+  }
+  .stat-cell {
+    padding:1rem 1.25rem;
+    border-right:1px solid var(--surface-border);
+  }
+  .stat-cell:last-child { border-right:none; }
+  .stat-num { font-size:1.5rem; font-weight:700; color:var(--text-main); font-family:var(--font-mono); line-height:1.1; }
+  .stat-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-top:0.3rem; }
+</style>
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.75rem; align-items:flex-start;">
+    <div>
+      <h2 class="card-title">Candidate Evaluation Leaderboard</h2>
+      <p class="card-sub" id="leaderboardMeta">Rankings and multi-agent interview evaluations scored by <code>LeaderboardAgent</code>.</p>
+    </div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="reMatchShortlist()">Run Matcher</button>
+      <button class="btn-outline" onclick="goToScreening()">All Resumes</button>
+      <button class="btn-outline" onclick="window.history.back()">Back</button>
+    </div>
+  </div>
+
+  <div class="stats-strip" id="leaderboardStats">
+    <div class="stat-cell">
+      <div class="stat-num" id="statOpenings" style="color:var(--primary);">1</div>
+      <div class="stat-label">Openings</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statSelected" style="color:var(--success-text);">0</div>
+      <div class="stat-label">Selected</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statEvaluated">0</div>
+      <div class="stat-label">Evaluated</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statIncomplete" style="color:var(--primary);">0</div>
+      <div class="stat-label">In Progress</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num" id="statFlagged" style="color:var(--warning-text);">0</div>
+      <div class="stat-label">Flagged</div>
+    </div>
+  </div>
+
+  <div class="card" id="selectionSummaryCard" style="margin-bottom:1.5rem; display:none; background:var(--success-subtle); border:1px solid rgba(16,185,129,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <div>
+        <h4 style="font-weight:600; color:var(--success-text); margin:0 0 0.2rem; font-size:0.95rem;">Hiring Selection Result</h4>
+        <p id="selectionSummaryText" style="margin:0; font-size:0.85rem; color:var(--text-muted);"></p>
+      </div>
+      <span class="tag" style="color:var(--success-text); border-color:rgba(16,185,129,0.3);">AI Evaluated</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem;">
+      <h3 class="card-title" style="font-size:1.05rem; margin:0;">Ranked Candidates</h3>
+      <div style="min-width:200px;">
+        <input type="text" id="leaderboardSearch" class="form-control" placeholder="Search candidate..." oninput="filterLeaderboardRows()" style="padding:0.35rem 0.75rem; font-size:12px;">
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Candidate</th>
+            <th>Resume Match</th>
+            <th>Interview Score</th>
+            <th>Selection Status</th>
+            <th>Integrity / Flags</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardTableBody">
+          <!-- Populated via JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  guardAuthenticatedPage();
+  renderNavbar('leaderboard');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobId = urlParams.get('job_id');
+  const tbody = document.getElementById('leaderboardTableBody');
+
+  let rawEntries = [];
+  let rawIncomplete = [];
+  let targetOpenings = 1;
+
+  if (jobId) {
+    document.getElementById('leaderboardMeta').textContent = `Ranked applicants for role: ${jobId}`;
+  } else {
+    document.getElementById('leaderboardMeta').textContent = 'No job selected.';
+    tbody.innerHTML = '<tr><td colspan="7" class="card-sub">Open this page from a specific job (Recruiter Dashboard → a posting → Leaderboard) to see its ranked candidates.</td></tr>';
+  }
+
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function loadLeaderboard() {
+    if (!jobId) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="card-sub">Loading leaderboard…</td></tr>';
+    try {
+      const data = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/leaderboard`);
+      rawEntries = data.leaderboard.entries || [];
+      rawIncomplete = data.leaderboard.incomplete_candidates || [];
+      targetOpenings = data.leaderboard.openings || 1;
+
+      const selectedEntries = rawEntries.filter(e => e.is_selected);
+      const flaggedCount = rawEntries.filter(e => e.has_integrity_issues || e.has_bias_concerns).length;
+
+      document.getElementById('statOpenings').textContent = targetOpenings;
+      document.getElementById('statSelected').textContent = selectedEntries.length;
+      document.getElementById('statEvaluated').textContent = rawEntries.length;
+      document.getElementById('statIncomplete').textContent = rawIncomplete.length;
+      document.getElementById('statFlagged').textContent = flaggedCount;
+
+      const summaryCard = document.getElementById('selectionSummaryCard');
+      const summaryText = document.getElementById('selectionSummaryText');
+      if (rawEntries.length > 0) {
+        summaryCard.style.display = 'block';
+        if (selectedEntries.length >= targetOpenings) {
+          summaryText.innerHTML = `All <strong>${targetOpenings}</strong> opening(s) filled by the top-ranked evaluated candidates based on AI multi-agent interview performance.`;
+        } else {
+          summaryText.innerHTML = `<strong>${selectedEntries.length}</strong> of <strong>${targetOpenings}</strong> opening(s) filled so far. (${targetOpenings - selectedEntries.length} slot(s) open for candidates in progress).`;
+        }
+      } else {
+        summaryCard.style.display = 'none';
+      }
+
+      renderLeaderboardRows();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="card-sub" style="color:var(--danger, #ef4444);">Could not load leaderboard: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderLeaderboardRows() {
+    const q = (document.getElementById('leaderboardSearch').value || '').toLowerCase().trim();
+    const filteredEntries = rawEntries.filter(c => {
+      if (!q) return true;
+      return (c.candidate_name || '').toLowerCase().includes(q) || (c.candidate_id || '').toLowerCase().includes(q);
+    });
+
+    if (!filteredEntries.length && !rawIncomplete.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="card-sub">No evaluated candidates yet for this job. Shortlisted candidates can take their interview at any time.</td></tr>';
+      return;
+    }
+
+    const rows = filteredEntries.map((c, idx) => {
+      const isSelected = c.is_selected;
+      let selectionBadge;
+      if (isSelected) {
+        selectionBadge = `<span class="tag" style="background:var(--success-subtle); color:var(--success-text); border-color:rgba(16,185,129,0.3); font-weight:600;">Selected</span>`;
+      } else {
+        selectionBadge = `<span class="tag">Waitlisted</span>`;
+      }
+
+      return `
+      <tr style="${isSelected ? 'background:rgba(16,185,129,0.03);' : ''}">
+        <td style="font-family:var(--font-mono); font-weight:700; color:${isSelected ? 'var(--success-text)' : 'var(--primary)'};">#${c.rank}</td>
+        <td>
+          <strong style="color:var(--text-main); font-size:0.95rem;">${escapeHtml(c.candidate_name)}</strong>
+          <div class="card-sub" style="font-size:11px; font-family:var(--font-mono);">${escapeHtml(c.candidate_id)}</div>
+        </td>
+        <td><span class="score-pill ${c.job_fit_score >= 7 ? 'high' : 'med'}">${(c.job_fit_score || 0).toFixed(1)}/10</span></td>
+        <td><span class="score-pill high" style="font-weight:700;">${(c.weighted_score || 0).toFixed(1)}/10</span></td>
+        <td>${selectionBadge}</td>
+        <td><span class="tag" style="${(c.has_integrity_issues || c.has_bias_concerns) ? 'color:var(--warning-text); border-color:rgba(245,158,11,0.3);' : 'color:var(--text-faint);'}">${(c.has_integrity_issues || c.has_bias_concerns) ? 'Flagged' : 'Clean'}</span></td>
+        <td>
+          <button class="btn-primary" style="padding:0.3rem 0.9rem; font-size:12px;" onclick="window.location.href='report.html?job_id=${encodeURIComponent(jobId)}&candidate_id=${encodeURIComponent(c.candidate_id)}'">
+            Report
+          </button>
+        </td>
+      </tr>
+    `;
+    });
+
+    const incompleteRows = rawIncomplete.map(candidateId => `
+      <tr style="opacity:0.8;">
+        <td>—</td>
+        <td>
+          <strong style="color:var(--text-main);">${escapeHtml(candidateId)}</strong>
+          <div class="card-sub" style="font-size:11px;">Shortlisted Candidate</div>
+        </td>
+        <td><span class="tag">Shortlisted</span></td>
+        <td colspan="3" class="card-sub" style="font-style:italic;">Eligible for on-demand interview — waiting for candidate to complete</td>
+        <td>
+          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" onclick="goToScreening()">
+            View Resume
+          </button>
+        </td>
+      </tr>
+    `);
+
+    tbody.innerHTML = rows.concat(incompleteRows).join('');
+  }
+
+  function filterLeaderboardRows() {
+    renderLeaderboardRows();
+  }
+
+  async function reMatchShortlist() {
+    if (!jobId) {
+      alert('Select a job first.');
+      return;
+    }
+    try {
+      const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
+      alert(`Auto-Matcher ran: ${result.matched} matched, ${result.shortlisted} auto-shortlisted, ${result.rejected} rejected.`);
+      loadLeaderboard();
+    } catch (err) {
+      alert(`Could not run the matcher: ${err.message}`);
+    }
+  }
+
+  function goToScreening() {
+    if (jobId) {
+      window.location.href = `screening.html?job_id=${encodeURIComponent(jobId)}`;
+    } else {
+      window.location.href = 'screening.html';
+    }
+  }
+
+  loadLeaderboard();
+</script>
+</body>
+</html>

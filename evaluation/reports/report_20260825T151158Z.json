@@ -1,0 +1,317 @@
+{
+  "generated_at": "20260825T151158Z",
+  "results": [
+    {
+      "case_id": "resume_normal",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.email: expected 'jordan@example.com', got 'jordan@example.com'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['Python', 'SQL'], expected to contain 'Python'"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 1, expected 1"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_sparse_no_invention",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.skills) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_multiple_jobs_overlapping_dates",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 2, expected 2"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_missing_sections",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.education) = 0, expected 0"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.projects) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_unusual_formatting",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['Python', 'AWS'], expected to contain 'AWS'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_empty",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.skills) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_malformed_llm_output_fallback",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "result.used_fallback: expected True, got True"
+        },
+        {
+          "metric": "field_nonempty",
+          "passed": true,
+          "detail": "result.error = 'LLM call failed after 3 attempt(s): Malformed JSON from scripted response: Expecting value: line 1 column 1 (char 0)'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['Python', 'SQL', 'PostgreSQL'], expected to contain 'Python'"
+        },
+        {
+          "metric": "list_not_contains",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_permanent_provider_error_falls_back",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "result.used_fallback: expected True, got True"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.skills = ['Java', 'Docker'], expected to contain 'Java'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_missing_start_year_entry_dropped",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.work_experience) = 1, expected 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.work_experience[0].company: expected 'Beta', got 'Beta'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_prompt_injection_no_fabricated_experience",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.total_experience_years: expected 2.0, got 2.0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_prompt_injection_no_fabricated_skill",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_not_contains",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_no_cgpa_or_graduation_year_invented",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.education[0].gpa: expected None, got None"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.education[0].graduation_year: expected None, got None"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "resume_certifications",
+      "agent": "resume_parser",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.certifications) = 1, expected 1"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.certifications[0].name: expected 'AWS Certified Solutions Architect', got 'AWS Certified Solutions Architect'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

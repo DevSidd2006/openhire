@@ -24,13 +24,63 @@ DATA_DIR.mkdir(exist_ok=True)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mock").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# gemini-2.5-flash was retired ("no longer available to new users" per the
+# API's own 404 body) and its successor gemini-3.6-flash took 64-126s on the
+# real resume_parser prompt/schema - well past RESUME_PARSER_TIMEOUT_SECONDS
+# (45s), causing repeated timeout->retry->fallback cycles in production.
+# gemini-flash-lite-latest was verified locally across 3 runs at 2.6-4.8s
+# with identical, fully correct extraction on the same prompt.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+# NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
+# Serves the Nemotron family (super-120b handles 360k-token prompts). Cloud-hosted at
+# integrate.api.nvidia.com. The key is only ever read from the environment - never
+# hard-coded, logged, or reported.
+NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
+# Model choice here is benchmarked, not guessed - see the numbers below, all
+# measured against the hosted integrate.api.nvidia.com endpoint with reasoning
+# off, 5 runs each on the resume-extraction prompt shape:
+#
+#   nemotron-3-super-120b-a12b   median  1.1s   5/5 correct   360k-token prompt in 17.8s
+#   nemotron-3.5-lightning-30b   median  2.1s   4/5 correct
+#   nemotron-3-ultra-550b-a55b   median 14.6s   5/5 correct   360k-token prompt in ~31s
+#   nemotron-3-nano-30b-a3b      GONE - 410, end of life 2026-09-01
+#
+# super-120b is the default because it is both the fastest and the widest: it
+# was ~13x faster than ultra-550b at equal accuracy and still swallowed a
+# 360k-token prompt. ultra-550b remains a valid NVIDIA_NIM_MODEL override if a
+# call site ever needs the bigger model, but it costs ~13x the latency.
+#
+# The previous default, nemotron-3-nano-30b-a3b, is DEAD - the endpoint returns
+# 410 Gone (end of life 2026-09-01), so every NIM call was failing until this
+# was changed. The old comment here blamed ultra-550b for "never returning
+# within the 45s RESUME_PARSER_TIMEOUT_SECONDS"; that was reasoning mode, not
+# the model. Nemotron draws reasoning tokens from the same max_tokens budget as
+# the answer, so with thinking on a small budget is spent thinking and the call
+# returns finish_reason="length" having emitted no answer (measured: 50.8s for a
+# trivial prompt at max_tokens=24, versus 4.9s with thinking off).
+NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+# Reasoning/"extended thinking" mode. Off by default - see the note above and
+# providers/llm/nvidia_nim.py. Turn it on only for a call site that also raises
+# max_tokens well above the answer length it expects.
+NVIDIA_NIM_ENABLE_THINKING = os.getenv("NVIDIA_NIM_ENABLE_THINKING", "false").lower() in ("1", "true", "yes")
+NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+# Groq: Alternative LLM provider (openai/gpt-oss-20b model). Supported but no longer
+# the primary target. Kept for backward compatibility.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # Embedding Configuration
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local").lower()
+# Production: use API-based (nvidia-nim) to avoid large local models
+# Uses nvidia/nemotron-3-embed-1b via free hosted API at integrate.api.nvidia.com
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/nemotron-3-embed-1b")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "nvidia-nim").lower()
 
 # Vector Store Configuration
-VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "faiss").lower()
+# Production: use mock (in-memory) for simplicity on Render
+# Development: can use faiss if needed
+VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE_TYPE", "mock").lower()
 VECTOR_STORE_PATH = os.getenv("VECTOR_STORE_PATH", str(PROJECT_ROOT / "faiss_index"))
 
 # Interview Configuration
@@ -56,13 +106,59 @@ MIN_CONFIDENCE_FOR_COVERAGE = 0.65  # a competency is only treated as
 # Evaluation Configuration
 MAX_RETRIES = 3
 TIMEOUT_SECONDS = 30
+
+# P8B.4 timeout audit: resume_parser's structured schema (ResumeParseResult
+# in schemas/llm_outputs.py) is the largest of any agent's - nested lists of
+# education/work_experience/projects/certifications entries, each its own
+# sub-schema - so under Groq's strict-mode constrained decoding
+# (providers/llm/groq.py._normalize_for_strict) it is also the slowest to
+# generate. A real Groq call was observed to exceed the global 30s
+# TIMEOUT_SECONDS on its first attempt and succeed in ~1.5s on the retry
+# (see the P8B.4 report) - correct, but a wasted 30s wait plus one extra API
+# call per occurrence, which matters when the daily quota is the scarce
+# resource. Every other agent's real-Groq latency stayed well under 30s
+# (jd_analyzer, technical/behavioral evaluator: 1-5s), so this override is
+# scoped to resume_parser only - the shared TIMEOUT_SECONDS default is
+# unchanged for every other agent.
+RESUME_PARSER_TIMEOUT_SECONDS = int(os.getenv("RESUME_PARSER_TIMEOUT_SECONDS", "45"))
 ASYNC_EXECUTION = True
 
 # Scoring Configuration
 CONFIDENCE_THRESHOLD = 0.7
 
 # Audio Configuration
-AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", "mock").lower()
+# P9 fix: the .env in this project defines AUDIO_PROCESSOR, but this
+# setting only ever read AUDIO_PROVIDER - so an operator setting
+# AUDIO_PROCESSOR=... was silently ignored and the system stayed on mock
+# with no warning. Both spellings are now accepted (AUDIO_PROVIDER wins if
+# both are set, preserving the documented name); AUDIO_PROCESSOR is
+# supported as the alias the existing .env already uses.
+AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", os.getenv("AUDIO_PROCESSOR", "mock")).lower()
+
+# P9: text-to-speech provider, selected independently of STT - a deployment
+# may reasonably transcribe with one service and synthesize with another.
+# Defaults to mock so the whole voice layer runs offline, with no API key,
+# exactly like LLM_PROVIDER=mock does for the agent layer.
+TTS_PROVIDER = os.getenv("TTS_PROVIDER", "mock").lower()
+
+# Azure Speech (P9): STT/TTS implementation. Credentials are
+# read ONLY from the environment - never hard-coded, logged, echoed into a
+# transcript, or returned through the API.
+AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
+AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
+AZURE_SPEECH_VOICE = os.getenv("AZURE_SPEECH_VOICE", "en-US-JennyNeural")
+
+# Edge TTS Configuration (Free neural TTS via Microsoft Edge service)
+EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-IN-NeerjaNeural")
+EDGE_TTS_RATE = os.getenv("EDGE_TTS_RATE", "+0%")
+EDGE_TTS_PITCH = os.getenv("EDGE_TTS_PITCH", "+0Hz")
+
+# P9 voice-turn safety limits.
+MAX_UTTERANCE_BYTES = int(os.getenv("MAX_UTTERANCE_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+# Below this many characters, a transcription is treated as "no speech
+# detected" rather than a real answer - protects against a stray cough or a
+# dropped connection silently becoming a scored interview answer (P9).
+MIN_TRANSCRIPT_CHARS = int(os.getenv("MIN_TRANSCRIPT_CHARS", "2"))
 
 # Debug Mode
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"

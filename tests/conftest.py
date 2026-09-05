@@ -1,4 +1,58 @@
-"""Pytest configuration and fixtures."""
+"""Pytest configuration and fixtures.
+
+Provider isolation (read this before changing the block below)
+--------------------------------------------------------------
+The test suite is a MOCK-mode suite: every test either uses the
+deterministic MockLLMProvider/MockAudioProcessor defaults or injects its own
+fake through an explicit seam (tests/fakes.py, `app.state.interviewer_factory`,
+`app.state.voice_service_factory`). No test is intended to reach a real
+provider, and one of them - test_api.py::test_default_config_has_no_api_key_required
+- asserts exactly that by checking `LLM_PROVIDER == "mock"`.
+
+`config/settings.py` reads those provider choices from the process
+environment at import time, and `load_dotenv()` means a developer's local
+`.env` is part of that environment. So running the suite on a machine
+configured for real Groq or real Azure Speech silently redirected ten tests
+at live, rate-limited, paid APIs - which is how they were observed failing
+with HTTP 429 rather than with a code defect.
+
+Pinning them here, before any project module is imported, makes the suite
+hermetic: its result now depends only on the code under test. `setdefault`
+is used, not assignment, so an explicitly exported environment variable
+still wins - a deliberate real-provider run (`LLM_PROVIDER=groq pytest ...`)
+is unaffected.
+
+DATABASE_URL joined this list for the exact same reason (Database chunk):
+a developer's `.env` may set it so a manually-run server uses PostgreSQL
+(core/container.py:build_default_container), but a test that builds its app
+via `get_settings()`/`AppSettings.from_env()` rather than an explicit
+`AppSettings()` (most of the FastAPI `TestClient` fixtures do) would then
+silently get a REAL `PostgresConnectionPool` instead of the in-memory
+stubs the suite is written against - and since pytest-asyncio gives most
+tests their own event loop, that pool ends up reused across loops the same
+way `tests/test_postgres_repositories.py` had to guard against, producing
+"Event loop is closed" failures in tests that were never meant to touch a
+database at all. Pinning it empty here keeps `DATABASE_URL` fully separate
+from `TEST_DATABASE_URL` (which `tests/test_postgres_repositories.py`
+reads on purpose to opt into a real Postgres run) - this suite's default
+behaviour never depends on what a developer's `.env` happens to contain.
+"""
+import os
+
+# Must run before any import that pulls in config.settings.
+for _var, _value in (
+    ("LLM_PROVIDER", "mock"),
+    ("EMBEDDING_PROVIDER", "mock"),
+    ("AUDIO_PROVIDER", "mock"),
+    ("AUDIO_PROCESSOR", "mock"),
+    ("TTS_PROVIDER", "mock"),
+    ("VECTOR_STORE_TYPE", "mock"),
+    ("DATABASE_URL", ""),
+    ("ENVIRONMENT", "test"),
+    ("AUTH_ENABLED", "false"),
+):
+    os.environ.setdefault(_var, _value)
+
 import pytest
 import json
 from pathlib import Path

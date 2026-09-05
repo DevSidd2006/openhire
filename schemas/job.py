@@ -45,7 +45,8 @@ class JobDescription(BaseModel):
     # Interview topics
     interview_topics: List[str] = Field(default_factory=list)
     
-    # Rubric
+    # Evaluation & Openings
+    openings: int = Field(default=1, ge=1, description="Target number of openings/vacancies for this role")
     evaluation_rubric: Optional[dict] = Field(None, description="Structure for evaluation")
     
     # Metadata

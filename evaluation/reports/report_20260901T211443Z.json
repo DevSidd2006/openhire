@@ -1,0 +1,141 @@
+{
+  "generated_at": "20260901T211443Z",
+  "provider": "mock",
+  "results": [
+    {
+      "case_id": "matcher_demonstrated_experience_is_fully_covered",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 1.0, expected [0.99, 1.0]"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.needs_human_review: expected False, got False"
+        },
+        {
+          "metric": "field_nonempty",
+          "passed": true,
+          "detail": "output.competency_verdicts = [CompetencyVerdict(competency_name='Python engineering', score=4, cited_span_ids=['sp_001_f7303a93', 'sp_002_6fbff1a9'], rationale='The candidate owned the Python services powering checkout and rewrote the async request path resulting in a 40% latency reduction, meeting the strong criteria of leading or owning work that depended on it with a visible outcome.', evidence_sufficiency=<EvidenceSufficiency.SUFFICIENT: 'sufficient'>), CompetencyVerdict(competency_name='Systems and operations', score=3, cited_span_ids=['sp_000_7227ec3d', 'sp_002_6fbff1a9'], rationale='The candidate has Kubernetes in their skills list and applied optimization work in real infrastructure by rewriting the async request path to cut p99 latency.', evidence_sufficiency=<EvidenceSufficiency.SUFFICIENT: 'sufficient'>), CompetencyVerdict(competency_name='Ownership', score=4, cited_span_ids=['sp_001_f7303a93'], rationale='The candidate explicitly owned the Python services powering checkout, satisfying the strong criteria of leading or owning critical work.', evidence_sufficiency=<EvidenceSufficiency.SUFFICIENT: 'sufficient'>)]"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_keyword_stuffing_does_not_rank_strong",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_one_of",
+          "passed": true,
+          "detail": "output.band = 'weak', expected one of ['weak', 'potential']"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_sparse_resume_is_unknown_not_rejected",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.needs_human_review: expected True, got True"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.match_score: expected None, got None"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 0.0, expected [0.0, 0.5]"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_partial_evidence_reports_partial_coverage",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.coverage = 0.4, expected [0.0, 1.0]"
+        },
+        {
+          "metric": "fact:every_scored_competency_is_cited",
+          "passed": true,
+          "detail": "every_scored_competency_is_cited = True"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    },
+    {
+      "case_id": "matcher_score_carries_its_rubric_version",
+      "agent": "resume_matcher",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_version: expected 3, got 3"
+        }
+      ],
+      "failures": [],
+      "explanation": "",
+      "skip_reason": null
+    }
+  ]
+}

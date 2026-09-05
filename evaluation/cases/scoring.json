@@ -1,0 +1,138 @@
+[
+  {
+    "case_id": "scoring_single_competency_exact",
+    "agent": "scoring",
+    "description": "One competency, weight 1.0 - weighted_final_score must equal that competency's score exactly.",
+    "input": {
+      "job": {"job_id": "job_sc_01", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 1.0}]},
+      "candidate_id": "cand_sc_01",
+      "technical_evaluation": {"evaluation_id": "te1", "candidate_id": "cand_sc_01", "job_id": "job_sc_01", "interview_id": "i1", "technical_score": 8.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 8.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be1", "candidate_id": "cand_sc_01", "job_id": "job_sc_01", "interview_id": "i1", "behavioral_score": 6.0, "communication": 6.0, "problem_solving": 6.0, "teamwork": 6.0, "adaptability": 6.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m1", "candidate_id": "cand_sc_01", "job_id": "job_sc_01", "match_score": 0.9, "experience_match": 0.9, "skill_gap": 0.0, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "weighted_final_score == rubric_score == 8.0 (the one matched, supported competency).",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 8.0},
+      {"metric": "field_equals", "field": "output.rubric_coverage", "value": 1.0}
+    ],
+    "metadata": {"category": "exact_formula"}
+  },
+  {
+    "case_id": "scoring_weighted_average_two_competencies",
+    "agent": "scoring",
+    "description": "Two equally-weighted competencies - rubric_score is their simple average.",
+    "input": {
+      "job": {"job_id": "job_sc_02", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 0.5}, {"name": "SQL", "weight": 0.5}]},
+      "candidate_id": "cand_sc_02",
+      "technical_evaluation": {"evaluation_id": "te2", "candidate_id": "cand_sc_02", "job_id": "job_sc_02", "interview_id": "i2", "technical_score": 7.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 6.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}, {"competency_name": "SQL", "score": 8.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be2", "candidate_id": "cand_sc_02", "job_id": "job_sc_02", "interview_id": "i2", "behavioral_score": 5.0, "communication": 5.0, "problem_solving": 5.0, "teamwork": 5.0, "adaptability": 5.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m2", "candidate_id": "cand_sc_02", "job_id": "job_sc_02", "match_score": 0.5, "experience_match": 0.5, "skill_gap": 0.0, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "rubric_score = (0.5*6 + 0.5*8) = 7.0, unaffected by behavioral_score(5.0) or job_fit.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 7.0}
+    ],
+    "metadata": {"category": "weighted_average"}
+  },
+  {
+    "case_id": "scoring_job_fit_does_not_influence_final",
+    "agent": "scoring",
+    "description": "P6 Phase 15 critical property: changing job_fit_score (match_score) must NOT change weighted_final_score.",
+    "input": {
+      "job": {"job_id": "job_sc_03", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 1.0}]},
+      "candidate_id": "cand_sc_03",
+      "technical_evaluation": {"evaluation_id": "te3", "candidate_id": "cand_sc_03", "job_id": "job_sc_03", "interview_id": "i3", "technical_score": 9.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 9.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be3", "candidate_id": "cand_sc_03", "job_id": "job_sc_03", "interview_id": "i3", "behavioral_score": 7.0, "communication": 7.0, "problem_solving": 7.0, "teamwork": 7.0, "adaptability": 7.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m3", "candidate_id": "cand_sc_03", "job_id": "job_sc_03", "match_score": 0.2, "experience_match": 0.2, "skill_gap": 0.8, "explanation": "x", "confidence": 0.9},
+      "job_fit_invariant_check": {"alt_match_score": 0.95}
+    },
+    "expected_behavior": "weighted_final_score identical whether match_score is 0.2 or 0.95; job_fit_score itself DOES change.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "fact_true", "fact": "job_fit_does_not_change_weighted_final"},
+      {"metric": "fact_true", "fact": "job_fit_score_did_change"}
+    ],
+    "metadata": {"category": "job_fit_independence"}
+  },
+  {
+    "case_id": "scoring_missing_competency_excluded",
+    "agent": "scoring",
+    "description": "A rubric competency with no matching evaluator score is excluded, not defaulted.",
+    "input": {
+      "job": {"job_id": "job_sc_04", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 0.5}, {"name": "Kubernetes", "weight": 0.5}]},
+      "candidate_id": "cand_sc_04",
+      "technical_evaluation": {"evaluation_id": "te4", "candidate_id": "cand_sc_04", "job_id": "job_sc_04", "interview_id": "i4", "technical_score": 8.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 8.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be4", "candidate_id": "cand_sc_04", "job_id": "job_sc_04", "interview_id": "i4", "behavioral_score": 6.0, "communication": 6.0, "problem_solving": 6.0, "teamwork": 6.0, "adaptability": 6.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m4", "candidate_id": "cand_sc_04", "job_id": "job_sc_04", "match_score": 0.5, "experience_match": 0.5, "skill_gap": 0.5, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "Kubernetes was never scored - rubric_score is exactly Python's score (8.0), coverage is 0.5, not a fabricated default for Kubernetes.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 8.0},
+      {"metric": "field_equals", "field": "output.rubric_coverage", "value": 0.5},
+      {"metric": "length_equals", "field": "output.competency_scores", "value": 1}
+    ],
+    "metadata": {"category": "missing_competency"}
+  },
+  {
+    "case_id": "scoring_no_rubric_match_falls_back",
+    "agent": "scoring",
+    "description": "No competency in the job's rubric matched any evaluator score at all.",
+    "input": {
+      "job": {"job_id": "job_sc_05", "title": "T", "description": "d", "competencies": [{"name": "Rust", "weight": 1.0}]},
+      "candidate_id": "cand_sc_05",
+      "technical_evaluation": {"evaluation_id": "te5", "candidate_id": "cand_sc_05", "job_id": "job_sc_05", "interview_id": "i5", "technical_score": 6.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 6.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be5", "candidate_id": "cand_sc_05", "job_id": "job_sc_05", "interview_id": "i5", "behavioral_score": 8.0, "communication": 8.0, "problem_solving": 8.0, "teamwork": 8.0, "adaptability": 8.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m5", "candidate_id": "cand_sc_05", "job_id": "job_sc_05", "match_score": 0.5, "experience_match": 0.5, "skill_gap": 0.5, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "rubric_coverage is 0.0 and rubric_score falls back to avg(technical, behavioral) = 7.0, explicitly stated in explanation.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.rubric_coverage", "value": 0.0},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 7.0},
+      {"metric": "contains_text", "field": "output.explanation", "value": "falls back"}
+    ],
+    "metadata": {"category": "no_rubric_match"}
+  },
+  {
+    "case_id": "scoring_insufficient_evidence_excluded_from_rubric",
+    "agent": "scoring",
+    "description": "A matched competency score with evidence_status=insufficient must be excluded from the rubric computation.",
+    "input": {
+      "job": {"job_id": "job_sc_06", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 0.5}, {"name": "SQL", "weight": 0.5}]},
+      "candidate_id": "cand_sc_06",
+      "technical_evaluation": {"evaluation_id": "te6", "candidate_id": "cand_sc_06", "job_id": "job_sc_06", "interview_id": "i6", "technical_score": 8.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 8.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}, {"competency_name": "SQL", "score": 9.0, "confidence": 0.2, "explanation": "x", "evidence_status": "insufficient"}]},
+      "behavioral_evaluation": {"evaluation_id": "be6", "candidate_id": "cand_sc_06", "job_id": "job_sc_06", "interview_id": "i6", "behavioral_score": 6.0, "communication": 6.0, "problem_solving": 6.0, "teamwork": 6.0, "adaptability": 6.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m6", "candidate_id": "cand_sc_06", "job_id": "job_sc_06", "match_score": 0.5, "experience_match": 0.5, "skill_gap": 0.5, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "SQL's ungrounded 9.0 does not raise the score - rubric_score is exactly Python's 8.0, coverage 0.5.",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 8.0},
+      {"metric": "field_equals", "field": "output.rubric_coverage", "value": 0.5},
+      {"metric": "length_equals", "field": "output.competency_scores", "value": 2}
+    ],
+    "metadata": {"category": "insufficient_evidence_excluded"}
+  },
+  {
+    "case_id": "scoring_boundary_scores",
+    "agent": "scoring",
+    "description": "Scores at the extreme boundaries (0 and 10) stay within the valid range.",
+    "input": {
+      "job": {"job_id": "job_sc_07", "title": "T", "description": "d", "competencies": [{"name": "Python", "weight": 1.0}]},
+      "candidate_id": "cand_sc_07",
+      "technical_evaluation": {"evaluation_id": "te7", "candidate_id": "cand_sc_07", "job_id": "job_sc_07", "interview_id": "i7", "technical_score": 0.0, "explanation": "x", "confidence": 0.9, "competency_scores": [{"competency_name": "Python", "score": 0.0, "confidence": 0.9, "explanation": "x", "evidence_status": "supported"}]},
+      "behavioral_evaluation": {"evaluation_id": "be7", "candidate_id": "cand_sc_07", "job_id": "job_sc_07", "interview_id": "i7", "behavioral_score": 10.0, "communication": 10.0, "problem_solving": 10.0, "teamwork": 10.0, "adaptability": 10.0, "explanation": "x", "confidence": 0.9},
+      "matching_score": {"match_id": "m7", "candidate_id": "cand_sc_07", "job_id": "job_sc_07", "match_score": 1.0, "experience_match": 1.0, "skill_gap": 0.0, "explanation": "x", "confidence": 0.9}
+    },
+    "expected_behavior": "weighted_final_score is exactly 0.0 (Python's score), still within [0, 10].",
+    "checks": [
+      {"metric": "no_error"},
+      {"metric": "field_equals", "field": "output.weighted_final_score", "value": 0.0},
+      {"metric": "field_in_range", "field": "output.job_fit_score", "min": 9.9, "max": 10.0}
+    ],
+    "metadata": {"category": "boundary"}
+  }
+]

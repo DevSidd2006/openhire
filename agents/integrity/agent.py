@@ -6,11 +6,24 @@ from typing import Any, Dict
 import uuid
 
 from agents.base import BaseAgent
+from config.settings import CONFIDENCE_THRESHOLD
 from schemas.evaluation import IntegrityEvaluation, IntegrityFlag
 from schemas.interview import InterviewTranscript
 from schemas.llm_outputs import IntegrityCheckResult
 from schemas.resume import ParsedResume
 from utils.evidence import resolve_transcript_evidence
+
+# Below this confidence, even a resolvable/grounded flag is not certain
+# enough to stand as "high" severity - "low" is the ceiling. Between this
+# and CONFIDENCE_THRESHOLD (0.7 - this project's general bar for a
+# trustworthy judgment, config.settings.CONFIDENCE_THRESHOLD), "medium" is
+# the ceiling. Only a confidence >= CONFIDENCE_THRESHOLD can stand as
+# "high" severity. (P6 Phase 13 finding: weak evidence must not
+# automatically become a fraud accusation - the LLM's raw severity claim
+# was previously passed through unchecked as long as its cited question(s)
+# resolved to a real exchange, even at confidence as low as e.g. 0.3.)
+_LOW_SEVERITY_CEILING = 0.5
+_SEVERITY_ORDER = ["low", "medium", "high"]
 
 
 class IntegrityAgent(BaseAgent):
@@ -83,7 +96,7 @@ class IntegrityAgent(BaseAgent):
                     IntegrityFlag(
                         flag_id=f"flag_{uuid.uuid4().hex[:8]}",
                         flag_type=flag_result.flag_type,
-                        severity=flag_result.severity,
+                        severity=self._cap_severity_by_confidence(flag_result.severity, flag_result.confidence),
                         confidence=flag_result.confidence,
                         evidence=evidence_items,
                         description=flag_result.description,
@@ -109,6 +122,24 @@ class IntegrityAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Integrity analysis failed: {str(e)}")
             return {"integrity_evaluation": None, "error": str(e)}
+
+    def _cap_severity_by_confidence(self, severity: str, confidence: float) -> str:
+        """Cap the LLM's claimed severity by how confident it actually was
+        (P6 Phase 13). A grounded-but-low-confidence flag must not read as
+        a high-severity fraud accusation - never raises severity, only ever
+        lowers it, and an unrecognized severity string passes through
+        unchanged rather than being guessed at."""
+        if severity not in _SEVERITY_ORDER:
+            return severity
+        if confidence < _LOW_SEVERITY_CEILING:
+            ceiling = "low"
+        elif confidence < CONFIDENCE_THRESHOLD:
+            ceiling = "medium"
+        else:
+            ceiling = "high"
+        if _SEVERITY_ORDER.index(severity) > _SEVERITY_ORDER.index(ceiling):
+            return ceiling
+        return severity
 
     def _format_resume_summary(self, resume: ParsedResume) -> str:
         """Create brief resume summary."""

@@ -1,0 +1,185 @@
+{
+  "generated_at": "20260825T144859Z",
+  "results": [
+    {
+      "case_id": "scoring_single_competency_exact",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 8.0, got 8.0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_coverage: expected 1.0, got 1.0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "scoring_weighted_average_two_competencies",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 7.0, got 7.0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "scoring_job_fit_does_not_influence_final",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "fact:job_fit_does_not_change_weighted_final",
+          "passed": true,
+          "detail": "job_fit_does_not_change_weighted_final = True"
+        },
+        {
+          "metric": "fact:job_fit_score_did_change",
+          "passed": true,
+          "detail": "job_fit_score_did_change = True"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "scoring_missing_competency_excluded",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 8.0, got 8.0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_coverage: expected 0.5, got 0.5"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 1, expected 1"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "scoring_no_rubric_match_falls_back",
+      "agent": "scoring",
+      "verdict": "fail",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_coverage: expected 0.0, got 0.0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 7.0, got 7.0"
+        },
+        {
+          "metric": "contains_text",
+          "passed": false,
+          "detail": "output.explanation does not contain 'fallback'"
+        }
+      ],
+      "failures": [
+        "contains_text"
+      ],
+      "explanation": "contains_text: output.explanation does not contain 'fallback'"
+    },
+    {
+      "case_id": "scoring_insufficient_evidence_excluded_from_rubric",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 8.0, got 8.0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.rubric_coverage: expected 0.5, got 0.5"
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competency_scores) = 2, expected 2"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "scoring_boundary_scores",
+      "agent": "scoring",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.weighted_final_score: expected 0.0, got 0.0"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.job_fit_score = 10.0, expected [9.9, 10.0]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}

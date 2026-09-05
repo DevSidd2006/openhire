@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div style="max-width: 420px; margin: 3.5rem auto;" class="card">
+    <div class="card-header" style="margin-bottom:0.5rem;">
+      <h2 class="card-title">Sign In</h2>
+    </div>
+    <p class="card-sub" style="margin-bottom:1.25rem;">Select your workspace role to access portal views.</p>
+    
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input type="text" id="userName" class="form-control" placeholder="e.g. Alex Morgan" value="Alex Morgan">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Role</label>
+      <select id="userRole" class="form-control" style="cursor:pointer;">
+        <option value="recruiter">Recruiter</option>
+        <option value="candidate" selected>Candidate</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" style="width:100%; margin-top:0.75rem;" onclick="handleLoginSubmit()">Continue</button>
+  </div>
+</main>
+
+<script>
+  // Configuration for different environments
+  (function() {
+    const hostname = window.location.hostname;
+    if (hostname.includes('openhire-sable.vercel.app')) {
+      window.OPENHIRE_API_URL = 'https://openhire-xc9c.onrender.com';
+      window.OPENHIRE_API_HOST = 'openhire-xc9c.onrender.com';
+    } else {
+      window.OPENHIRE_API_URL = '';
+      window.OPENHIRE_API_HOST = location.host;
+    }
+  })();
+</script>
+<script src="js/app.js"></script>
+<script>
+  renderNavbar();
+
+  function handleLoginSubmit() {
+    const name = document.getElementById('userName').value.trim() || 'User';
+    const role = document.getElementById('userRole').value;
+    setCurrentUser({ name, role });
+
+    if (role === 'recruiter') {
+      window.location.href = 'recruiter.html';
+    } else {
+      window.location.href = 'candidate.html';
+    }
+  }
+</script>
+</body>
+</html>

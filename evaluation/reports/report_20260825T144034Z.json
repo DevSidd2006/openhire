@@ -1,0 +1,217 @@
+{
+  "generated_at": "20260825T144034Z",
+  "results": [
+    {
+      "case_id": "jd_normal_rich",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.title: expected 'Senior Python Backend Developer', got 'Senior Python Backend Developer'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.required_skills = ['Python', 'FastAPI', 'PostgreSQL'], expected to contain 'FastAPI'"
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.preferred_skills = ['Docker'], expected to contain 'Docker'"
+        },
+        {
+          "metric": "list_not_contains",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.experience_years = 5, expected [5, 5]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_sparse_no_fabrication",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.required_skills) = 0, expected 0"
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.experience_years: expected None, got None"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_weight_normalization",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.competencies) = 2, expected 2"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.competencies[1].weight = 0.7, expected [0.69, 0.71]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_missing_experience",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.experience_years: expected None, got None"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_unusual_formatting",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "list_contains",
+          "passed": true,
+          "detail": "output.required_skills = ['Python', 'AWS'], expected to contain 'AWS'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_empty_text",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "schema_validity",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "length_equals",
+          "passed": true,
+          "detail": "len(output.required_skills) = 0, expected 0"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_malformed_structured_output",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output: expected None, got None"
+        },
+        {
+          "metric": "field_nonempty",
+          "passed": true,
+          "detail": "result.error = 'Expecting value: line 1 column 1 (char 0)'"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    },
+    {
+      "case_id": "jd_conflicting_requirements",
+      "agent": "jd_analyzer",
+      "verdict": "pass",
+      "metrics": [
+        {
+          "metric": "no_error",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "metric": "field_equals",
+          "passed": true,
+          "detail": "output.level: expected 'entry', got 'entry'"
+        },
+        {
+          "metric": "field_in_range",
+          "passed": true,
+          "detail": "output.experience_years = 8, expected [8, 8]"
+        }
+      ],
+      "failures": [],
+      "explanation": ""
+    }
+  ]
+}
