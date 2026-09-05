@@ -241,7 +241,7 @@ function renderNavbar(activePage = '') {
       <div class="brand-logo" onclick="window.location.href='index.html'">
         <span class="brand-dot"></span>OpenHire
       </div>
-      
+
       <nav class="nav-links">
         <a href="index.html">Overview</a>
         <a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>
@@ -253,16 +253,54 @@ function renderNavbar(activePage = '') {
 
       <div class="nav-right">
         ${user ? `
-          <div class="user-badge">
-            <span>${user.name}</span>
-            <span class="role-tag">${user.role}</span>
+          <div class="nav-menu">
+            <button type="button" class="user-badge nav-menu-trigger" onclick="toggleNavMenu(event)">
+              <span>${user.name}</span>
+              <span class="role-tag">${user.role}</span>
+            </button>
+            <div class="nav-menu-dropdown" id="navMenuDropdown" hidden>
+              <a href="profile.html">Profile</a>
+              <a href="profile.html#api-keys">API Keys</a>
+              <div class="nav-menu-divider"></div>
+              <button type="button" class="nav-menu-item-btn" onclick="logoutUser()">Sign out</button>
+            </div>
           </div>
-          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11px;" onclick="logoutUser()">Exit</button>
         ` : `
           <button class="btn-outline" onclick="window.location.href='login.html'">Sign In</button>
         `}
       </div>
     </header>
   `;
+}
+
+/** Toggles the top-right nav dropdown. Closes on an outside click or
+ * Escape, and re-attaches those listeners each time it opens rather than
+ * once at page load, since renderNavbar rebuilds this DOM from scratch on
+ * every call (e.g. after setCurrentUser). */
+function toggleNavMenu(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('navMenuDropdown');
+  if (!dropdown) return;
+
+  const opening = dropdown.hidden;
+  dropdown.hidden = !opening;
+  if (!opening) return;
+
+  const closeOnOutsideClick = (e) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.hidden = true;
+      document.removeEventListener('click', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    }
+  };
+  const closeOnEscape = (e) => {
+    if (e.key === 'Escape') {
+      dropdown.hidden = true;
+      document.removeEventListener('click', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    }
+  };
+  document.addEventListener('click', closeOnOutsideClick);
+  document.addEventListener('keydown', closeOnEscape);
 }
 
