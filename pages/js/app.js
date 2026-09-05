@@ -148,6 +148,29 @@ async function fetchApplicationsForCandidate(candidateId) {
   return data.applications || [];
 }
 
+/** GET /auth/me - the signed-in user's full profile. */
+async function fetchMyProfile() {
+  return apiRequest('/auth/me');
+}
+
+/** PATCH /auth/me with a partial set of fields. Pass only the fields that
+ * changed; omit a field entirely to leave it alone, or pass `null` to
+ * clear it - both are handled by the backend's exclude_unset semantics
+ * (schemas/auth.py:UpdateProfileRequest). */
+async function updateMyProfile(fields) {
+  return apiRequest('/auth/me', { method: 'PATCH', body: fields });
+}
+
+/** POST /auth/me/password. Resolves with no value on success (204); throws
+ * (via apiRequest's existing error handling) with a human-readable message
+ * on a wrong current password (401) or a too-short new password (422). */
+async function changeMyPassword(currentPassword, newPassword) {
+  return apiRequest('/auth/me/password', {
+    method: 'POST',
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
 /** Creates the interview session for an application that is already
  * SHORTLISTED and has none yet - fetches the full job/resume records
  * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
