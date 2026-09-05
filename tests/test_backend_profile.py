@@ -10,10 +10,26 @@ only ever read, never written, through this module's endpoints. See
 BYOK key storage is out of scope for this module - see the `byok` branch.
 """
 import pytest
+from fastapi.testclient import TestClient
 
+from api.app import create_app
+from core.config import AppSettings, get_settings
+from core.container import ServiceContainer
+from core.security import JWTAuthProvider
 from repositories.interfaces import UserRecord
-from repositories.memory import InMemoryUserRepository
+from repositories.memory import (
+    InMemoryApplicationRepository,
+    InMemoryBugReportRepository,
+    InMemoryCandidateRepository,
+    InMemoryEvaluationRepository,
+    InMemoryJobRepository,
+    InMemoryRubricRepository,
+    InMemorySessionRepository,
+    InMemoryTranscriptRepository,
+    InMemoryUserRepository,
+)
 from services.auth_service import AuthService
+from services.evaluation_dispatcher import AsyncTaskEvaluationDispatcher
 
 
 class TestUserRecordProfileFields:
@@ -180,3 +196,187 @@ class TestProfileSchemas:
     def test_change_password_request_rejects_short_new_password(self):
         with pytest.raises(Exception):
             ChangePasswordRequest(current_password="old12345", new_password="short")
+
+
+# ---------------------------------------------------------------------------
+# HTTP layer: GET/PATCH /auth/me, POST /auth/me/password
+#
+# Uses a real JWTAuthProvider over an in-memory UserRepository so these
+# tests can prove per-user identity end to end (which user a token
+# resolves to matters here, unlike the anonymous-principal tests
+# elsewhere in this codebase). AUTH_ENABLED=true is safe with an in-memory
+# backend as long as a real AuthProvider is installed - see
+# core/lifespan.py's validate_startup_configuration.
+# ---------------------------------------------------------------------------
+
+def _authenticated_app():
+    settings = AppSettings(auth_enabled=True)
+    user_repo = InMemoryUserRepository()
+    auth_service = AuthService(user_repository=user_repo, settings=settings)
+    container = ServiceContainer(
+        settings=settings,
+        session_repository=InMemorySessionRepository(),
+        transcript_repository=InMemoryTranscriptRepository(),
+        job_repository=InMemoryJobRepository(),
+        candidate_repository=InMemoryCandidateRepository(),
+        application_repository=InMemoryApplicationRepository(),
+        rubric_repository=InMemoryRubricRepository(),
+        evaluation_repository=InMemoryEvaluationRepository(),
+        user_repository=user_repo,
+        bug_report_repository=InMemoryBugReportRepository(),
+        evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
+        auth_provider=JWTAuthProvider(auth_service),
+        persistence_is_ephemeral=True,
+    )
+    app = create_app(settings)
+    # Bypassing the lifespan's own build_default_container (core/lifespan.py)
+    # is deliberate: that factory has no branch for "in-memory + real auth
+    # provider", and adding one there would be a production wiring change
+    # for a test-only need. TestClient below is used WITHOUT the `with`
+    # context manager, so lifespan startup never runs and never overwrites
+    # this container.
+    app.state.container = container
+    # core/security.py's get_principal/require_authenticated read
+    # AppSettings via the process-wide `core.config.get_settings()` (an
+    # lru_cache singleton), not through the container - so without this
+    # override every request here would see whatever auth_enabled value
+    # happened to be cached first (false, per tests/conftest.py), making
+    # `require_authenticated` inert regardless of this app's own settings.
+    # Overriding the dependency (rather than mutating the shared cache) is
+    # local to this app instance and leaves the process-wide cache, and
+    # every other test file relying on its default, untouched.
+    app.dependency_overrides[get_settings] = lambda: settings
+    return app, auth_service
+
+
+@pytest.fixture
+def authenticated_client():
+    app, auth_service = _authenticated_app()
+    client = TestClient(app)
+    return client, auth_service
+
+
+def _signup_and_get_token(client, email="candidate@example.com", user_type="candidate"):
+    response = client.post(
+        "/auth/signup",
+        json={"email": email, "password": "password123", "user_type": user_type},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    return body["user"]["user_id"], body["access_token"]
+
+
+class TestGetMe:
+    def test_returns_the_caller_own_profile(self, authenticated_client):
+        client, _ = authenticated_client
+        user_id, token = _signup_and_get_token(client)
+        response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["user_id"] == user_id
+        assert body["email"] == "candidate@example.com"
+        assert body["user_type"] == "candidate"
+        assert "password_hash" not in body
+
+    def test_requires_authentication(self, authenticated_client):
+        client, _ = authenticated_client
+        response = client.get("/auth/me")
+        assert response.status_code == 401
+
+
+class TestPatchMe:
+    def test_updates_supplied_fields_only(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.patch("/auth/me", json={"full_name": "Jane Doe"}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["full_name"] == "Jane Doe"
+
+        response = client.patch("/auth/me", json={"location": "Remote"}, headers=headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["full_name"] == "Jane Doe"  # still set
+        assert body["location"] == "Remote"
+
+    def test_cannot_change_email_or_user_type(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(client)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.patch(
+            "/auth/me",
+            json={"email": "new@example.com", "user_type": "recruiter"},
+            headers=headers,
+        )
+        # email/user_type are not fields on UpdateProfileRequest, so FastAPI
+        # ignores them rather than erroring - the response proves neither
+        # took effect.
+        assert response.status_code == 200
+        body = response.json()
+        assert body["email"] == "candidate@example.com"
+        assert body["user_type"] == "candidate"
+
+    def test_rejects_recruiter_fields_from_a_candidate(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(client, user_type="candidate")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.patch("/auth/me", json={"company_name": "Acme"}, headers=headers)
+        assert response.status_code == 400
+
+    def test_allows_recruiter_fields_for_a_recruiter(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(
+            client, email="recruiter@example.com", user_type="recruiter"
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.patch("/auth/me", json={"company_name": "Acme"}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["company_name"] == "Acme"
+
+    def test_requires_authentication(self, authenticated_client):
+        client, _ = authenticated_client
+        response = client.patch("/auth/me", json={"full_name": "X"})
+        assert response.status_code == 401
+
+
+class TestChangePassword:
+    def test_succeeds_with_correct_current_password(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(client)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.post(
+            "/auth/me/password",
+            json={"current_password": "password123", "new_password": "newpassword456"},
+            headers=headers,
+        )
+        assert response.status_code == 204
+
+        # Old password no longer works; new one does.
+        login_old = client.post(
+            "/auth/login", json={"email": "candidate@example.com", "password": "password123"}
+        )
+        assert login_old.status_code == 401
+        login_new = client.post(
+            "/auth/login", json={"email": "candidate@example.com", "password": "newpassword456"}
+        )
+        assert login_new.status_code == 200
+
+    def test_rejects_wrong_current_password(self, authenticated_client):
+        client, _ = authenticated_client
+        _user_id, token = _signup_and_get_token(client)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.post(
+            "/auth/me/password",
+            json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+            headers=headers,
+        )
+        assert response.status_code == 401
+
+    def test_requires_authentication(self, authenticated_client):
+        client, _ = authenticated_client
+        response = client.post(
+            "/auth/me/password",
+            json={"current_password": "a", "new_password": "newpassword456"},
+        )
+        assert response.status_code == 401
