@@ -39,6 +39,16 @@ function getWebSocketUrl(path) {
  * Includes Authorization header with Bearer token if available.
  * Handles 401 responses by attempting to refresh the token and retrying.
  */
+// Token-issuing endpoints only - these must NOT receive an Authorization
+// header (and must not trigger a 401-refresh-and-retry), or a stale/expired
+// token could interfere with login/signup/refresh itself. All other /auth*
+// endpoints (e.g. /auth/me, /auth/me/password) are normal authenticated
+// endpoints and need the token like any other route.
+const AUTH_TOKEN_ISSUING_PATHS = ['/auth/login', '/auth/signup', '/auth/refresh'];
+function isAuthTokenIssuingPath(path) {
+  return AUTH_TOKEN_ISSUING_PATHS.some((p) => path.startsWith(p));
+}
+
 async function apiRequest(path, options = {}) {
   const opts = Object.assign({}, options);
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
@@ -48,7 +58,7 @@ async function apiRequest(path, options = {}) {
 
   // Add Authorization header if we have an access token
   // Skip for auth endpoints to avoid circular refresh attempts
-  if (typeof getAccessToken === 'function' && !path.startsWith('/auth')) {
+  if (typeof getAccessToken === 'function' && !isAuthTokenIssuingPath(path)) {
     const token = getAccessToken();
     if (token) {
       opts.headers['Authorization'] = `Bearer ${token}`;
@@ -73,7 +83,7 @@ async function apiRequest(path, options = {}) {
   }
 
   // Handle 401 Unauthorized: try to refresh token and retry
-  if (res.status === 401 && !path.startsWith('/auth') && typeof refreshAccessToken === 'function') {
+  if (res.status === 401 && !isAuthTokenIssuingPath(path) && typeof refreshAccessToken === 'function') {
     try {
       const newToken = await refreshAccessToken();
       // Retry the request with the new token
@@ -146,6 +156,29 @@ async function fetchJob(jobId) {
 async function fetchApplicationsForCandidate(candidateId) {
   const data = await apiRequest(`/applications?candidate_id=${encodeURIComponent(candidateId)}`);
   return data.applications || [];
+}
+
+/** GET /auth/me - the signed-in user's full profile. */
+async function fetchMyProfile() {
+  return apiRequest('/auth/me');
+}
+
+/** PATCH /auth/me with a partial set of fields. Pass only the fields that
+ * changed; omit a field entirely to leave it alone, or pass `null` to
+ * clear it - both are handled by the backend's exclude_unset semantics
+ * (schemas/auth.py:UpdateProfileRequest). */
+async function updateMyProfile(fields) {
+  return apiRequest('/auth/me', { method: 'PATCH', body: fields });
+}
+
+/** POST /auth/me/password. Resolves with no value on success (204); throws
+ * (via apiRequest's existing error handling) with a human-readable message
+ * on a wrong current password (401) or a too-short new password (422). */
+async function changeMyPassword(currentPassword, newPassword) {
+  return apiRequest('/auth/me/password', {
+    method: 'POST',
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
 }
 
 /** Creates the interview session for an application that is already
@@ -241,7 +274,7 @@ function renderNavbar(activePage = '') {
       <div class="brand-logo" onclick="window.location.href='index.html'">
         <span class="brand-dot"></span>OpenHire
       </div>
-      
+
       <nav class="nav-links">
         <a href="index.html">Overview</a>
         <a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>
@@ -253,16 +286,54 @@ function renderNavbar(activePage = '') {
 
       <div class="nav-right">
         ${user ? `
-          <div class="user-badge">
-            <span>${user.name}</span>
-            <span class="role-tag">${user.role}</span>
+          <div class="nav-menu">
+            <button type="button" class="user-badge nav-menu-trigger" onclick="toggleNavMenu(event)">
+              <span>${user.name}</span>
+              <span class="role-tag">${user.role}</span>
+            </button>
+            <div class="nav-menu-dropdown" id="navMenuDropdown" hidden>
+              <a href="profile.html">Profile</a>
+              <a href="profile.html#api-keys">API Keys</a>
+              <div class="nav-menu-divider"></div>
+              <button type="button" class="nav-menu-item-btn" onclick="logoutUser()">Sign out</button>
+            </div>
           </div>
-          <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11px;" onclick="logoutUser()">Exit</button>
         ` : `
           <button class="btn-outline" onclick="window.location.href='login.html'">Sign In</button>
         `}
       </div>
     </header>
   `;
+}
+
+/** Toggles the top-right nav dropdown. Closes on an outside click or
+ * Escape, and re-attaches those listeners each time it opens rather than
+ * once at page load, since renderNavbar rebuilds this DOM from scratch on
+ * every call (e.g. after setCurrentUser). */
+function toggleNavMenu(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('navMenuDropdown');
+  if (!dropdown) return;
+
+  const opening = dropdown.hidden;
+  dropdown.hidden = !opening;
+  if (!opening) return;
+
+  const closeOnOutsideClick = (e) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.hidden = true;
+      document.removeEventListener('click', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    }
+  };
+  const closeOnEscape = (e) => {
+    if (e.key === 'Escape') {
+      dropdown.hidden = true;
+      document.removeEventListener('click', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    }
+  };
+  document.addEventListener('click', closeOnOutsideClick);
+  document.addEventListener('keydown', closeOnEscape);
 }
 

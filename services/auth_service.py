@@ -9,6 +9,9 @@ Methods provided:
   - login(email, password): Authenticate user and return access/refresh tokens.
   - refresh_access_token(refresh_token): Generate a new access token from refresh token.
   - verify_access_token(token): Decode and validate JWT access token, return Principal.
+  - get_profile(user_id): Fetch the full stored profile for one user.
+  - update_profile(user_id, updates): Apply a partial profile update.
+  - change_password(user_id, current_password, new_password): Verify and replace a password.
 """
 from __future__ import annotations
 
@@ -20,12 +23,22 @@ import bcrypt
 import jwt
 
 from core.config import AppSettings
-from core.errors import ConflictError, UnauthorizedError
+from core.errors import BadRequestError, ConflictError, NotFoundError, UnauthorizedError
 from core.logging import get_logger, log_context
 from core.security import Principal, PrincipalType
 from repositories.interfaces import UserRecord, UserRepository
 
 logger = get_logger("services.auth")
+
+# Fields on UserRecord that only make sense for a recruiter account. A
+# candidate account supplying any of these to update_profile is a client
+# error, not a silent no-op - the caller should learn its request doesn't
+# match its own account type.
+_RECRUITER_ONLY_PROFILE_FIELDS = {"company_name", "company_website", "company_role"}
+
+# Fields update_profile will never touch, even if a caller's dict happens to
+# contain them - authentication/authorization state is not "profile".
+_PROTECTED_ACCOUNT_FIELDS = {"user_id", "email", "password_hash", "user_type", "is_active"}
 
 
 class AuthService:
@@ -154,6 +167,101 @@ class AuthService:
         )
 
         return user, access_token, refresh_token
+
+    async def get_profile(self, user_id: str) -> UserRecord:
+        """The full stored profile for one user.
+
+        Raises:
+            NotFoundError: If no user with this id exists.
+        """
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(
+                "No account found.",
+                internal_detail=f"user_id={user_id!r} not found",
+            )
+        return user
+
+    async def update_profile(self, user_id: str, updates: dict) -> UserRecord:
+        """Apply a partial update to one user's profile fields.
+
+        `updates` should come from a request model's `model_dump(exclude_unset=True)`
+        so that an omitted field is left alone and an explicit `null` clears
+        it - both are ordinary dict operations once collapsed to a dict,
+        which is why this method takes a plain dict rather than the request
+        schema itself (keeping schemas/auth.py's shape out of the service
+        layer).
+
+        Any key in `_PROTECTED_ACCOUNT_FIELDS` is silently ignored rather
+        than applied - `schemas.auth.UpdateProfileRequest` (Task 4) never
+        includes them, so this only matters for a caller that assembled the
+        dict by hand (as the tests above do to pin the behaviour).
+
+        Raises:
+            NotFoundError: If no user with this id exists.
+            BadRequestError: If a candidate account's update includes any
+                recruiter-only field.
+        """
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(
+                "No account found.",
+                internal_detail=f"user_id={user_id!r} not found",
+            )
+
+        safe_updates = {k: v for k, v in updates.items() if k not in _PROTECTED_ACCOUNT_FIELDS}
+
+        if user.user_type != "recruiter":
+            offending = _RECRUITER_ONLY_PROFILE_FIELDS & safe_updates.keys()
+            if offending:
+                raise BadRequestError(
+                    f"These fields are only valid for a recruiter account: {sorted(offending)}",
+                    internal_detail=(
+                        f"user {user_id!r} (user_type={user.user_type!r}) attempted to set "
+                        f"recruiter-only fields: {sorted(offending)}"
+                    ),
+                )
+
+        updated = user.model_copy(update=safe_updates)
+        stored = await self._users.save(updated)
+
+        logger.info(
+            "profile updated",
+            extra=log_context(event="profile_updated", user_id=user_id, fields=sorted(safe_updates)),
+        )
+        return stored
+
+    async def change_password(self, user_id: str, current_password: str, new_password: str) -> None:
+        """Verify the current password and replace it with a new hash.
+
+        Raises:
+            NotFoundError: If no user with this id exists.
+            UnauthorizedError: If `current_password` does not match.
+        """
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(
+                "No account found.",
+                internal_detail=f"user_id={user_id!r} not found",
+            )
+
+        if not self._verify_password(current_password, user.password_hash):
+            logger.warning(
+                "password change attempt with wrong current password",
+                extra=log_context(event="password_change_invalid_current", user_id=user_id),
+            )
+            raise UnauthorizedError(
+                "Current password is incorrect.",
+                internal_detail=f"password verification failed for user {user_id!r}",
+            )
+
+        updated = user.model_copy(update={"password_hash": self._hash_password(new_password)})
+        await self._users.save(updated)
+
+        logger.info(
+            "password changed",
+            extra=log_context(event="password_changed", user_id=user_id),
+        )
 
     async def refresh_access_token(self, refresh_token: str) -> str:
         """Generate a new access token from a refresh token.

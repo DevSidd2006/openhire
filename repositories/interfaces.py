@@ -443,6 +443,13 @@ class UserRecord(BaseModel):
     Stores authentication credentials and account metadata. The password_hash
     field contains the output of a proper password hashing algorithm (e.g.
     bcrypt, scrypt), never plaintext.
+
+    The profile fields below (full_name onward) are account-level only.
+    Candidate resume data - skills, experience, education - is deliberately
+    NOT stored here: it lives on `CandidateRecord`/`ParsedResume`, which is
+    already the single candidate representation every agent and the
+    matching/interview engines key off. Duplicating it here would create a
+    second copy that drifts the moment a candidate uploads a new resume.
     """
 
     model_config = ConfigDict(frozen=False)
@@ -454,6 +461,19 @@ class UserRecord(BaseModel):
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
+
+    # Account-level profile fields, shared by both roles.
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    headline: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+    # Recruiter-only fields. Left None for a candidate account.
+    company_name: Optional[str] = None
+    company_website: Optional[str] = None
+    company_role: Optional[str] = None
 
 
 class UserRepository(ABC):

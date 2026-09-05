@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.5rem;">
+    <div>
+      <h2 class="card-title">Your Profile</h2>
+      <p class="card-sub">Account details, role information, and security settings.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="profile-header-row">
+      <div class="profile-avatar" id="profileAvatar">?</div>
+      <div>
+        <h3 class="card-title" id="profileName" style="font-size:1.1rem;">—</h3>
+        <p class="card-sub" id="profileEmail" style="margin:0.15rem 0;">—</p>
+        <span class="tag" id="profileRoleTag">—</span>
+        <span class="card-sub" id="profileMemberSince" style="margin-left:0.5rem;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Account Details</h3>
+    </div>
+    <form id="accountForm">
+      <div class="form-group">
+        <label class="form-label" for="fullName">Full name</label>
+        <input class="form-control" id="fullName" name="full_name" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="phone">Phone</label>
+        <input class="form-control" id="phone" name="phone" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="location">Location</label>
+        <input class="form-control" id="location" name="location" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="headline">Headline</label>
+        <input class="form-control" id="headline" name="headline" type="text" placeholder="e.g. Senior Backend Engineer">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bio">Bio</label>
+        <textarea class="form-control" id="bio" name="bio" rows="3"></textarea>
+      </div>
+      <button type="submit" class="btn-primary">Save changes</button>
+      <div class="form-status" id="accountFormStatus"></div>
+    </form>
+  </div>
+
+  <div class="card" id="roleCard" hidden>
+    <!-- Populated by JS: recruiter company form, or candidate read-only resume summary. -->
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Security</h3>
+    </div>
+    <form id="passwordForm">
+      <div class="form-group">
+        <label class="form-label" for="currentPassword">Current password</label>
+        <input class="form-control" id="currentPassword" name="current_password" type="password" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="newPassword">New password</label>
+        <input class="form-control" id="newPassword" name="new_password" type="password" minlength="8" required>
+      </div>
+      <button type="submit" class="btn-primary">Change password</button>
+      <div class="form-status" id="passwordFormStatus"></div>
+    </form>
+  </div>
+
+  <div class="card" id="api-keys">
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">API Keys</h3>
+      <span class="tag">Coming soon</span>
+    </div>
+    <p class="card-sub">
+      Bring your own API key to run OpenHire's pipeline against the provider
+      of your choice (OpenAI, Groq, Gemini, NVIDIA NIM). Key management
+      lands in a follow-up release.
+    </p>
+    <button class="btn-outline" disabled>Manage keys</button>
+  </div>
+</main>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+let currentProfile = null;
+
+function initials(name, email) {
+  const source = (name && name.trim()) || (email || '').split('@')[0] || '?';
+  const parts = source.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function formatMemberSince(createdAtIso) {
+  try {
+    const date = new Date(createdAtIso);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return `Member since ${date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function fillAccountForm(profile) {
+  document.getElementById('fullName').value = profile.full_name || '';
+  document.getElementById('phone').value = profile.phone || '';
+  document.getElementById('location').value = profile.location || '';
+  document.getElementById('headline').value = profile.headline || '';
+  document.getElementById('bio').value = profile.bio || '';
+}
+
+function renderHeader(profile) {
+  document.getElementById('profileAvatar').textContent = initials(profile.full_name, profile.email);
+  document.getElementById('profileName').textContent = profile.full_name || profile.email.split('@')[0];
+  document.getElementById('profileEmail').textContent = profile.email;
+  document.getElementById('profileRoleTag').textContent = profile.user_type;
+  document.getElementById('profileMemberSince').textContent = formatMemberSince(profile.created_at);
+}
+
+function renderRecruiterCard(profile) {
+  const card = document.getElementById('roleCard');
+  card.hidden = false;
+  card.innerHTML = `
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Company</h3>
+    </div>
+    <form id="companyForm">
+      <div class="form-group">
+        <label class="form-label" for="companyName">Company name</label>
+        <input class="form-control" id="companyName" name="company_name" type="text" value="${(profile.company_name || '').replace(/"/g, '&quot;')}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="companyWebsite">Company website</label>
+        <input class="form-control" id="companyWebsite" name="company_website" type="text" value="${(profile.company_website || '').replace(/"/g, '&quot;')}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="companyRole">Your role at the company</label>
+        <input class="form-control" id="companyRole" name="company_role" type="text" value="${(profile.company_role || '').replace(/"/g, '&quot;')}">
+      </div>
+      <button type="submit" class="btn-primary">Save company details</button>
+      <div class="form-status" id="companyFormStatus"></div>
+    </form>
+  `;
+
+  document.getElementById('companyForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = document.getElementById('companyFormStatus');
+    status.textContent = '';
+    status.className = 'form-status';
+    try {
+      const updated = await updateMyProfile({
+        company_name: document.getElementById('companyName').value || null,
+        company_website: document.getElementById('companyWebsite').value || null,
+        company_role: document.getElementById('companyRole').value || null,
+      });
+      currentProfile = updated;
+      status.textContent = 'Saved.';
+      status.className = 'form-status success';
+    } catch (err) {
+      status.textContent = err.message || 'Could not save company details.';
+      status.className = 'form-status error';
+    }
+  });
+}
+
+async function renderCandidateCard() {
+  const card = document.getElementById('roleCard');
+  card.hidden = false;
+  card.innerHTML = `
+    <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+    </div>
+    <p class="card-sub">Loading…</p>
+  `;
+
+  try {
+    const candidate = await apiRequest('/candidates/me');
+    const resume = candidate.resume || {};
+    const skills = (resume.skills || []).concat(resume.technologies || []);
+    const latestRole = (resume.work_experience || [])[0];
+    const latestEducation = (resume.education || [])[0];
+
+    // Static scaffolding is safe as innerHTML; resume-derived values are
+    // user-controlled (from an uploaded resume) and must not be interpolated
+    // into innerHTML - built with createElement/textContent instead, same
+    // pattern as renderHeader().
+    card.innerHTML = `
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+        <a href="apply.html" class="tag">Update via resume</a>
+      </div>
+    `;
+
+    if (resume.total_experience_years != null) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `${resume.total_experience_years} years of experience`;
+      card.appendChild(p);
+    }
+
+    if (latestRole) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `Most recent: ${latestRole.position || ''}${latestRole.company ? ' at ' + latestRole.company : ''}`;
+      card.appendChild(p);
+    }
+
+    if (latestEducation) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `Education: ${latestEducation.degree || ''}${latestEducation.institution ? ', ' + latestEducation.institution : ''}`;
+      card.appendChild(p);
+    }
+
+    if (skills.length) {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      row.style.marginTop = '0.5rem';
+      skills.forEach((s) => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = s;
+        row.appendChild(chip);
+      });
+      card.appendChild(row);
+    } else {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = 'No skills on file yet.';
+      card.appendChild(p);
+    }
+  } catch (err) {
+    if (err.status === 404) {
+      // No resume registered yet, a normal state (see GET /candidates/me).
+      card.innerHTML = `
+        <div class="card-header">
+          <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+        </div>
+        <p class="card-sub">No resume on file yet.</p>
+        <a href="apply.html" class="btn-outline">Upload your resume</a>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="card-header">
+          <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+        </div>
+        <p class="card-sub">Could not load your resume summary.</p>
+      `;
+    }
+  }
+}
+
+document.getElementById('accountForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.getElementById('accountFormStatus');
+  status.textContent = '';
+  status.className = 'form-status';
+  try {
+    const updated = await updateMyProfile({
+      full_name: document.getElementById('fullName').value || null,
+      phone: document.getElementById('phone').value || null,
+      location: document.getElementById('location').value || null,
+      headline: document.getElementById('headline').value || null,
+      bio: document.getElementById('bio').value || null,
+    });
+    currentProfile = updated;
+    renderHeader(updated);
+    status.textContent = 'Saved.';
+    status.className = 'form-status success';
+  } catch (err) {
+    status.textContent = err.message || 'Could not save your profile.';
+    status.className = 'form-status error';
+  }
+});
+
+document.getElementById('passwordForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.getElementById('passwordFormStatus');
+  status.textContent = '';
+  status.className = 'form-status';
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  try {
+    await changeMyPassword(currentPassword, newPassword);
+    status.textContent = 'Password changed.';
+    status.className = 'form-status success';
+    document.getElementById('passwordForm').reset();
+  } catch (err) {
+    status.textContent = err.message || 'Could not change your password.';
+    status.className = 'form-status error';
+  }
+});
+
+(async function init() {
+  renderNavbar();
+  try {
+    currentProfile = await fetchMyProfile();
+  } catch (err) {
+    if (err.status === 401) {
+      window.location.href = 'login.html';
+      return;
+    }
+    const main = document.querySelector('main.container');
+    if (main) {
+      main.innerHTML = `
+        <div class="card">
+          <h3 class="card-title" style="font-size:1.05rem;">Could not load your profile</h3>
+          <p class="card-sub">${err.message || 'Something went wrong loading your profile. Please try again later.'}</p>
+        </div>
+      `;
+    }
+    return;
+  }
+  renderHeader(currentProfile);
+  fillAccountForm(currentProfile);
+  if (currentProfile.user_type === 'recruiter') {
+    renderRecruiterCard(currentProfile);
+  } else {
+    await renderCandidateCard();
+  }
+
+  if (window.location.hash === '#api-keys') {
+    document.getElementById('api-keys').scrollIntoView({ behavior: 'smooth' });
+  }
+})();
+</script>
+</body>
+</html>

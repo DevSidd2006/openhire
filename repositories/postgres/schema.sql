@@ -62,11 +62,39 @@ CREATE TABLE IF NOT EXISTS users (
     user_type text NOT NULL CHECK (user_type IN ('candidate', 'recruiter')),
     is_active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz
+    updated_at timestamptz,
+    -- Account-level profile fields (Profile page, 2026-09-06). Nullable so
+    -- existing rows need no backfill. Candidate resume data (skills,
+    -- experience, education) is intentionally NOT here - see users.py /
+    -- CandidateRecord for why.
+    full_name text,
+    phone text,
+    location text,
+    headline text,
+    bio text,
+    avatar_url text,
+    -- Recruiter-only; NULL for candidate accounts.
+    company_name text,
+    company_website text,
+    company_role text
 );
 
 -- Backs user lookups by email (login).
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Add users.* profile columns to databases created before the Profile page
+-- existed. core/lifespan.py's schema-init step runs this whole file on
+-- every startup, so these run every time too - same guarded, re-runnable
+-- shape as applications.semantic_score below.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS location text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS headline text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_website text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_role text;
 
 -- ---------------------------------------------------------------------
 -- refresh_tokens — Refresh token storage for JWT-based authentication.

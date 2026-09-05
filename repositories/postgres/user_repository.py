@@ -29,6 +29,15 @@ def _user_record_from_row(row: asyncpg.Record) -> UserRecord:
         is_active=row["is_active"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        full_name=row["full_name"],
+        phone=row["phone"],
+        location=row["location"],
+        headline=row["headline"],
+        bio=row["bio"],
+        avatar_url=row["avatar_url"],
+        company_name=row["company_name"],
+        company_website=row["company_website"],
+        company_role=row["company_role"],
     )
 
 
@@ -43,22 +52,38 @@ class PostgresUserRepository(UserRepository):
         """Insert or update by user_id. Idempotent, preserves created_at.
 
         Stores email in lowercase for case-insensitive lookups. Sets
-        updated_at to the current timestamp on every write.
+        updated_at to the current timestamp on every write. Writes every
+        profile field on the record, so a caller must pass the FULL desired
+        state (fetch, `model_copy(update=...)`, then save - see
+        `AuthService.update_profile`) rather than a sparse patch.
         """
         pool = await self._pool.get()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO users
-                    (user_id, email, password_hash, user_type, is_active, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, now())
+                    (user_id, email, password_hash, user_type, is_active, created_at,
+                     updated_at, full_name, phone, location, headline, bio, avatar_url,
+                     company_name, company_website, company_role)
+                VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 ON CONFLICT (user_id) DO UPDATE
                     SET email = EXCLUDED.email,
                         password_hash = EXCLUDED.password_hash,
                         user_type = EXCLUDED.user_type,
                         is_active = EXCLUDED.is_active,
-                        updated_at = now()
-                RETURNING user_id, email, password_hash, user_type, is_active, created_at, updated_at
+                        updated_at = now(),
+                        full_name = EXCLUDED.full_name,
+                        phone = EXCLUDED.phone,
+                        location = EXCLUDED.location,
+                        headline = EXCLUDED.headline,
+                        bio = EXCLUDED.bio,
+                        avatar_url = EXCLUDED.avatar_url,
+                        company_name = EXCLUDED.company_name,
+                        company_website = EXCLUDED.company_website,
+                        company_role = EXCLUDED.company_role
+                RETURNING user_id, email, password_hash, user_type, is_active, created_at,
+                          updated_at, full_name, phone, location, headline, bio, avatar_url,
+                          company_name, company_website, company_role
                 """,
                 record.user_id,
                 record.email.lower(),
@@ -66,6 +91,15 @@ class PostgresUserRepository(UserRepository):
                 record.user_type,
                 record.is_active,
                 record.created_at,
+                record.full_name,
+                record.phone,
+                record.location,
+                record.headline,
+                record.bio,
+                record.avatar_url,
+                record.company_name,
+                record.company_website,
+                record.company_role,
             )
         return _user_record_from_row(row)
 
