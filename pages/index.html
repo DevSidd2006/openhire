@@ -851,63 +851,282 @@
         }
 
         /* ─── HOW IT WORKS DETAIL ─── */
-        .steps-detail {
+        /* ─── FLOW (stepped walkthrough) ─── */
+        .section-inner-wide { max-width: 1180px; }
+
+        .flow {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+            gap: 2.5rem;
+            align-items: start;
+        }
+
+        .flow-steps {
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 0.6rem;
         }
 
-        .step-row {
+        .flow-step-btn {
+            position: relative;
+            width: 100%;
             display: grid;
-            grid-template-columns: 60px 1fr;
-            gap: 1.5rem;
-            padding: 2rem 0;
-            border-bottom: 1px solid var(--border);
+            grid-template-columns: 40px 1fr auto;
+            gap: 1rem;
             align-items: start;
-            opacity: 0;
-            transform: translateY(16px);
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            text-align: left;
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+            padding: 1.15rem 1.25rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
         }
 
-        .step-row.visible {
-            opacity: 1;
-            transform: translateY(0);
+        .flow-step-btn:hover { border-color: var(--border-hover); }
+
+        .flow-step-btn:focus-visible {
+            outline: 2px solid var(--accent-light);
+            outline-offset: 2px;
         }
 
-        .step-row:last-child { border-bottom: none; }
-
-        .step-row-num {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            font-family: 'JetBrains Mono', monospace;
-            padding-top: 0.2rem;
+        .flow-step.active .flow-step-btn {
+            background: var(--bg-elevated);
+            border-color: rgba(124,106,239,0.45);
+            box-shadow: 0 0 0 1px rgba(124,106,239,0.12), 0 12px 32px -18px var(--accent);
         }
 
-        .step-row-content h3 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.4rem;
+        /* Connector spine between the step icons */
+        .flow-step:not(:last-child) .flow-step-btn::after {
+            content: '';
+            position: absolute;
+            left: calc(1.25rem + 20px);
+            top: calc(1.15rem + 40px);
+            width: 1px;
+            height: calc(100% - 40px - 1.15rem + 0.6rem);
+            background: var(--border);
         }
 
-        .step-row-content p {
-            font-size: 0.88rem;
-            color: var(--text-secondary);
-            line-height: 1.65;
-            max-width: 500px;
-        }
-
-        .step-row-tag {
-            display: inline-block;
-            margin-top: 0.65rem;
-            padding: 0.2rem 0.6rem;
+        .flow-icon {
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
             background: rgba(255,255,255,0.03);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            font-size: 0.68rem;
             color: var(--text-muted);
+            transition: background 0.25s, color 0.25s, border-color 0.25s;
+        }
+
+        .flow-icon svg { width: 18px; height: 18px; }
+
+        .flow-step.active .flow-icon {
+            background: var(--accent);
+            border-color: transparent;
+            color: #fff;
+        }
+
+        .flow-step-title {
+            display: block;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.3rem;
+        }
+
+        .flow-step-desc {
+            display: block;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .flow-num {
             font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            padding: 0.2rem 0.45rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            transition: color 0.25s, border-color 0.25s;
+        }
+
+        .flow-step.active .flow-num {
+            color: var(--accent-light);
+            border-color: rgba(124,106,239,0.35);
+        }
+
+        /* ─── Preview panel ─── */
+        .flow-preview {
+            position: sticky;
+            top: 96px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            display: grid;
+        }
+
+        .flow-preview::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: var(--radius);
+            background: radial-gradient(ellipse at 50% 0%, var(--accent-subtle), transparent 60%);
+            pointer-events: none;
+        }
+
+        .flow-panel {
+            grid-area: 1 / 1;
+            opacity: 0;
+            transform: translateY(6px);
+            visibility: hidden;
+            transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .flow-panel.active {
+            opacity: 1;
+            transform: none;
+            visibility: visible;
+        }
+
+        .flow-panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-bottom: 0.9rem;
+            margin-bottom: 1.1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .flow-panel-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--accent-light);
+        }
+
+        .flow-tag {
+            padding: 0.25rem 0.6rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.7rem 0.85rem;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+            font-size: 0.82rem;
+        }
+
+        .flow-row-label { color: var(--text); }
+        .flow-row-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .flow-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.85rem; }
+
+        .flow-chip {
+            padding: 0.28rem 0.65rem;
+            background: rgba(124,106,239,0.08);
+            border: 1px solid rgba(124,106,239,0.2);
+            border-radius: 999px;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+        }
+
+        .flow-meter {
+            flex: 1;
+            max-width: 130px;
+            height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .flow-meter span {
+            display: block;
+            height: 100%;
+            border-radius: 2px;
+            background: var(--accent-light);
+        }
+
+        .flow-note {
+            margin-top: 1rem;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .flow-qa {
+            padding: 0.85rem;
+            border-left: 2px solid var(--accent);
+            background: rgba(124,106,239,0.05);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            margin-bottom: 0.6rem;
+            font-size: 0.83rem;
+            line-height: 1.6;
+        }
+
+        .flow-qa-who {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+        }
+
+        .flow-panel-slot { display: none; }
+
+        /* ─── Flow: mobile accordion ─── */
+        @media (max-width: 900px) {
+            .flow { grid-template-columns: 1fr; gap: 0; }
+            .flow-preview {
+                position: static;
+                display: none;
+            }
+            .flow-panel-slot { display: block; }
+            .flow-panel-slot .flow-panel {
+                grid-area: auto;
+                display: none;
+                margin: 0.6rem 0 0;
+                padding: 1.25rem;
+                background: var(--bg-card);
+                border: 1px solid rgba(124,106,239,0.25);
+                border-radius: var(--radius-sm);
+            }
+            .flow-panel-slot .flow-panel.active { display: block; }
+            .flow-step:not(:last-child) .flow-step-btn::after { display: none; }
+        }
+
+        @media (max-width: 560px) {
+            .flow-step-btn { grid-template-columns: 32px 1fr auto; gap: 0.75rem; padding: 1rem; }
+            .flow-icon { width: 32px; height: 32px; border-radius: 9px; }
+            .flow-icon svg { width: 15px; height: 15px; }
+            .flow-step-title { font-size: 0.93rem; }
+            .flow-step-desc { font-size: 0.8rem; }
+            .flow-row { flex-wrap: wrap; gap: 0.4rem; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .flow-panel { transition: none; }
         }
 
         /* ─── TESTIMONIAL ─── */
@@ -1170,58 +1389,6 @@
         </div>
     </section>
 
-    <!-- PIPELINE / HOW IT WORKS -->
-    <section class="section" id="how">
-        <div class="section-inner">
-            <div class="section-eyebrow reveal">How It Works</div>
-            <h2 class="section-heading reveal">From job post to shortlist in 4 steps</h2>
-            <p class="section-sub reveal">Your entire first-round screening, automated. Candidates interview on their time. You get a ranked, evidence-backed shortlist.</p>
-
-            <div class="pipeline-box reveal" id="pipelineBox">
-                <div class="pipeline-header">
-                    <div class="pipeline-title">
-                        <span class="live-dot"></span>
-                        Live candidate flow
-                    </div>
-                    <div class="pipeline-hint">click to replay</div>
-                </div>
-                <div class="pipeline-track" id="pipelineTrack">
-                    <div class="p-step" data-step="0" style="--step-color: #7c6aef; --step-glow: rgba(124,106,239,0.2);">
-                        <div class="p-icon"><span class="p-step-num">1</span>📋</div>
-                        <div class="p-label">Job Opening<br>& Resume Parsing</div>
-                    </div>
-                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
-                    <div class="p-step" data-step="1" style="--step-color: #22d3ee; --step-glow: rgba(34,211,238,0.2);">
-                        <div class="p-icon"><span class="p-step-num">2</span>🔗</div>
-                        <div class="p-label">Top Candidate Selection<br></div>
-                    </div>
-                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
-                    <div class="p-step" data-step="2" style="--step-color: #a78bfa; --step-glow: rgba(167,139,250,0.2);">
-                        <div class="p-icon"><span class="p-step-num">3</span>🎙️</div>
-                        <div class="p-label">Top Candidate's<br>AI Interview</div>
-                    </div>
-                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
-                    <div class="p-step" data-step="3" style="--step-color: #fbbf24; --step-glow: rgba(251,191,36,0.2);">
-                        <div class="p-icon"><span class="p-step-num">4</span>🤖</div>
-                        <div class="p-label">AI Scores<br>& Evaluates</div>
-                    </div>
-                    <div class="p-conn"><div class="p-conn-fill"></div><div class="p-conn-particle"></div></div>
-                    <div class="p-step" data-step="4" style="--step-color: #34d399; --step-glow: rgba(52,211,153,0.2);">
-                        <div class="p-icon"><span class="p-step-num">5</span>✅</div>
-                        <div class="p-label">Get Ranked<br>Shortlist</div>
-                    </div>
-                </div>
-                <div class="pipeline-footer">
-                    <div class="pf-left">
-                        <div class="pf-dot" id="pfDot"></div>
-                        <div class="pf-text" id="pfText">Ready — <strong>click to simulate a candidate flow</strong></div>
-                    </div>
-                    <div class="pf-time" id="pfTime">00:00</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <div class="divider"></div>
 
     <!-- FEATURES -->
@@ -1280,7 +1447,7 @@
                 <div class="feature">
                     <div class="feature-icon" style="background: rgba(167,139,250,0.08);">🔌</div>
                     <h3>Integrates Easily</h3>
-                    <p>Works with your existing ATS. Share links via email, Slack, or embed in your careers page.</p>
+                    <p>Post the job to your careers page or your existing ATS. Candidates apply where they already find you.</p>
                     <div class="feature-stat">
                         <span class="feature-stat-val" style="color: #a78bfa;">5 min</span>
                         <span class="feature-stat-label">setup time</span>
@@ -1293,44 +1460,175 @@
     <div class="divider"></div>
 
     <!-- DETAILED STEPS -->
-    <section class="section">
-        <div class="section-inner">
+    <section class="section" id="details">
+        <div class="section-inner section-inner-wide">
             <div class="section-eyebrow reveal">The Details</div>
-            <h2 class="section-heading reveal">Everything you need,<br>nothing you don't</h2>
-            <p class="section-sub reveal">A closer look at each step of the process.</p>
+            <h2 class="section-heading reveal">One posting, start to leaderboard</h2>
+            <p class="section-sub reveal">One job posting, from the description you write to the ranked list you hire from. Pick a step to see it.</p>
 
-            <div class="steps-detail">
-                <div class="step-row">
-                    <div class="step-row-num">01</div>
-                    <div class="step-row-content">
-                        <h3>Define your job & questions</h3>
-                        <p>Create a job posting with structured questions tailored to the role. Set competency rubrics so every candidate is measured against the same criteria.</p>
-                        <span class="step-row-tag">Takes ~5 minutes</span>
+            <div class="flow reveal" id="flowRoot">
+                <div class="flow-steps" role="tablist" aria-label="How OpenHire works">
+
+                    <div class="flow-step active" data-step="1">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-1" aria-controls="flow-panel-1" aria-selected="true" tabindex="0">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="M6.5 8h7M6.5 11.5h4"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">Post the job</span>
+                                <span class="flow-step-desc">Write the description, add the role details, and set the competencies that decide a good fit.</span>
+                            </span>
+                            <span class="flow-num">01</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
                     </div>
+
+                    <div class="flow-step" data-step="2">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-2" aria-controls="flow-panel-2" aria-selected="false" tabindex="-1">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12.5V3m0 0L6.5 6.5M10 3l3.5 3.5"/><path d="M3.5 12.5v3a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-3"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">Candidates apply with a resume</span>
+                                <span class="flow-step-desc">Applicants open the posting and submit their own resume. Nothing for you to chase or collect.</span>
+                            </span>
+                            <span class="flow-num">02</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
+                    </div>
+
+                    <div class="flow-step" data-step="3">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-3" aria-controls="flow-panel-3" aria-selected="false" tabindex="-1">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5h14M5 10h10M8 14.5h4"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">Each resume is matched</span>
+                                <span class="flow-step-desc">Every application is scored against your rubric and the description itself. Strong fits are shortlisted on the spot.</span>
+                            </span>
+                            <span class="flow-num">03</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
+                    </div>
+
+                    <div class="flow-step" data-step="4">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-4" aria-controls="flow-panel-4" aria-selected="false" tabindex="-1">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 10S4.6 4.8 10 4.8 18.2 10 18.2 10 15.4 15.2 10 15.2 1.8 10 1.8 10Z"/><circle cx="10" cy="10" r="2.2"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">You review who advances</span>
+                                <span class="flow-step-desc">See every applicant with their score and the reasoning behind it. Move the cutoff or override any call.</span>
+                            </span>
+                            <span class="flow-num">04</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
+                    </div>
+
+                    <div class="flow-step" data-step="5">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-5" aria-controls="flow-panel-5" aria-selected="false" tabindex="-1">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="5" height="9" rx="2.5"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">Shortlisted candidates interview</span>
+                                <span class="flow-step-desc">The AI interviewer runs the round with them, whenever they are ready. Every answer is transcribed as it happens.</span>
+                            </span>
+                            <span class="flow-num">05</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
+                    </div>
+
+                    <div class="flow-step" data-step="6">
+                        <button class="flow-step-btn" role="tab" id="flow-tab-6" aria-controls="flow-panel-6" aria-selected="false" tabindex="-1">
+                            <span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16V9M10 16V4M16 16v-5"/></svg></span>
+                            <span class="flow-step-body">
+                                <span class="flow-step-title">The leaderboard ranks them</span>
+                                <span class="flow-step-desc">Final standings across every competency, each score tied back to the line in the transcript that earned it.</span>
+                            </span>
+                            <span class="flow-num">06</span>
+                        </button>
+                        <div class="flow-panel-slot"></div>
+                    </div>
+
                 </div>
-                <div class="step-row">
-                    <div class="step-row-num">02</div>
-                    <div class="step-row-content">
-                        <h3>Share a link with candidates</h3>
-                        <p>Send a unique interview link via email, Slack, or embed it on your careers page. Candidates can complete the interview anytime, from any device.</p>
-                        <span class="step-row-tag">No app download needed</span>
+
+                <div class="flow-preview" id="flowPreview">
+
+                    <div class="flow-panel active" id="flow-panel-1" role="tabpanel" aria-labelledby="flow-tab-1">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">Post job description</span>
+                            <span class="flow-tag">recruiter</span>
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">Senior Backend Engineer</span><span class="flow-row-meta">3–6 YOE</span></div>
+                        <div class="flow-row"><span class="flow-row-label">System design</span><div class="flow-meter"><span style="width:80%"></span></div><span class="flow-row-meta">30%</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Coding depth</span><div class="flow-meter"><span style="width:70%"></span></div><span class="flow-row-meta">25%</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Ownership</span><div class="flow-meter"><span style="width:55%"></span></div><span class="flow-row-meta">25%</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Communication</span><div class="flow-meter"><span style="width:45%"></span></div><span class="flow-row-meta">20%</span></div>
+                        <p class="flow-note">Weights decide how the final score is composed. Change them later and every candidate is rescored.</p>
                     </div>
-                </div>
-                <div class="step-row">
-                    <div class="step-row-num">03</div>
-                    <div class="step-row-content">
-                        <h3>Candidates complete a voice interview</h3>
-                        <p>An AI interviewer asks each question via natural voice. Candidates respond verbally — just like a real phone screen. The system transcribes everything automatically.</p>
-                        <span class="step-row-tag">~15 min per candidate</span>
+
+                    <div class="flow-panel" id="flow-panel-2" role="tabpanel" aria-labelledby="flow-tab-2">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">Apply with resume</span>
+                            <span class="flow-tag">candidate</span>
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">Ananya Rao</span><span class="flow-row-meta">ananya-rao.pdf</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Applying to</span><span class="flow-row-meta">Senior Backend Engineer</span></div>
+                        <p class="flow-note">Read off the resume:</p>
+                        <div class="flow-chips">
+                            <span class="flow-chip">Go</span>
+                            <span class="flow-chip">PostgreSQL</span>
+                            <span class="flow-chip">Kafka</span>
+                            <span class="flow-chip">Kubernetes</span>
+                            <span class="flow-chip">4 yrs backend</span>
+                        </div>
+                        <p class="flow-note">Candidates apply from the posting itself. No account to create, no recruiter in the loop yet.</p>
                     </div>
-                </div>
-                <div class="step-row">
-                    <div class="step-row-num">04</div>
-                    <div class="step-row-content">
-                        <h3>AI evaluates & ranks every candidate</h3>
-                        <p>Multiple specialized AI agents score each transcript against your rubrics. You receive a detailed report with scores, evidence, and a ranked shortlist — ready for human review.</p>
-                        <span class="step-row-tag">Results in minutes</span>
+
+                    <div class="flow-panel" id="flow-panel-3" role="tabpanel" aria-labelledby="flow-tab-3">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">Match evaluation</span>
+                            <span class="flow-tag">Ananya Rao</span>
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">Rubric match</span><div class="flow-meter"><span style="width:91%"></span></div><span class="flow-row-meta">91</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Semantic fit</span><div class="flow-meter"><span style="width:87%"></span></div><span class="flow-row-meta">87</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Status</span><span class="flow-row-meta">shortlisted</span></div>
+                        <p class="flow-note">Two reads on the same resume: how it scores against the competencies you set, and how closely it tracks the description you wrote.</p>
                     </div>
+
+                    <div class="flow-panel" id="flow-panel-4" role="tabpanel" aria-labelledby="flow-tab-4">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">Screening</span>
+                            <span class="flow-tag">340 applicants</span>
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">Samarth Kulkarni</span><div class="flow-meter"><span style="width:94%"></span></div><span class="flow-row-meta">shortlisted</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Ananya Rao</span><div class="flow-meter"><span style="width:91%"></span></div><span class="flow-row-meta">shortlisted</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Rahul Mehta</span><div class="flow-meter"><span style="width:88%"></span></div><span class="flow-row-meta">shortlisted</span></div>
+                        <div class="flow-row"><span class="flow-row-label">Dev Joshi</span><div class="flow-meter"><span style="width:62%"></span></div><span class="flow-row-meta">under review</span></div>
+                        <p class="flow-note">The cutoff is yours to move. Open any applicant to see which competency carried the score.</p>
+                    </div>
+
+                    <div class="flow-panel" id="flow-panel-5" role="tabpanel" aria-labelledby="flow-tab-5">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">AI interview</span>
+                            <span class="flow-tag">14:22 elapsed</span>
+                        </div>
+                        <div class="flow-qa">
+                            <span class="flow-qa-who">Interviewer</span>
+                            Walk me through how you'd keep two services consistent without a two-phase commit.
+                        </div>
+                        <div class="flow-qa">
+                            <span class="flow-qa-who">Ananya</span>
+                            I'd reach for an outbox table and publish to Kafka, then let the consumer stay idempotent on the event id…
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">Question 4 of 6</span><div class="flow-meter"><span style="width:66%"></span></div><span class="flow-row-meta">transcribing</span></div>
+                    </div>
+
+                    <div class="flow-panel" id="flow-panel-6" role="tabpanel" aria-labelledby="flow-tab-6">
+                        <div class="flow-panel-head">
+                            <span class="flow-panel-name">Leaderboard</span>
+                            <span class="flow-tag">Senior Backend Engineer</span>
+                        </div>
+                        <div class="flow-row"><span class="flow-row-label">1 · Ananya Rao</span><div class="flow-meter"><span style="width:93%"></span></div><span class="flow-row-meta">93</span></div>
+                        <div class="flow-row"><span class="flow-row-label">2 · Samarth Kulkarni</span><div class="flow-meter"><span style="width:89%"></span></div><span class="flow-row-meta">89</span></div>
+                        <div class="flow-row"><span class="flow-row-label">3 · Rahul Mehta</span><div class="flow-meter"><span style="width:81%"></span></div><span class="flow-row-meta">81</span></div>
+                        <div class="flow-qa">
+                            <span class="flow-qa-who">Ananya Rao · system design · 95</span>
+                            "I'd reach for an outbox table and publish to Kafka, then let the consumer stay idempotent on the event id."
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1370,16 +1668,70 @@
 
         document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-        // Step rows
-        const stepObserver = new IntersectionObserver((entries) => {
-            entries.forEach((entry, i) => {
-                if (entry.isIntersecting) {
-                    setTimeout(() => entry.target.classList.add('visible'), i * 100);
-                }
-            });
-        }, { threshold: 0.15 });
+        // ─── Flow walkthrough (scroll-synced, click to override) ───
+        (() => {
+            const root = document.getElementById('flowRoot');
+            if (!root) return;
 
-        document.querySelectorAll('.step-row').forEach(el => stepObserver.observe(el));
+            const steps = [...root.querySelectorAll('.flow-step')];
+            const btns = steps.map(s => s.querySelector('.flow-step-btn'));
+            const panels = [...root.querySelectorAll('.flow-panel')];
+            const preview = document.getElementById('flowPreview');
+            const mobile = window.matchMedia('(max-width: 900px)');
+
+            let current = 0;
+            let lockUntil = 0;
+
+            const setActive = (i) => {
+                if (i === current) return;
+                current = i;
+                steps.forEach((s, n) => s.classList.toggle('active', n === i));
+                btns.forEach((b, n) => {
+                    b.setAttribute('aria-selected', n === i ? 'true' : 'false');
+                    b.tabIndex = n === i ? 0 : -1;
+                });
+                panels.forEach((p, n) => p.classList.toggle('active', n === i));
+            };
+
+            // On narrow screens each panel moves under its own step, so there is
+            // never a question of which panel belongs to which step.
+            const placePanels = () => {
+                if (mobile.matches) {
+                    steps.forEach((s, n) => s.querySelector('.flow-panel-slot').append(panels[n]));
+                } else {
+                    panels.forEach(p => preview.append(p));
+                }
+            };
+            placePanels();
+            mobile.addEventListener('change', placePanels);
+
+            btns.forEach((b, i) => {
+                b.addEventListener('click', () => {
+                    lockUntil = Date.now() + 1000; // a click always beats the scroll sync
+                    setActive(i);
+                });
+                b.addEventListener('keydown', (e) => {
+                    const dir = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1
+                              : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+                    if (!dir) return;
+                    e.preventDefault();
+                    const next = (i + dir + steps.length) % steps.length;
+                    lockUntil = Date.now() + 1000;
+                    setActive(next);
+                    btns[next].focus();
+                });
+            });
+
+            // Desktop only: the panel is sticky, so track whichever step is centred.
+            const flowObserver = new IntersectionObserver((entries) => {
+                if (mobile.matches || Date.now() < lockUntil) return;
+                const hit = entries.filter(e => e.isIntersecting);
+                if (!hit.length) return;
+                setActive(steps.indexOf(hit[hit.length - 1].target));
+            }, { rootMargin: '-45% 0px -45% 0px' });
+
+            steps.forEach(s => flowObserver.observe(s));
+        })();
 
         // ─── Mockup score animation ───
         const mockupObserver = new IntersectionObserver((entries) => {

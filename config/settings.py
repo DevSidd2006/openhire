@@ -33,22 +33,37 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # with identical, fully correct extraction on the same prompt.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 # NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
-# Supports Nemotron ultra-powerful model with extended thinking. Cloud-hosted at
+# Serves the Nemotron family (super-120b handles 360k-token prompts). Cloud-hosted at
 # integrate.api.nvidia.com. The key is only ever read from the environment - never
 # hard-coded, logged, or reported.
 NVIDIA_NIM_API_KEY = os.getenv("NVIDIA_NIM_API_KEY", "")
-# P8B.5: nemotron-3-ultra-550b-a55b never returned within the 45s
-# RESUME_PARSER_TIMEOUT_SECONDS in production - verified locally to hang
-# past 50s with no response at all. The smaller nemotron-3-nano-30b-a3b was
-# tried as a replacement and is fast (~0.4-0.5s), but on the ACTUAL resume
-# parser prompt (schemas/llm_outputs.py:ResumeParseResult, security-hardened
-# against prompt injection) it returned a hallucinated, unrelated response
-# instead of a JSON parse error - unlike a timeout, this a caller could
-# mistake for a real result. LLM_PROVIDER=gemini is the verified-working
-# alternative for structured extraction (see providers/llm/gemini.py); this
-# default is kept only for whichever call sites don't need structured
-# extraction reliability.
-NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
+# Model choice here is benchmarked, not guessed - see the numbers below, all
+# measured against the hosted integrate.api.nvidia.com endpoint with reasoning
+# off, 5 runs each on the resume-extraction prompt shape:
+#
+#   nemotron-3-super-120b-a12b   median  1.1s   5/5 correct   360k-token prompt in 17.8s
+#   nemotron-3.5-lightning-30b   median  2.1s   4/5 correct
+#   nemotron-3-ultra-550b-a55b   median 14.6s   5/5 correct   360k-token prompt in ~31s
+#   nemotron-3-nano-30b-a3b      GONE - 410, end of life 2026-09-01
+#
+# super-120b is the default because it is both the fastest and the widest: it
+# was ~13x faster than ultra-550b at equal accuracy and still swallowed a
+# 360k-token prompt. ultra-550b remains a valid NVIDIA_NIM_MODEL override if a
+# call site ever needs the bigger model, but it costs ~13x the latency.
+#
+# The previous default, nemotron-3-nano-30b-a3b, is DEAD - the endpoint returns
+# 410 Gone (end of life 2026-09-01), so every NIM call was failing until this
+# was changed. The old comment here blamed ultra-550b for "never returning
+# within the 45s RESUME_PARSER_TIMEOUT_SECONDS"; that was reasoning mode, not
+# the model. Nemotron draws reasoning tokens from the same max_tokens budget as
+# the answer, so with thinking on a small budget is spent thinking and the call
+# returns finish_reason="length" having emitted no answer (measured: 50.8s for a
+# trivial prompt at max_tokens=24, versus 4.9s with thinking off).
+NVIDIA_NIM_MODEL = os.getenv("NVIDIA_NIM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+# Reasoning/"extended thinking" mode. Off by default - see the note above and
+# providers/llm/nvidia_nim.py. Turn it on only for a call site that also raises
+# max_tokens well above the answer length it expects.
+NVIDIA_NIM_ENABLE_THINKING = os.getenv("NVIDIA_NIM_ENABLE_THINKING", "false").lower() in ("1", "true", "yes")
 NVIDIA_NIM_BASE_URL = os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
 # Groq: Alternative LLM provider (openai/gpt-oss-20b model). Supported but no longer
