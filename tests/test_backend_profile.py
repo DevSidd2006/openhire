@@ -145,3 +145,38 @@ class TestAuthServiceProfile:
     async def test_change_password_unknown_user_is_not_found(self, auth_service):
         with pytest.raises(NotFoundError):
             await auth_service.change_password("user_does_not_exist", "a", "newpassword456")
+
+
+# ---------------------------------------------------------------------------
+# schemas/auth.py: UserProfileResponse / UpdateProfileRequest / ChangePasswordRequest
+# ---------------------------------------------------------------------------
+
+from schemas.auth import ChangePasswordRequest, UpdateProfileRequest, UserProfileResponse
+
+
+class TestProfileSchemas:
+    def test_user_profile_response_from_record_carries_no_password_hash(self):
+        record = UserRecord(
+            user_id="user_1",
+            email="a@example.com",
+            password_hash="secret-hash",
+            user_type="candidate",
+            full_name="Jane Doe",
+        )
+        response = UserProfileResponse.from_record(record)
+        assert response.full_name == "Jane Doe"
+        assert response.email == "a@example.com"
+        assert "password_hash" not in response.model_dump()
+        assert "secret-hash" not in response.model_dump_json()
+
+    def test_update_profile_request_has_no_protected_fields(self):
+        field_names = set(UpdateProfileRequest.model_fields.keys())
+        assert field_names.isdisjoint({"email", "user_type", "is_active", "password_hash", "user_id"})
+
+    def test_update_profile_request_exclude_unset_only_carries_supplied_fields(self):
+        request = UpdateProfileRequest(full_name="Jane")
+        assert request.model_dump(exclude_unset=True) == {"full_name": "Jane"}
+
+    def test_change_password_request_rejects_short_new_password(self):
+        with pytest.raises(Exception):
+            ChangePasswordRequest(current_password="old12345", new_password="short")
