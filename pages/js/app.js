@@ -39,6 +39,16 @@ function getWebSocketUrl(path) {
  * Includes Authorization header with Bearer token if available.
  * Handles 401 responses by attempting to refresh the token and retrying.
  */
+// Token-issuing endpoints only - these must NOT receive an Authorization
+// header (and must not trigger a 401-refresh-and-retry), or a stale/expired
+// token could interfere with login/signup/refresh itself. All other /auth*
+// endpoints (e.g. /auth/me, /auth/me/password) are normal authenticated
+// endpoints and need the token like any other route.
+const AUTH_TOKEN_ISSUING_PATHS = ['/auth/login', '/auth/signup', '/auth/refresh'];
+function isAuthTokenIssuingPath(path) {
+  return AUTH_TOKEN_ISSUING_PATHS.some((p) => path.startsWith(p));
+}
+
 async function apiRequest(path, options = {}) {
   const opts = Object.assign({}, options);
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
@@ -48,7 +58,7 @@ async function apiRequest(path, options = {}) {
 
   // Add Authorization header if we have an access token
   // Skip for auth endpoints to avoid circular refresh attempts
-  if (typeof getAccessToken === 'function' && !path.startsWith('/auth')) {
+  if (typeof getAccessToken === 'function' && !isAuthTokenIssuingPath(path)) {
     const token = getAccessToken();
     if (token) {
       opts.headers['Authorization'] = `Bearer ${token}`;
@@ -73,7 +83,7 @@ async function apiRequest(path, options = {}) {
   }
 
   // Handle 401 Unauthorized: try to refresh token and retry
-  if (res.status === 401 && !path.startsWith('/auth') && typeof refreshAccessToken === 'function') {
+  if (res.status === 401 && !isAuthTokenIssuingPath(path) && typeof refreshAccessToken === 'function') {
     try {
       const newToken = await refreshAccessToken();
       // Retry the request with the new token

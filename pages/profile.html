@@ -98,6 +98,7 @@
   </div>
 </main>
 
+<script src="js/auth.js"></script>
 <script src="js/app.js"></script>
 <script>
 let currentProfile = null;
@@ -113,6 +114,9 @@ function initials(name, email) {
 function formatMemberSince(createdAtIso) {
   try {
     const date = new Date(createdAtIso);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
     return `Member since ${date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}`;
   } catch (e) {
     return '';
@@ -198,25 +202,73 @@ async function renderCandidateCard() {
     const latestRole = (resume.work_experience || [])[0];
     const latestEducation = (resume.education || [])[0];
 
+    // Static scaffolding is safe as innerHTML; resume-derived values are
+    // user-controlled (from an uploaded resume) and must not be interpolated
+    // into innerHTML - built with createElement/textContent instead, same
+    // pattern as renderHeader().
     card.innerHTML = `
       <div class="card-header">
         <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
         <a href="apply.html" class="tag">Update via resume</a>
       </div>
-      ${resume.total_experience_years != null ? `<p class="card-sub">${resume.total_experience_years} years of experience</p>` : ''}
-      ${latestRole ? `<p class="card-sub">Most recent: ${latestRole.title || ''}${latestRole.company ? ' at ' + latestRole.company : ''}</p>` : ''}
-      ${latestEducation ? `<p class="card-sub">Education: ${latestEducation.degree || ''}${latestEducation.institution ? ', ' + latestEducation.institution : ''}</p>` : ''}
-      ${skills.length ? `<div class="chip-row" style="margin-top:0.5rem;">${skills.map((s) => `<span class="chip">${s}</span>`).join('')}</div>` : '<p class="card-sub">No skills on file yet.</p>'}
     `;
+
+    if (resume.total_experience_years != null) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `${resume.total_experience_years} years of experience`;
+      card.appendChild(p);
+    }
+
+    if (latestRole) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `Most recent: ${latestRole.title || ''}${latestRole.company ? ' at ' + latestRole.company : ''}`;
+      card.appendChild(p);
+    }
+
+    if (latestEducation) {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = `Education: ${latestEducation.degree || ''}${latestEducation.institution ? ', ' + latestEducation.institution : ''}`;
+      card.appendChild(p);
+    }
+
+    if (skills.length) {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      row.style.marginTop = '0.5rem';
+      skills.forEach((s) => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = s;
+        row.appendChild(chip);
+      });
+      card.appendChild(row);
+    } else {
+      const p = document.createElement('p');
+      p.className = 'card-sub';
+      p.textContent = 'No skills on file yet.';
+      card.appendChild(p);
+    }
   } catch (err) {
-    // 404 = no resume registered yet, a normal state (see GET /candidates/me).
-    card.innerHTML = `
-      <div class="card-header">
-        <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
-      </div>
-      <p class="card-sub">No resume on file yet.</p>
-      <a href="apply.html" class="btn-outline">Upload your resume</a>
-    `;
+    if (err.status === 404) {
+      // No resume registered yet, a normal state (see GET /candidates/me).
+      card.innerHTML = `
+        <div class="card-header">
+          <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+        </div>
+        <p class="card-sub">No resume on file yet.</p>
+        <a href="apply.html" class="btn-outline">Upload your resume</a>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="card-header">
+          <h3 class="card-title" style="font-size:1.05rem;">Resume Summary</h3>
+        </div>
+        <p class="card-sub">Could not load your resume summary.</p>
+      `;
+    }
   }
 }
 
@@ -270,7 +322,16 @@ document.getElementById('passwordForm').addEventListener('submit', async (event)
       window.location.href = 'login.html';
       return;
     }
-    throw err;
+    const main = document.querySelector('main.container');
+    if (main) {
+      main.innerHTML = `
+        <div class="card">
+          <h3 class="card-title" style="font-size:1.05rem;">Could not load your profile</h3>
+          <p class="card-sub">${err.message || 'Something went wrong loading your profile. Please try again later.'}</p>
+        </div>
+      `;
+    }
+    return;
   }
   renderHeader(currentProfile);
   fillAccountForm(currentProfile);

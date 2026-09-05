@@ -183,6 +183,7 @@ a { color: inherit; text-decoration: none; }
 .nav-menu-trigger {
   cursor: pointer;
   font-family: var(--font-mono);
+  color: var(--text-main);
 }
 
 .nav-menu-dropdown {

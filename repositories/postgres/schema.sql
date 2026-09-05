@@ -82,6 +82,20 @@ CREATE TABLE IF NOT EXISTS users (
 -- Backs user lookups by email (login).
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
+-- Add users.* profile columns to databases created before the Profile page
+-- existed. core/lifespan.py's schema-init step runs this whole file on
+-- every startup, so these run every time too - same guarded, re-runnable
+-- shape as applications.semantic_score below.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS location text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS headline text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_website text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_role text;
+
 -- ---------------------------------------------------------------------
 -- refresh_tokens — Refresh token storage for JWT-based authentication.
 -- Tracks token validity and expiration for session management.
