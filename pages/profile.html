@@ -223,7 +223,7 @@ async function renderCandidateCard() {
     if (latestRole) {
       const p = document.createElement('p');
       p.className = 'card-sub';
-      p.textContent = `Most recent: ${latestRole.title || ''}${latestRole.company ? ' at ' + latestRole.company : ''}`;
+      p.textContent = `Most recent: ${latestRole.position || ''}${latestRole.company ? ' at ' + latestRole.company : ''}`;
       card.appendChild(p);
     }
 
