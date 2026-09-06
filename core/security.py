@@ -60,16 +60,18 @@ from core.errors import ForbiddenError, UnauthorizedError
 class PrincipalType(str, Enum):
     """Who a request is acting as.
 
-    Three kinds, because the product already has three: the recruiter using
-    the dashboard, the candidate following an interview link, and the
-    service itself (a background evaluation worker calling internally).
-    ANONYMOUS is the fourth, meaning "no credential was presented".
+    Four kinds the product has: the recruiter using the dashboard, the
+    candidate following an interview link, the service itself (a background
+    evaluation worker calling internally), and - as of the admin console -
+    the operator account that manages users/content/impersonation. ANONYMOUS
+    is the fifth, meaning "no credential was presented".
     """
 
     ANONYMOUS = "anonymous"
     CANDIDATE = "candidate"
     RECRUITER = "recruiter"
     SERVICE = "service"
+    ADMIN = "admin"
 
 
 class Principal(BaseModel):
