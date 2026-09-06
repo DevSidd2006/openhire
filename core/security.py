@@ -271,6 +271,49 @@ def require_scopes(*required: str):
     return _dependency
 
 
+def _get_user_repository_for_security(request: Request):
+    """The `UserRepository`, resolved the same way `get_auth_provider`
+    above resolves the auth provider - reading straight from
+    `app.state.container` rather than importing `core.dependencies`, so
+    this module's only dependency stays on `core.container`, never on the
+    service-constructing layer built on top of it."""
+    container = getattr(request.app.state, "container", None)
+    return getattr(container, "user_repository", None)
+
+
+async def require_admin(
+    principal: Principal = Depends(require_authenticated),
+    settings: AppSettings = Depends(get_settings),
+    user_repository=Depends(_get_user_repository_for_security),
+) -> Principal:
+    """Endpoint dependency: reject any caller whose CURRENT account is not
+    an admin.
+
+    Mirrors `require_authenticated` exactly (inert while `AUTH_ENABLED=false`,
+    same 401-for-anonymous behaviour via the chained `Depends`), plus one
+    addition: it re-reads `UserRecord.user_type` from the repository on every
+    call rather than trusting the JWT's `user_type` claim. A role change or
+    deactivation takes effect on an admin's very next request instead of
+    waiting for their access token to expire - the same freshness guarantee
+    `AuthService.login`'s `is_active` check already gives login itself.
+
+    403, not 404: the route existing is not a secret (spec §5).
+    """
+    if not settings.auth_enabled:
+        return principal
+    if not principal.is_authenticated:
+        raise UnauthorizedError()
+    user = await user_repository.get_by_id(principal.subject_id)
+    if user is None or user.user_type != "admin" or not user.is_active:
+        raise ForbiddenError(
+            "This action requires an administrator account.",
+            internal_detail=(
+                f"principal subject_id={principal.subject_id!r} is not an active admin"
+            ),
+        )
+    return principal
+
+
 __all__ = [
     "ANONYMOUS",
     "AnonymousAuthProvider",
@@ -280,6 +323,7 @@ __all__ = [
     "PrincipalType",
     "get_auth_provider",
     "get_principal",
+    "require_admin",
     "require_authenticated",
     "require_scopes",
 ]

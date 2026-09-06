@@ -134,8 +134,8 @@ class CandidateService:
         matches = await self._candidates.list_for_user(user_id)
         return matches[0] if matches else None
 
-    async def list_candidates(self) -> list[CandidateRecord]:
-        return await self._candidates.list_candidates()
+    async def list_candidates(self, *, include_hidden: bool = False) -> list[CandidateRecord]:
+        return await self._candidates.list_candidates(include_hidden=include_hidden)
 
     async def update_candidate(
         self,

@@ -19,6 +19,7 @@ from core.security import JWTAuthProvider
 from repositories.interfaces import UserRecord
 from repositories.memory import (
     InMemoryApplicationRepository,
+    InMemoryAuditLogRepository,
     InMemoryBugReportRepository,
     InMemoryCandidateRepository,
     InMemoryEvaluationRepository,
@@ -224,6 +225,7 @@ def _authenticated_app():
         evaluation_repository=InMemoryEvaluationRepository(),
         user_repository=user_repo,
         bug_report_repository=InMemoryBugReportRepository(),
+        audit_log_repository=InMemoryAuditLogRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
         auth_provider=JWTAuthProvider(auth_service),
         persistence_is_ephemeral=True,

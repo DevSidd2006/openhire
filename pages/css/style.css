@@ -469,3 +469,21 @@ tr:hover td { background: var(--surface-hover); }
   margin: 0.5rem 0;
   border-radius: 0 var(--radius) var(--radius) 0;
 }
+
+.impersonation-banner {
+  background: var(--danger-subtle, #3a1f1f);
+  color: var(--danger-text, #ffb4b4);
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.impersonation-banner .link-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}

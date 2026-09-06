@@ -7,6 +7,7 @@ UserRepository for persistence and AppSettings for configuration.
 Methods provided:
   - signup(email, password, user_type): Create a new user account and generate tokens.
   - login(email, password): Authenticate user and return access/refresh tokens.
+  - issue_tokens_for_user(user): Mint a token pair for an already-resolved user (no password check).
   - refresh_access_token(refresh_token): Generate a new access token from refresh token.
   - verify_access_token(token): Decode and validate JWT access token, return Principal.
   - get_profile(user_id): Fetch the full stored profile for one user.
@@ -92,8 +93,7 @@ class AuthService:
         stored_user = await self._users.save(user_record)
 
         # Generate tokens
-        access_token = self._generate_access_token(user_id, user_type)
-        refresh_token = self._generate_refresh_token(user_id)
+        access_token, refresh_token = self.issue_tokens_for_user(stored_user)
 
         logger.info(
             "user signed up",
@@ -154,8 +154,7 @@ class AuthService:
             )
 
         # Generate tokens
-        access_token = self._generate_access_token(user.user_id, user.user_type)
-        refresh_token = self._generate_refresh_token(user.user_id)
+        access_token, refresh_token = self.issue_tokens_for_user(user)
 
         logger.info(
             "user logged in",
@@ -181,6 +180,23 @@ class AuthService:
                 internal_detail=f"user_id={user_id!r} not found",
             )
         return user
+
+    def issue_tokens_for_user(self, user: UserRecord) -> Tuple[str, str]:
+        """Mint a fresh access/refresh token pair for an already-resolved
+        user, with no password check of its own.
+
+        The single place `login`/`signup` (below) and `AdminService.
+        impersonate` (services/admin_service.py) mint tokens from - so an
+        impersonated session is byte-for-byte the same shape of token the
+        target user's own login produces, exactly as spec §5.4 requires
+        ("indistinguishable from the user's own login to the rest of the
+        app"). Callers are responsible for their own authorization decision
+        BEFORE calling this - it never re-checks a password or an
+        is_active flag itself.
+        """
+        access_token = self._generate_access_token(user.user_id, user.user_type)
+        refresh_token = self._generate_refresh_token(user.user_id)
+        return access_token, refresh_token
 
     async def update_profile(self, user_id: str, updates: dict) -> UserRecord:
         """Apply a partial update to one user's profile fields.

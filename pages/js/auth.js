@@ -41,6 +41,7 @@ function logout() {
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');
   localStorage.removeItem('openhire_user');
+  localStorage.removeItem('openhire_impersonating_as_admin');
   window.location.href = 'login.html';
 }
 

@@ -374,6 +374,15 @@ class JobRepository(ABC):
         job does not exist. Idempotent: archiving an already-archived job is
         not an error."""
 
+    @abstractmethod
+    async def restore(self, job_id: str) -> Optional[JobRecord]:
+        """Set `is_active=True` - the reverse of `archive`. Returns the
+        updated record, or None if the job does not exist. Idempotent:
+        restoring an already-active job is not an error. Used by the admin
+        console to un-hide a job an admin previously hid (spec §5.2) - a
+        recruiter's own re-post flow, if one exists, is a separate concern
+        and not required to route through this method."""
+
 
 class CandidateRecord(BaseModel):
     """Durable storage record for one candidate.
@@ -400,6 +409,9 @@ class CandidateRecord(BaseModel):
     parse_warning: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
+    # Admin console moderation flag (spec §3.2). False means visible in
+    # every normal, non-admin listing - see CandidateRepository.list_candidates.
+    is_hidden: bool = False
 
 
 class CandidateRepository(ABC):
@@ -421,8 +433,16 @@ class CandidateRepository(ABC):
         """The record, or None. Never raises for absence."""
 
     @abstractmethod
-    async def list_candidates(self) -> list[CandidateRecord]:
-        """All candidates, newest first."""
+    async def list_candidates(self, *, include_hidden: bool = False) -> list[CandidateRecord]:
+        """All candidates, newest first. Admin-hidden candidates are excluded
+        unless asked for, matching JobRepository.list_jobs' `include_archived`
+        pattern."""
+
+    @abstractmethod
+    async def set_hidden(self, candidate_id: str, is_hidden: bool) -> Optional[CandidateRecord]:
+        """Set the admin moderation flag. Returns the updated record, or
+        None if the candidate does not exist. Idempotent and reversible -
+        setting the same value twice is not an error."""
 
     @abstractmethod
     async def get_many(self, candidate_ids: list[str]) -> list[CandidateRecord]:
@@ -496,6 +516,55 @@ class UserRepository(ABC):
     async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
         """Fetch user by user_id. Returns None if not found."""
 
+    @abstractmethod
+    async def list_users(
+        self,
+        *,
+        query: Optional[str] = None,
+        user_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> list[UserRecord]:
+        """Every user matching the given filters, newest first. `query`
+        matches case-insensitively against email (and `full_name`, when
+        set). All three filters are optional and independent; omitting all
+        of them returns every user. Backs the admin console's user search
+        (spec §5.1) - no other caller in this codebase needs an unscoped
+        user listing."""
+
+
+class AuditLogRecord(BaseModel):
+    """One accountability record for an admin action.
+
+    Phase 1 logs exactly one action, impersonation - see
+    `AdminService.impersonate` (services/admin_service.py). `action` is
+    free-text rather than an enum so a future admin action (e.g.
+    "deactivate_user") can log through this same table with no migration -
+    see this record's own justification in the design spec (§3.3).
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    log_id: str
+    admin_id: str
+    action: str
+    target_user_id: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AuditLogRepository(ABC):
+    """Durable storage for `AuditLogRecord`. Append-only: no update/delete
+    method exists because an accountability log must not be editable by the
+    thing it is holding accountable."""
+
+    @abstractmethod
+    async def save(self, record: AuditLogRecord) -> AuditLogRecord:
+        """Insert one record. Never upserts by `log_id` - every call is a
+        new row, unlike every other repository's save()."""
+
+    @abstractmethod
+    async def list_for_admin(self, admin_id: str) -> list[AuditLogRecord]:
+        """Every action logged for one admin, newest first."""
+
 
 class ApplicationRepository(ABC):
     """Durable storage for `Application` (schemas/application.py).
@@ -523,14 +592,31 @@ class ApplicationRepository(ABC):
         application (at most one application per candidate per job)."""
 
     @abstractmethod
-    async def list_for_job(self, job_id: str) -> list[Application]:
+    async def list_for_job(
+        self, job_id: str, *, include_hidden: bool = False
+    ) -> list[Application]:
         """Every application against one job - the pool
-        `MatchingService`/`ApplicationService` rank and shortlist from."""
+        `MatchingService`/`ApplicationService` rank and shortlist from.
+        Admin-hidden applications are excluded unless asked for."""
 
     @abstractmethod
-    async def list_for_candidate(self, candidate_id: str) -> list[Application]:
+    async def list_for_candidate(
+        self, candidate_id: str, *, include_hidden: bool = False
+    ) -> list[Application]:
         """Every application belonging to one candidate. Scoped, for the
-        same isolation reason `SessionRepository.list_for_candidate` is."""
+        same isolation reason `SessionRepository.list_for_candidate` is.
+        Admin-hidden applications are excluded unless asked for."""
+
+    @abstractmethod
+    async def list_all(self, *, include_hidden: bool = False) -> list[Application]:
+        """Every application on the platform, newest first - the admin
+        moderation view (spec §5.2). No candidate/recruiter-facing route
+        calls this; it exists solely for `AdminService`."""
+
+    @abstractmethod
+    async def set_hidden(self, application_id: str, is_hidden: bool) -> Optional[Application]:
+        """Set the admin moderation flag. Returns the updated application,
+        or None if it does not exist. Idempotent and reversible."""
 
 
 class EvaluationStatus(str, Enum):
@@ -682,6 +768,8 @@ class EvaluationRepository(ABC):
 __all__ = [
     "Application",
     "ApplicationRepository",
+    "AuditLogRecord",
+    "AuditLogRepository",
     "BugReportRecord",
     "BugReportRepository",
     "BugSeverity",

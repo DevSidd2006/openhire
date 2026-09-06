@@ -105,6 +105,10 @@ class Application(BaseModel):
     # /sessions, unmodified). None until `link_interview_session` sets it.
     session_id: Optional[str] = None
 
+    # Admin console moderation flag (spec §3.2). False means visible in
+    # every normal, non-admin listing.
+    is_hidden: bool = False
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 

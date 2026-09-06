@@ -20,6 +20,7 @@ every process start.
 """
 from __future__ import annotations
 
+from repositories.postgres.audit_log_repository import PostgresAuditLogRepository
 from repositories.postgres.pool import PostgresConnectionPool
 from repositories.postgres.repository import (
     PostgresRubricRepository,
@@ -40,6 +41,7 @@ POSTGRES_BACKEND_NAME = "PostgreSQL (repositories/postgres)"
 __all__ = [
     "PostgresRubricRepository",
     "POSTGRES_BACKEND_NAME",
+    "PostgresAuditLogRepository",
     "PostgresConnectionPool",
     "PostgresApplicationRepository",
     "PostgresBugReportRepository",

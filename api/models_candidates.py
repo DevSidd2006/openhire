@@ -40,6 +40,7 @@ class CandidateResponse(BaseModel):
     parse_warning: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    is_hidden: bool = False
 
     @classmethod
     def from_record(cls, record: CandidateRecord) -> "CandidateResponse":
@@ -47,6 +48,7 @@ class CandidateResponse(BaseModel):
             candidate_id=record.candidate_id, resume=record.resume,
             used_fallback=record.used_fallback, parse_warning=record.parse_warning,
             created_at=record.created_at, updated_at=record.updated_at,
+            is_hidden=record.is_hidden,
         )
 
 

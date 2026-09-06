@@ -22,6 +22,7 @@ from core.container import ServiceContainer, build_default_container
 from repositories.interfaces import (
     RubricRepository,
     ApplicationRepository,
+    AuditLogRepository,
     CandidateRepository,
     EvaluationRepository,
     JobRepository,
@@ -29,6 +30,7 @@ from repositories.interfaces import (
     TranscriptRepository,
     UserRepository,
 )
+from services.admin_service import AdminService
 from services.application_service import ApplicationService
 from services.auth_service import AuthService
 from services.bug_report_service import BugReportService
@@ -106,6 +108,10 @@ def get_evaluation_repository(request: Request) -> EvaluationRepository:
 
 def get_user_repository(request: Request) -> UserRepository:
     return _container_from_app(request.app).user_repository
+
+
+def get_audit_log_repository(request: Request) -> AuditLogRepository:
+    return _container_from_app(request.app).audit_log_repository
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -234,12 +240,28 @@ def get_recruiter_service(request: Request) -> RecruiterService:
     )
 
 
+def get_admin_service(request: Request) -> AdminService:
+    container = _container_from_app(request.app)
+    return AdminService(
+        user_repository=container.user_repository,
+        job_repository=container.job_repository,
+        candidate_repository=container.candidate_repository,
+        application_repository=container.application_repository,
+        audit_log_repository=container.audit_log_repository,
+        auth_service=AuthService(
+            user_repository=container.user_repository, settings=container.settings
+        ),
+    )
+
+
 __all__ = [
     "build_evaluation_service",
     "build_interview_service",
+    "get_admin_service",
     "get_app_settings",
     "get_application_repository",
     "get_application_service",
+    "get_audit_log_repository",
     "get_auth_service",
     "get_bug_report_service",
     "get_candidate_repository",

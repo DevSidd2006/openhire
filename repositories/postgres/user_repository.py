@@ -127,5 +127,32 @@ class PostgresUserRepository(UserRepository):
             row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
         return _user_record_from_row(row) if row is not None else None
 
+    async def list_users(
+        self,
+        *,
+        query: Optional[str] = None,
+        user_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> list[UserRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT * FROM users
+                WHERE ($1::text IS NULL OR user_type = $1)
+                  AND ($2::boolean IS NULL OR is_active = $2)
+                  AND (
+                    $3::text IS NULL
+                    OR email ILIKE '%' || $3 || '%'
+                    OR full_name ILIKE '%' || $3 || '%'
+                  )
+                ORDER BY created_at DESC
+                """,
+                user_type,
+                is_active,
+                query,
+            )
+        return [_user_record_from_row(row) for row in rows]
+
 
 __all__ = ["PostgresUserRepository"]

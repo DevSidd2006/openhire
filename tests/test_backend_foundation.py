@@ -48,6 +48,7 @@ from core.security import (
 from repositories.interfaces import RepositoryError, SessionRecord
 from repositories.memory import (
     InMemoryApplicationRepository,
+    InMemoryAuditLogRepository,
     InMemoryRubricRepository,
     InMemoryBugReportRepository,
     InMemoryCandidateRepository,
@@ -202,6 +203,7 @@ class TestStartupValidation:
             evaluation_repository=InMemoryEvaluationRepository(),
             user_repository=InMemoryUserRepository(),
             bug_report_repository=InMemoryBugReportRepository(),
+            audit_log_repository=InMemoryAuditLogRepository(),
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
             auth_provider=AnonymousAuthProvider(),
             persistence_is_ephemeral=True,
