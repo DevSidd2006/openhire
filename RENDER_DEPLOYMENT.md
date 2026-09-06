@@ -76,7 +76,7 @@ AUDIO_PROVIDER              = mock
 TTS_PROVIDER                = edge
 EDGE_TTS_VOICE              = en-US-JennyNeural
 
-DATABASE_URL                = postgresql://openhire_r9gz_user:WuEGZ5zwCZ8QNlCmDIJp62O5EUQ2yf0A@dpg-da9ahkcs728c73d6srqg-a.singapore-postgres.render.com/openhire_r9gz
+DATABASE_URL                = <REDACTED - leaked credential rotated and removed; see GitHub issue for details. Get the real value from Render's dashboard (auto-populated when using fromService in render.yaml), never commit it>
 
 AUTH_ENABLED                = true
 AUTH_REQUIRED_BY_DEFAULT    = true
