@@ -322,7 +322,11 @@ async function impersonateUser(userId, targetEmail, targetRole) {
   if (adminEmail) {
     localStorage.setItem('openhire_impersonating_as_admin', adminEmail);
   }
-  window.location.href = targetRole === 'recruiter' ? 'recruiter.html' : 'candidate.html';
+  window.location.href = targetRole === 'admin'
+    ? 'admin.html'
+    : targetRole === 'recruiter'
+      ? 'recruiter.html'
+      : 'candidate.html';
 }
 
 /** Whether the CURRENT session is an impersonated one - set only by
