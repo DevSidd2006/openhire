@@ -473,7 +473,7 @@ class AuthService:
         """Map user_type string to PrincipalType enum.
 
         Args:
-            user_type: User type string ('candidate' or 'recruiter').
+            user_type: User type string ('candidate', 'recruiter', or 'admin').
 
         Returns:
             Corresponding PrincipalType enum value.
@@ -482,6 +482,8 @@ class AuthService:
             return PrincipalType.CANDIDATE
         elif user_type == "recruiter":
             return PrincipalType.RECRUITER
+        elif user_type == "admin":
+            return PrincipalType.ADMIN
         else:
             # Default to ANONYMOUS for unknown types
             return PrincipalType.ANONYMOUS
@@ -491,7 +493,7 @@ class AuthService:
         """Get OAuth scopes for a user type.
 
         Args:
-            user_type: User type string ('candidate' or 'recruiter').
+            user_type: User type string ('candidate', 'recruiter', or 'admin').
 
         Returns:
             Frozenset of scopes appropriate for the user type.
@@ -500,6 +502,8 @@ class AuthService:
             return frozenset(["recruiter:read", "recruiter:write"])
         elif user_type == "candidate":
             return frozenset(["candidate:read"])
+        elif user_type == "admin":
+            return frozenset(["admin:read", "admin:write"])
         else:
             return frozenset()
 
