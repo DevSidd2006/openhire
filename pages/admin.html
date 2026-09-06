@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Admin Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbarContainer"></div>
+<div id="impersonationBanner"></div>
+
+<main class="container">
+  <div class="card-header" style="margin-bottom:1.5rem;">
+    <div>
+      <h2 class="card-title">Admin Console</h2>
+      <p class="card-sub">User management, content moderation, and platform metrics.</p>
+    </div>
+  </div>
+
+  <div class="tab-bar" id="adminTabBar">
+    <button type="button" class="tab-btn active" data-tab="users">Users</button>
+    <button type="button" class="tab-btn" data-tab="moderation">Moderation</button>
+    <button type="button" class="tab-btn" data-tab="metrics">Metrics</button>
+  </div>
+
+  <section id="usersTab" class="admin-tab">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:1.05rem;">Users</h3>
+      </div>
+      <form id="userFilterForm" class="filter-row">
+        <input class="form-control" id="userQuery" placeholder="Search email or name">
+        <select class="form-control" id="userTypeFilter">
+          <option value="">All roles</option>
+          <option value="candidate">Candidate</option>
+          <option value="recruiter">Recruiter</option>
+          <option value="admin">Admin</option>
+        </select>
+        <select class="form-control" id="userActiveFilter">
+          <option value="">Any status</option>
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+        <button type="submit" class="btn-primary">Search</button>
+      </form>
+      <table class="data-table" id="usersTable">
+        <thead>
+          <tr><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+      <div class="form-status" id="usersStatus"></div>
+    </div>
+  </section>
+
+  <section id="moderationTab" class="admin-tab" hidden>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Jobs</h3></div>
+      <table class="data-table" id="modJobsTable">
+        <thead><tr><th>Title</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="modJobsBody"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Candidates</h3></div>
+      <table class="data-table" id="modCandidatesTable">
+        <thead><tr><th>Candidate</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="modCandidatesBody"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Applications</h3></div>
+      <table class="data-table" id="modApplicationsTable">
+        <thead><tr><th>Application ID</th><th>Job</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="modApplicationsBody"></tbody>
+      </table>
+    </div>
+    <div class="form-status" id="moderationStatus"></div>
+  </section>
+
+  <section id="metricsTab" class="admin-tab" hidden>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Users</h3></div>
+      <div class="chip-row" id="metricsUsers"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Jobs</h3></div>
+      <div class="chip-row" id="metricsJobs"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.05rem;">Applications</h3></div>
+      <div class="chip-row" id="metricsApplications"></div>
+    </div>
+    <div class="form-status" id="metricsStatus"></div>
+  </section>
+</main>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+guardAuthenticatedPage();
+renderNavbar('admin');
+
+function switchAdminTab(name) {
+  document.querySelectorAll('.admin-tab').forEach((el) => { el.hidden = true; });
+  document.querySelectorAll('#adminTabBar .tab-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  const el = document.getElementById(`${name}Tab`);
+  if (el) el.hidden = false;
+}
+
+let moderationLoaded = false;
+let metricsLoaded = false;
+document.getElementById('adminTabBar').addEventListener('click', (event) => {
+  const btn = event.target.closest('.tab-btn');
+  if (!btn) return;
+  switchAdminTab(btn.dataset.tab);
+  if (btn.dataset.tab === 'moderation' && !moderationLoaded) {
+    moderationLoaded = true;
+    loadModeration();
+  }
+  if (btn.dataset.tab === 'metrics' && !metricsLoaded) {
+    metricsLoaded = true;
+    loadMetrics();
+  }
+});
+
+function roleDropdown(currentType) {
+  const roles = ['candidate', 'recruiter', 'admin'];
+  return `<select class="form-control user-role-select">${roles.map(
+    (r) => `<option value="${r}" ${r === currentType ? 'selected' : ''}>${r}</option>`
+  ).join('')}</select>`;
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTableBody');
+  tbody.innerHTML = '';
+  users.forEach((u) => {
+    const tr = document.createElement('tr');
+    tr.dataset.userId = u.user_id;
+
+    const emailTd = document.createElement('td');
+    emailTd.textContent = u.email;
+    tr.appendChild(emailTd);
+
+    const roleTd = document.createElement('td');
+    roleTd.innerHTML = roleDropdown(u.user_type);
+    tr.appendChild(roleTd);
+
+    const statusTd = document.createElement('td');
+    statusTd.textContent = u.is_active ? 'Active' : 'Inactive';
+    tr.appendChild(statusTd);
+
+    const actionsTd = document.createElement('td');
+    actionsTd.innerHTML = `
+        <button type="button" class="btn-outline toggle-active-btn">${u.is_active ? 'Deactivate' : 'Reactivate'}</button>
+        <button type="button" class="btn-outline save-role-btn">Save role</button>
+        <button type="button" class="btn-outline impersonate-btn">Impersonate</button>
+    `;
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadUsers() {
+  const status = document.getElementById('usersStatus');
+  status.textContent = '';
+  try {
+    const filters = {
+      query: document.getElementById('userQuery').value.trim(),
+      user_type: document.getElementById('userTypeFilter').value,
+      is_active: document.getElementById('userActiveFilter').value,
+    };
+    const data = await fetchAdminUsers(filters);
+    renderUsersTable(data.users);
+  } catch (err) {
+    status.textContent = err.message || 'Failed to load users.';
+    status.className = 'form-status error';
+  }
+}
+
+document.getElementById('userFilterForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  loadUsers();
+});
+
+document.getElementById('usersTableBody').addEventListener('click', async (event) => {
+  const row = event.target.closest('tr[data-user-id]');
+  if (!row) return;
+  const userId = row.dataset.userId;
+  const status = document.getElementById('usersStatus');
+
+  try {
+    if (event.target.classList.contains('toggle-active-btn')) {
+      const wantsActive = event.target.textContent.trim() === 'Reactivate';
+      await updateAdminUser(userId, { is_active: wantsActive });
+      await loadUsers();
+    } else if (event.target.classList.contains('save-role-btn')) {
+      const select = row.querySelector('.user-role-select');
+      await updateAdminUser(userId, { user_type: select.value });
+      await loadUsers();
+    } else if (event.target.classList.contains('impersonate-btn')) {
+      const email = row.querySelector('td').textContent.trim();
+      const role = row.querySelector('.user-role-select').value;
+      if (!confirm(`Impersonate ${email}? You will be signed in as them until you return to admin.`)) {
+        return;
+      }
+      await impersonateUser(userId, email, role);
+      return;
+    }
+    status.textContent = 'Saved.';
+    status.className = 'form-status success';
+  } catch (err) {
+    status.textContent = err.message || 'Action failed.';
+    status.className = 'form-status error';
+  }
+});
+
+loadUsers();
+
+function renderModJobsTable(jobs) {
+  const tbody = document.getElementById('modJobsBody');
+  tbody.innerHTML = '';
+  jobs.forEach((j) => {
+    const tr = document.createElement('tr');
+    tr.dataset.jobId = j.job_id;
+
+    const titleTd = document.createElement('td');
+    titleTd.textContent = j.job.title;
+    tr.appendChild(titleTd);
+
+    const statusTd = document.createElement('td');
+    statusTd.textContent = j.is_active ? 'Active' : 'Hidden';
+    tr.appendChild(statusTd);
+
+    const actionsTd = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-outline job-toggle-btn';
+    btn.textContent = j.is_active ? 'Hide' : 'Restore';
+    actionsTd.appendChild(btn);
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderModCandidatesTable(candidates) {
+  const tbody = document.getElementById('modCandidatesBody');
+  tbody.innerHTML = '';
+  candidates.forEach((c) => {
+    const tr = document.createElement('tr');
+    tr.dataset.candidateId = c.candidate_id;
+
+    const nameTd = document.createElement('td');
+    nameTd.textContent = c.resume.candidate_name || c.candidate_id;
+    tr.appendChild(nameTd);
+
+    const statusTd = document.createElement('td');
+    statusTd.textContent = c.is_hidden ? 'Hidden' : 'Visible';
+    tr.appendChild(statusTd);
+
+    const actionsTd = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-outline candidate-toggle-btn';
+    btn.textContent = c.is_hidden ? 'Restore' : 'Hide';
+    actionsTd.appendChild(btn);
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderModApplicationsTable(applications) {
+  const tbody = document.getElementById('modApplicationsBody');
+  tbody.innerHTML = '';
+  applications.forEach((a) => {
+    const tr = document.createElement('tr');
+    tr.dataset.applicationId = a.application_id;
+
+    const idTd = document.createElement('td');
+    idTd.textContent = a.application_id;
+    tr.appendChild(idTd);
+
+    const jobTd = document.createElement('td');
+    jobTd.textContent = a.job_id;
+    tr.appendChild(jobTd);
+
+    const statusTd = document.createElement('td');
+    statusTd.textContent = a.is_hidden ? 'Hidden' : 'Visible';
+    tr.appendChild(statusTd);
+
+    const actionsTd = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-outline application-toggle-btn';
+    btn.textContent = a.is_hidden ? 'Restore' : 'Hide';
+    actionsTd.appendChild(btn);
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadModeration() {
+  const status = document.getElementById('moderationStatus');
+  status.textContent = '';
+  try {
+    const [jobs, candidates, applications] = await Promise.all([
+      fetchAdminJobs(true), fetchAdminCandidates(true), fetchAdminApplications(true),
+    ]);
+
+    renderModJobsTable(jobs.jobs);
+    renderModCandidatesTable(candidates.candidates);
+    renderModApplicationsTable(applications.applications);
+  } catch (err) {
+    status.textContent = err.message || 'Failed to load moderation data.';
+    status.className = 'form-status error';
+  }
+}
+
+document.getElementById('modJobsBody').addEventListener('click', async (event) => {
+  if (!event.target.classList.contains('job-toggle-btn')) return;
+  const row = event.target.closest('tr[data-job-id]');
+  const wantsRestore = event.target.textContent.trim() === 'Restore';
+  const status = document.getElementById('moderationStatus');
+  try {
+    await setAdminJobActive(row.dataset.jobId, wantsRestore);
+    await loadModeration();
+    status.textContent = 'Saved.';
+    status.className = 'form-status success';
+  } catch (err) {
+    status.textContent = err.message || 'Action failed.';
+    status.className = 'form-status error';
+  }
+});
+
+document.getElementById('modCandidatesBody').addEventListener('click', async (event) => {
+  if (!event.target.classList.contains('candidate-toggle-btn')) return;
+  const row = event.target.closest('tr[data-candidate-id]');
+  const wantsRestore = event.target.textContent.trim() === 'Restore';
+  const status = document.getElementById('moderationStatus');
+  try {
+    await setAdminCandidateHidden(row.dataset.candidateId, !wantsRestore);
+    await loadModeration();
+    status.textContent = 'Saved.';
+    status.className = 'form-status success';
+  } catch (err) {
+    status.textContent = err.message || 'Action failed.';
+    status.className = 'form-status error';
+  }
+});
+
+document.getElementById('modApplicationsBody').addEventListener('click', async (event) => {
+  if (!event.target.classList.contains('application-toggle-btn')) return;
+  const row = event.target.closest('tr[data-application-id]');
+  const wantsRestore = event.target.textContent.trim() === 'Restore';
+  const status = document.getElementById('moderationStatus');
+  try {
+    await setAdminApplicationHidden(row.dataset.applicationId, !wantsRestore);
+    await loadModeration();
+    status.textContent = 'Saved.';
+    status.className = 'form-status success';
+  } catch (err) {
+    status.textContent = err.message || 'Action failed.';
+    status.className = 'form-status error';
+  }
+});
+
+function renderMetricChips(containerId, entries) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  entries.forEach(([label, value]) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = `${label}: ${value}`;
+    container.appendChild(chip);
+  });
+}
+
+async function loadMetrics() {
+  const status = document.getElementById('metricsStatus');
+  status.textContent = '';
+  try {
+    const metrics = await fetchAdminMetrics();
+    renderMetricChips('metricsUsers', [
+      ['Candidates', metrics.users.candidate],
+      ['Recruiters', metrics.users.recruiter],
+      ['Admins', metrics.users.admin],
+    ]);
+    renderMetricChips('metricsJobs', [
+      ['Active', metrics.jobs.active],
+      ['Hidden', metrics.jobs.hidden],
+    ]);
+    renderMetricChips('metricsApplications', [
+      ['Total', metrics.applications.total],
+      ['Hidden', metrics.applications.hidden],
+    ]);
+  } catch (err) {
+    status.textContent = err.message || 'Failed to load metrics.';
+    status.className = 'form-status error';
+  }
+}
+</script>
+</body>
+</html>

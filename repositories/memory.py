@@ -43,6 +43,8 @@ from repositories.interfaces import (
     RubricRepository,
     Application,
     ApplicationRepository,
+    AuditLogRecord,
+    AuditLogRepository,
     BugReportRecord,
     BugReportRepository,
     CandidateRecord,
@@ -207,6 +209,17 @@ class InMemoryJobRepository(JobRepository):
             self._jobs[job_id] = archived
             return archived
 
+    async def restore(self, job_id: str) -> Optional[JobRecord]:
+        async with self._lock:
+            existing = self._jobs.get(job_id)
+            if existing is None:
+                return None
+            restored = existing.model_copy(
+                update={"is_active": True, "updated_at": datetime.now(timezone.utc)}
+            )
+            self._jobs[job_id] = restored
+            return restored
+
 
 class InMemoryCandidateRepository(CandidateRepository):
     """Dict-backed `CandidateRepository`. TEMPORARY - see module docstring."""
@@ -229,10 +242,23 @@ class InMemoryCandidateRepository(CandidateRepository):
         async with self._lock:
             return self._candidates.get(candidate_id)
 
-    async def list_candidates(self) -> List[CandidateRecord]:
+    async def list_candidates(self, *, include_hidden: bool = False) -> List[CandidateRecord]:
         async with self._lock:
-            matches = list(self._candidates.values())
+            matches = [
+                c for c in self._candidates.values() if include_hidden or not c.is_hidden
+            ]
         return sorted(matches, key=lambda r: r.created_at, reverse=True)
+
+    async def set_hidden(self, candidate_id: str, is_hidden: bool) -> Optional[CandidateRecord]:
+        async with self._lock:
+            existing = self._candidates.get(candidate_id)
+            if existing is None:
+                return None
+            updated = existing.model_copy(
+                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)}
+            )
+            self._candidates[candidate_id] = updated
+            return updated
 
     async def get_many(self, candidate_ids: List[str]) -> List[CandidateRecord]:
         wanted = set(candidate_ids)
@@ -271,15 +297,43 @@ class InMemoryApplicationRepository(ApplicationRepository):
                     return application
         return None
 
-    async def list_for_job(self, job_id: str) -> List[Application]:
+    async def list_for_job(
+        self, job_id: str, *, include_hidden: bool = False
+    ) -> List[Application]:
         async with self._lock:
-            matches = [a for a in self._applications.values() if a.job_id == job_id]
+            matches = [
+                a for a in self._applications.values()
+                if a.job_id == job_id and (include_hidden or not a.is_hidden)
+            ]
         return sorted(matches, key=lambda a: a.created_at, reverse=True)
 
-    async def list_for_candidate(self, candidate_id: str) -> List[Application]:
+    async def list_for_candidate(
+        self, candidate_id: str, *, include_hidden: bool = False
+    ) -> List[Application]:
         async with self._lock:
-            matches = [a for a in self._applications.values() if a.candidate_id == candidate_id]
+            matches = [
+                a for a in self._applications.values()
+                if a.candidate_id == candidate_id and (include_hidden or not a.is_hidden)
+            ]
         return sorted(matches, key=lambda a: a.created_at, reverse=True)
+
+    async def list_all(self, *, include_hidden: bool = False) -> List[Application]:
+        async with self._lock:
+            matches = [
+                a for a in self._applications.values() if include_hidden or not a.is_hidden
+            ]
+        return sorted(matches, key=lambda a: a.created_at, reverse=True)
+
+    async def set_hidden(self, application_id: str, is_hidden: bool) -> Optional[Application]:
+        async with self._lock:
+            existing = self._applications.get(application_id)
+            if existing is None:
+                return None
+            updated = existing.model_copy(
+                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)}
+            )
+            self._applications[application_id] = updated
+            return updated
 
 
 class InMemoryEvaluationRepository(EvaluationRepository):
@@ -381,10 +435,50 @@ class InMemoryUserRepository(UserRepository):
         async with self._lock:
             return self._users.get(user_id)
 
+    async def list_users(
+        self,
+        *,
+        query: Optional[str] = None,
+        user_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> List[UserRecord]:
+        async with self._lock:
+            matches = list(self._users.values())
+        if user_type is not None:
+            matches = [u for u in matches if u.user_type == user_type]
+        if is_active is not None:
+            matches = [u for u in matches if u.is_active == is_active]
+        if query:
+            needle = query.lower()
+            matches = [
+                u for u in matches
+                if needle in u.email.lower() or (u.full_name and needle in u.full_name.lower())
+            ]
+        return sorted(matches, key=lambda u: u.created_at, reverse=True)
+
+
+class InMemoryAuditLogRepository(AuditLogRepository):
+    """List-backed `AuditLogRepository`. TEMPORARY - see module docstring."""
+
+    def __init__(self) -> None:
+        self._records: List[AuditLogRecord] = []
+        self._lock = asyncio.Lock()
+
+    async def save(self, record: AuditLogRecord) -> AuditLogRecord:
+        async with self._lock:
+            self._records.append(record)
+            return record
+
+    async def list_for_admin(self, admin_id: str) -> List[AuditLogRecord]:
+        async with self._lock:
+            matches = [r for r in self._records if r.admin_id == admin_id]
+        return sorted(matches, key=lambda r: r.created_at, reverse=True)
+
 
 __all__ = [
     "EPHEMERAL_BACKEND_NAME",
     "InMemoryApplicationRepository",
+    "InMemoryAuditLogRepository",
     "InMemoryCandidateRepository",
     "InMemoryEvaluationRepository",
     "InMemoryJobRepository",

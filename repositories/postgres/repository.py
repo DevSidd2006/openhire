@@ -100,6 +100,7 @@ def _candidate_record_from_row(row: asyncpg.Record) -> CandidateRecord:
         parse_warning=row["parse_warning"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        is_hidden=row["is_hidden"],
     )
 
 
@@ -116,6 +117,7 @@ def _application_from_row(row: asyncpg.Record) -> Application:
         ),
         semantic_score=row["semantic_score"],
         session_id=row["session_id"],
+        is_hidden=row["is_hidden"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -257,6 +259,20 @@ class PostgresJobRepository(JobRepository):
             )
         return _job_record_from_row(row) if row is not None else None
 
+    async def restore(self, job_id: str) -> Optional[JobRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE jobs
+                SET is_active = true, updated_at = now()
+                WHERE job_id = $1
+                RETURNING job_id, job, is_active, created_at, updated_at
+                """,
+                job_id,
+            )
+        return _job_record_from_row(row) if row is not None else None
+
 
 class PostgresCandidateRepository(CandidateRepository):
     """Durable storage for `CandidateRecord`. See
@@ -297,11 +313,33 @@ class PostgresCandidateRepository(CandidateRepository):
             )
         return _candidate_record_from_row(row) if row is not None else None
 
-    async def list_candidates(self) -> List[CandidateRecord]:
+    async def list_candidates(self, *, include_hidden: bool = False) -> List[CandidateRecord]:
         pool = await self._pool.get()
         async with pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM candidates ORDER BY created_at DESC")
+            rows = await conn.fetch(
+                """
+                SELECT * FROM candidates
+                WHERE ($1 OR NOT is_hidden)
+                ORDER BY created_at DESC
+                """,
+                include_hidden,
+            )
         return [_candidate_record_from_row(row) for row in rows]
+
+    async def set_hidden(self, candidate_id: str, is_hidden: bool) -> Optional[CandidateRecord]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE candidates
+                SET is_hidden = $2, updated_at = now()
+                WHERE candidate_id = $1
+                RETURNING *
+                """,
+                candidate_id,
+                is_hidden,
+            )
+        return _candidate_record_from_row(row) if row is not None else None
 
     async def get_many(self, candidate_ids: List[str]) -> List[CandidateRecord]:
         if not candidate_ids:
@@ -339,8 +377,8 @@ class PostgresApplicationRepository(ApplicationRepository):
                     """
                     INSERT INTO applications
                         (application_id, job_id, candidate_id, status, matching_score,
-                         semantic_score, session_id, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                         semantic_score, session_id, is_hidden, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
                     ON CONFLICT (application_id) DO UPDATE
                         SET job_id = EXCLUDED.job_id,
                             candidate_id = EXCLUDED.candidate_id,
@@ -348,9 +386,10 @@ class PostgresApplicationRepository(ApplicationRepository):
                             matching_score = EXCLUDED.matching_score,
                             semantic_score = EXCLUDED.semantic_score,
                             session_id = EXCLUDED.session_id,
+                            is_hidden = EXCLUDED.is_hidden,
                             updated_at = now()
                     RETURNING application_id, job_id, candidate_id, status,
-                              matching_score, semantic_score, session_id,
+                              matching_score, semantic_score, session_id, is_hidden,
                               created_at, updated_at
                     """,
                     application.application_id,
@@ -364,6 +403,7 @@ class PostgresApplicationRepository(ApplicationRepository):
                     ),
                     application.semantic_score,
                     application.session_id,
+                    application.is_hidden,
                     application.created_at,
                 )
         except asyncpg.UniqueViolationError as exc:
@@ -397,23 +437,65 @@ class PostgresApplicationRepository(ApplicationRepository):
             )
         return _application_from_row(row) if row is not None else None
 
-    async def list_for_job(self, job_id: str) -> List[Application]:
+    async def list_for_job(
+        self, job_id: str, *, include_hidden: bool = False
+    ) -> List[Application]:
         pool = await self._pool.get()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM applications WHERE job_id = $1 ORDER BY created_at DESC",
+                """
+                SELECT * FROM applications
+                WHERE job_id = $1 AND ($2 OR NOT is_hidden)
+                ORDER BY created_at DESC
+                """,
                 job_id,
+                include_hidden,
             )
         return [_application_from_row(row) for row in rows]
 
-    async def list_for_candidate(self, candidate_id: str) -> List[Application]:
+    async def list_for_candidate(
+        self, candidate_id: str, *, include_hidden: bool = False
+    ) -> List[Application]:
         pool = await self._pool.get()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM applications WHERE candidate_id = $1 ORDER BY created_at DESC",
+                """
+                SELECT * FROM applications
+                WHERE candidate_id = $1 AND ($2 OR NOT is_hidden)
+                ORDER BY created_at DESC
+                """,
                 candidate_id,
+                include_hidden,
             )
         return [_application_from_row(row) for row in rows]
+
+    async def list_all(self, *, include_hidden: bool = False) -> List[Application]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT * FROM applications
+                WHERE ($1 OR NOT is_hidden)
+                ORDER BY created_at DESC
+                """,
+                include_hidden,
+            )
+        return [_application_from_row(row) for row in rows]
+
+    async def set_hidden(self, application_id: str, is_hidden: bool) -> Optional[Application]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE applications
+                SET is_hidden = $2, updated_at = now()
+                WHERE application_id = $1
+                RETURNING *
+                """,
+                application_id,
+                is_hidden,
+            )
+        return _application_from_row(row) if row is not None else None
 
 
 class PostgresSessionRepository(SessionRepository):

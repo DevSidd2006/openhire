@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id text PRIMARY KEY,
     email text NOT NULL UNIQUE,
     password_hash text NOT NULL,
-    user_type text NOT NULL CHECK (user_type IN ('candidate', 'recruiter')),
+    user_type text NOT NULL CHECK (user_type IN ('candidate', 'recruiter', 'admin')),
     is_active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz,
@@ -81,6 +81,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Backs user lookups by email (login).
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Widen users.user_type to allow 'admin' for databases created before the
+-- admin console existed (2026-09-06).
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'users'
+    ) THEN
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;
+        ALTER TABLE users ADD CONSTRAINT users_user_type_check
+            CHECK (user_type IN ('candidate', 'recruiter', 'admin'));
+    END IF;
+END $$;
 
 -- Add users.* profile columns to databases created before the Profile page
 -- existed. core/lifespan.py's schema-init step runs this whole file on
@@ -126,12 +139,22 @@ CREATE TABLE IF NOT EXISTS candidates (
     used_fallback   boolean NOT NULL DEFAULT false,
     parse_warning   text,
     created_at      timestamptz NOT NULL DEFAULT now(),
-    updated_at      timestamptz
+    updated_at      timestamptz,
+    -- Admin console moderation flag (2026-09-06). Nullable-safe: DEFAULT
+    -- false, so existing rows need no backfill.
+    is_hidden       boolean NOT NULL DEFAULT false
 );
+
+-- Add candidates.is_hidden for databases created before the admin console
+-- existed - same guarded, re-runnable shape as users.full_name etc. above.
+ALTER TABLE candidates ADD COLUMN IF NOT EXISTS is_hidden boolean NOT NULL DEFAULT false;
 
 -- Backs CandidateRepository.list_candidates(): "newest first".
 CREATE INDEX IF NOT EXISTS idx_candidates_created_at
     ON candidates (created_at DESC);
+
+-- Backs the admin moderation view and the default-hides-hidden listing.
+CREATE INDEX IF NOT EXISTS idx_candidates_is_hidden ON candidates (is_hidden);
 
 -- Backs ownership validation: list a user's candidates.
 CREATE INDEX IF NOT EXISTS idx_candidates_user_id
@@ -171,6 +194,8 @@ CREATE TABLE IF NOT EXISTS applications (
     session_id      text,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz,
+    -- Admin console moderation flag (2026-09-06).
+    is_hidden       boolean NOT NULL DEFAULT false,
 
     -- The one hard duplicate-prevention rule the current backend enforces
     -- (ApplicationService.apply's get_for_job_and_candidate check) -
@@ -189,6 +214,12 @@ CREATE INDEX IF NOT EXISTS idx_applications_candidate_id_created_at
 -- ('shortlisted', 'interview_linked') for one job).
 CREATE INDEX IF NOT EXISTS idx_applications_job_id_status
     ON applications (job_id, status);
+
+-- Add applications.is_hidden for databases created before the admin
+-- console existed.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS is_hidden boolean NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_applications_is_hidden ON applications (is_hidden);
 
 -- ---------------------------------------------------------------------
 -- sessions — SessionRecord (repositories/interfaces.py): the durable,
@@ -407,3 +438,22 @@ CREATE TABLE IF NOT EXISTS bug_reports (
 -- Backs BugReportRepository.list_all(): "newest first".
 CREATE INDEX IF NOT EXISTS idx_bug_reports_created_at
     ON bug_reports (created_at DESC);
+
+-- ---------------------------------------------------------------------
+-- audit_logs — AuditLogRecord (repositories/interfaces.py): accountability
+-- trail for admin actions. Phase 1 writes exactly one action
+-- ("impersonate") - see services/admin_service.py:AdminService.impersonate.
+-- Append-only: no UPDATE/DELETE path exists anywhere in the backend for
+-- this table.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+    log_id            text PRIMARY KEY,
+    admin_id          text NOT NULL REFERENCES users (user_id),
+    action            text NOT NULL,
+    target_user_id    text NOT NULL REFERENCES users (user_id),
+    created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+-- Backs AuditLogRepository.list_for_admin(admin_id): "newest first".
+CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id_created_at
+    ON audit_logs (admin_id, created_at DESC);

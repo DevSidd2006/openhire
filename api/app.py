@@ -36,6 +36,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.errors import register_exception_handlers
 from api.models import HealthResponse
+from api.routes.admin import router as admin_router
 from api.routes.applications import router as applications_router
 from api.routes.auth import router as auth_router
 from api.routes.bugs import router as bugs_router
@@ -120,6 +121,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(auth_router, prefix=settings.api_prefix)
+    app.include_router(admin_router, prefix=settings.api_prefix)
     app.include_router(interview_router, prefix=settings.api_prefix)
     app.include_router(voice_router, prefix=settings.api_prefix)
     app.include_router(interview_mediator_router, prefix=settings.api_prefix)

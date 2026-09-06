@@ -47,6 +47,7 @@ from core.security import AnonymousAuthProvider, AuthProvider, JWTAuthProvider
 from repositories.interfaces import (
     RubricRepository,
     ApplicationRepository,
+    AuditLogRepository,
     BugReportRepository,
     CandidateRepository,
     EvaluationRepository,
@@ -101,6 +102,8 @@ class ServiceContainer:
     user_repository: UserRepository
     # OpenBox: platform-wide, user-reported bug tracker (pages/openbox.html).
     bug_report_repository: BugReportRepository
+    # Admin console: impersonation accountability trail (Task 2/3).
+    audit_log_repository: AuditLogRepository
     auth_provider: AuthProvider = field(default_factory=AnonymousAuthProvider)
 
     # True while any repository above is one of the temporary in-process
@@ -187,6 +190,7 @@ class ServiceContainer:
             "evaluation_repository",
             "evaluation_dispatcher",
             "bug_report_repository",
+            "audit_log_repository",
             "auth_provider",
             "database_pool",
         ):
@@ -231,7 +235,8 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         from repositories.postgres import (
             POSTGRES_BACKEND_NAME,
             PostgresApplicationRepository,
-    PostgresRubricRepository,
+            PostgresAuditLogRepository,
+            PostgresRubricRepository,
             PostgresBugReportRepository,
             PostgresCandidateRepository,
             PostgresConnectionPool,
@@ -261,6 +266,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
             evaluation_repository=PostgresEvaluationRepository(pool),
             user_repository=user_repo,
             bug_report_repository=PostgresBugReportRepository(pool),
+            audit_log_repository=PostgresAuditLogRepository(pool),
             evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
             auth_provider=auth_provider,
             persistence_is_ephemeral=False,
@@ -270,7 +276,8 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
     from repositories.memory import (
         EPHEMERAL_BACKEND_NAME,
         InMemoryApplicationRepository,
-    InMemoryRubricRepository,
+        InMemoryAuditLogRepository,
+        InMemoryRubricRepository,
         InMemoryBugReportRepository,
         InMemoryCandidateRepository,
         InMemoryEvaluationRepository,
@@ -299,6 +306,7 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         evaluation_repository=InMemoryEvaluationRepository(),
         user_repository=InMemoryUserRepository(),
         bug_report_repository=InMemoryBugReportRepository(),
+        audit_log_repository=InMemoryAuditLogRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
         auth_provider=AnonymousAuthProvider(),
         persistence_is_ephemeral=True,

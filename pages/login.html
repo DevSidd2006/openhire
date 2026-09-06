@@ -107,6 +107,7 @@
 </head>
 <body>
 <div id="navbarContainer"></div>
+<div id="impersonationBanner"></div>
 
 <main class="auth-shell">
   <div class="auth-card">
@@ -189,7 +190,14 @@
       }
 
       // Redirect to appropriate dashboard
-      const dashboard = response.user.user_type === 'recruiter' ? 'recruiter.html' : 'candidate.html';
+      let dashboard;
+      if (response.user.user_type === 'admin') {
+        dashboard = 'admin.html';
+      } else if (response.user.user_type === 'recruiter') {
+        dashboard = 'recruiter.html';
+      } else {
+        dashboard = 'candidate.html';
+      }
       window.location.href = dashboard;
     } catch (error) {
       submitBtn.disabled = false;

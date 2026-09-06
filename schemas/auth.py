@@ -64,6 +64,7 @@ class UserProfileResponse(BaseModel):
     email: str
     user_type: str
     created_at: datetime
+    is_active: bool = True
 
     full_name: Optional[str] = None
     phone: Optional[str] = None
@@ -83,6 +84,7 @@ class UserProfileResponse(BaseModel):
             email=record.email,
             user_type=record.user_type,
             created_at=record.created_at,
+            is_active=record.is_active,
             full_name=record.full_name,
             phone=record.phone,
             location=record.location,

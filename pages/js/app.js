@@ -181,6 +181,55 @@ async function changeMyPassword(currentPassword, newPassword) {
   });
 }
 
+/** GET /admin/users with optional {query, user_type, is_active} filters -
+ * only ever called from pages/admin.html, only ever reachable by an admin
+ * (the navbar link is hidden otherwise, and the backend 403s regardless). */
+async function fetchAdminUsers(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.query) params.set('query', filters.query);
+  if (filters.user_type) params.set('user_type', filters.user_type);
+  if (filters.is_active !== undefined && filters.is_active !== '') {
+    params.set('is_active', filters.is_active);
+  }
+  const qs = params.toString();
+  return apiRequest(`/admin/users${qs ? '?' + qs : ''}`);
+}
+
+/** PATCH /admin/users/{userId} with a partial {is_active, user_type} body. */
+async function updateAdminUser(userId, fields) {
+  return apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: fields });
+}
+
+/** GET /admin/jobs, optionally including hidden (inactive) jobs. */
+async function fetchAdminJobs(includeHidden = false) {
+  return apiRequest(`/admin/jobs?include_hidden=${includeHidden}`);
+}
+/** PATCH /admin/jobs/{jobId} to set is_active. */
+async function setAdminJobActive(jobId, isActive) {
+  return apiRequest(`/admin/jobs/${jobId}`, { method: 'PATCH', body: { is_active: isActive } });
+}
+/** GET /admin/candidates, optionally including hidden candidates. */
+async function fetchAdminCandidates(includeHidden = false) {
+  return apiRequest(`/admin/candidates?include_hidden=${includeHidden}`);
+}
+/** PATCH /admin/candidates/{candidateId} to set is_hidden. */
+async function setAdminCandidateHidden(candidateId, isHidden) {
+  return apiRequest(`/admin/candidates/${candidateId}`, { method: 'PATCH', body: { is_hidden: isHidden } });
+}
+/** GET /admin/applications, optionally including hidden applications. */
+async function fetchAdminApplications(includeHidden = false) {
+  return apiRequest(`/admin/applications?include_hidden=${includeHidden}`);
+}
+/** PATCH /admin/applications/{applicationId} to set is_hidden. */
+async function setAdminApplicationHidden(applicationId, isHidden) {
+  return apiRequest(`/admin/applications/${applicationId}`, { method: 'PATCH', body: { is_hidden: isHidden } });
+}
+
+/** GET /admin/metrics - aggregate counts for the admin Metrics tab. */
+async function fetchAdminMetrics() {
+  return apiRequest('/admin/metrics');
+}
+
 /** Creates the interview session for an application that is already
  * SHORTLISTED and has none yet - fetches the full job/resume records
  * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
@@ -258,7 +307,40 @@ function logoutUser() {
   localStorage.removeItem('openhire_user');
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');
+  localStorage.removeItem('openhire_impersonating_as_admin');
   window.location.href = 'login.html';
+}
+
+/** POST /admin/impersonate/{userId}, swap stored tokens to the target
+ * user's, remember which admin email started this so the banner (below)
+ * can show it, and redirect to that user's landing page. */
+async function impersonateUser(userId, targetEmail, targetRole) {
+  const adminEmail = getCurrentUser() ? getCurrentUser().name : null;
+  const response = await apiRequest(`/admin/impersonate/${userId}`, { method: 'POST' });
+  setTokens(response.access_token, response.refresh_token);
+  setCurrentUser({ name: targetEmail, role: targetRole, user_id: userId });
+  if (adminEmail) {
+    localStorage.setItem('openhire_impersonating_as_admin', adminEmail);
+  }
+  window.location.href = targetRole === 'admin'
+    ? 'admin.html'
+    : targetRole === 'recruiter'
+      ? 'recruiter.html'
+      : 'candidate.html';
+}
+
+/** Whether the CURRENT session is an impersonated one - set only by
+ * impersonateUser() above, cleared only by returnFromImpersonation(). */
+function isImpersonating() {
+  return !!localStorage.getItem('openhire_impersonating_as_admin');
+}
+
+/** "Return to admin" - the simplest correct behavior for phase 1 (spec
+ * §6/§8): re-authenticate as the admin normally, rather than retaining the
+ * admin's original tokens across the impersonation session. */
+function returnFromImpersonation() {
+  localStorage.removeItem('openhire_impersonating_as_admin');
+  logoutUser();
 }
 
 function renderNavbar(activePage = '') {
@@ -267,6 +349,7 @@ function renderNavbar(activePage = '') {
   if (!navContainer) return;
 
   const isRecruiter = user && user.role === 'recruiter';
+  const isAdmin = user && user.role === 'admin';
   const dashboardHref = isRecruiter ? 'recruiter.html' : 'candidate.html';
 
   navContainer.innerHTML = `
@@ -277,11 +360,12 @@ function renderNavbar(activePage = '') {
 
       <nav class="nav-links">
         <a href="index.html">Overview</a>
-        <a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>
+        ${!isAdmin ? `<a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>` : ''}
         ${isRecruiter ? `<a href="create-job.html" class="${activePage === 'create-job' ? 'active' : ''}">+ Job</a>` : ''}
         ${isRecruiter ? `<a href="screening.html" class="${activePage === 'screening' ? 'active' : ''}">Screening</a>` : ''}
         <a href="leaderboard.html" class="${activePage === 'leaderboard' ? 'active' : ''}">Leaderboard</a>
         <a href="openbox.html" class="${activePage === 'openbox' ? 'active' : ''}">OpenBox</a>
+        ${isAdmin ? `<a href="admin.html" class="${activePage === 'admin' ? 'active' : ''}">Admin</a>` : ''}
       </nav>
 
       <div class="nav-right">
@@ -304,6 +388,28 @@ function renderNavbar(activePage = '') {
       </div>
     </header>
   `;
+
+  const bannerContainer = document.getElementById('impersonationBanner');
+  if (bannerContainer) {
+    const adminEmail = localStorage.getItem('openhire_impersonating_as_admin');
+    bannerContainer.innerHTML = '';
+    if (user && adminEmail) {
+      // user.name is a user-controlled string (target email) - build the
+      // banner with textContent/createElement rather than interpolating it
+      // into an HTML template string, per the XSS-safety convention from
+      // Tasks 12/16.
+      const banner = document.createElement('div');
+      banner.className = 'impersonation-banner';
+      banner.appendChild(document.createTextNode(`Viewing as ${user.name} — `));
+      const returnBtn = document.createElement('button');
+      returnBtn.type = 'button';
+      returnBtn.className = 'link-btn';
+      returnBtn.textContent = 'Return to admin';
+      returnBtn.addEventListener('click', () => returnFromImpersonation());
+      banner.appendChild(returnBtn);
+      bannerContainer.appendChild(banner);
+    }
+  }
 }
 
 /** Toggles the top-right nav dropdown. Closes on an outside click or
