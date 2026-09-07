@@ -149,13 +149,18 @@ Full-featured production system with multilingual support, reliability improveme
    pip install -r requirements.txt
    ```
 
-5. **Set up database:**
+5. **Set up the database (optional):**
+
+   With `DATABASE_URL` unset, OpenHire runs on the in-process repositories
+   in `repositories/memory.py` — everything works, nothing survives a
+   restart. For durable local data:
+
    ```bash
    # Start PostgreSQL (Docker)
    docker-compose -f docker-compose.postgres.yml up -d
-   
-   # Run migrations
-   python -m alembic upgrade head
+
+   # Apply the schema (one idempotent file; safe to re-run)
+   psql "$DATABASE_URL" -f repositories/postgres/schema.sql
    ```
 
 6. **Run the server:**
@@ -319,9 +324,9 @@ See [`api/models.py`](api/models.py) for detailed schema.
    docker-compose -f docker-compose.postgres.yml up -d
    ```
 
-2. **Run migrations:**
+2. **Apply the schema:**
    ```bash
-   python -m alembic upgrade head
+   psql "$DATABASE_URL" -f repositories/postgres/schema.sql
    ```
 
 3. **Start the server:**
@@ -387,12 +392,13 @@ pytest --cov=. tests/
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
+Contributions welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for
+setup, conventions, and how changes get reviewed. You do not need an API
+key or a database to develop OpenHire: the default `LLM_PROVIDER=mock` runs
+the whole pipeline locally.
 
-1. Create a feature branch
-2. Make your changes
-3. Write tests for new functionality
-4. Submit a pull request
+Found a security problem? Please report it privately — see
+**[SECURITY.md](SECURITY.md)**, not a public issue.
 
 ## 📝 License
 

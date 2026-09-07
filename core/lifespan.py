@@ -164,6 +164,19 @@ def validate_startup_configuration(
             "core/container.py, or set AUTH_ENABLED=false."
         )
 
+    # A publicly-known signing key is not a weak secret, it is no secret:
+    # anyone who has read core/config.py (or, once this repository is
+    # public, anyone at all) can mint a valid access token for any account,
+    # including an admin's. Production must refuse to start on it.
+    if settings.is_production and settings.jwt_secret_is_default:
+        problems.append(
+            "ENVIRONMENT=production with the default JWT_SECRET_KEY - tokens "
+            "would be signed with a placeholder published in this "
+            "repository's source, so anyone could forge a session for any "
+            "account. Set JWT_SECRET_KEY to a real secret, e.g. "
+            "python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"."
+        )
+
     # Ephemeral persistence in production is data loss, not a degraded mode.
     if settings.is_production and container.persistence_is_ephemeral:
         problems.append(

@@ -93,6 +93,15 @@ def _env_list(name: str, default: Optional[List[str]] = None) -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+# The development placeholder for JWT_SECRET_KEY. Named rather than
+# repeated as a literal, because two places need to agree on it: the
+# default below, and the production startup check in core/lifespan.py that
+# refuses to boot while it is still in use. Once this repository is public,
+# this exact string is public too - a deployment that never overrode it
+# could have tokens minted against it by anyone who has read this file.
+DEV_JWT_SECRET_KEY = "dev-secret-key-change-in-production"
+
+
 class AppSettings(BaseModel):
     """Validated, immutable service configuration.
 
@@ -150,7 +159,7 @@ class AppSettings(BaseModel):
     max_request_body_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
 
     # -- JWT / Authentication -----------------------------------------------
-    jwt_secret_key: str = Field(default="dev-secret-key-change-in-production")
+    jwt_secret_key: str = Field(default=DEV_JWT_SECRET_KEY)
     access_token_expire_minutes: int = Field(default=15, ge=1)
     refresh_token_expire_days: int = Field(default=7, ge=1)
 
@@ -227,6 +236,13 @@ class AppSettings(BaseModel):
 
     # ------------------------------------------------------------------
     @property
+    def jwt_secret_is_default(self) -> bool:
+        """Whether JWT tokens are being signed with the public placeholder
+        rather than a real secret. Checked at startup - see
+        core/lifespan.py:validate_startup_configuration."""
+        return self.jwt_secret_key == DEV_JWT_SECRET_KEY
+
+    @property
     def is_production(self) -> bool:
         return self.environment == "production"
 
@@ -291,7 +307,7 @@ class AppSettings(BaseModel):
             auth_enabled=_env_bool("AUTH_ENABLED", False),
             auth_required_by_default=_env_bool("AUTH_REQUIRED_BY_DEFAULT", False),
             max_request_body_bytes=_env_int("MAX_REQUEST_BODY_BYTES", 12 * 1024 * 1024),
-            jwt_secret_key=_env("JWT_SECRET_KEY", "dev-secret-key-change-in-production"),
+            jwt_secret_key=_env("JWT_SECRET_KEY", DEV_JWT_SECRET_KEY),
             access_token_expire_minutes=_env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 15),
             refresh_token_expire_days=_env_int("REFRESH_TOKEN_EXPIRE_DAYS", 7),
             database_url=_env("DATABASE_URL", ""),

@@ -226,6 +226,30 @@ class TestStartupValidation:
             validate_startup_configuration(settings, self._container(settings))
         assert "in-memory persistence" in exc.value.internal_detail
 
+    def test_production_with_the_default_jwt_secret_refuses_to_start(self):
+        """The placeholder signing key is published in this repository's
+        source, so a deployment still using it lets anyone forge a session
+        for any account - including an admin's."""
+        settings = AppSettings(environment="production")
+        with pytest.raises(ConfigurationError) as exc:
+            validate_startup_configuration(
+                settings, self._container(settings, persistence_is_ephemeral=False)
+            )
+        assert "JWT_SECRET_KEY" in exc.value.internal_detail
+
+    def test_production_with_a_real_jwt_secret_is_allowed(self):
+        settings = AppSettings(
+            environment="production", jwt_secret_key="a-real-secret-from-the-environment"
+        )
+        validate_startup_configuration(
+            settings, self._container(settings, persistence_is_ephemeral=False)
+        )  # no raise
+
+    def test_the_default_jwt_secret_is_fine_in_development(self):
+        """Local development must stay zero-configuration."""
+        assert AppSettings().jwt_secret_is_default is True
+        validate_startup_configuration(AppSettings(), self._container(AppSettings()))
+
     def test_development_with_ephemeral_persistence_is_allowed(self):
         settings = AppSettings()
         validate_startup_configuration(settings, self._container(settings))  # no raise
