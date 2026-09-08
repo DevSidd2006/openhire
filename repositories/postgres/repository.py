@@ -294,7 +294,7 @@ class PostgresCandidateRepository(CandidateRepository):
                         used_fallback = EXCLUDED.used_fallback,
                         parse_warning = EXCLUDED.parse_warning,
                         updated_at = now()
-                RETURNING candidate_id, user_id, resume, used_fallback, parse_warning, created_at, updated_at
+                RETURNING candidate_id, user_id, resume, used_fallback, parse_warning, is_hidden, created_at, updated_at
                 """,
                 record.candidate_id,
                 record.user_id,
