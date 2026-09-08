@@ -61,3 +61,8 @@ outputs/
 # Vector stores
 faiss_index/
 chroma_db/
+
+#md files
+
+RENDER_DEPLOYMENT.md
+PRODUCTION_SETUP.md

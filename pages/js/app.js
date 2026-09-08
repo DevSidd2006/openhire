@@ -362,7 +362,20 @@ function renderNavbar(activePage = '') {
   navContainer.innerHTML = `
     <header class="navbar">
       <div class="brand-logo" onclick="window.location.href='index.html'">
-        <span class="brand-dot"></span>OpenHire
+        <svg class="brand-mark" viewBox="0 0 120 120" aria-hidden="true">
+          <rect x="56" y="6" width="8" height="34" fill="var(--primary)"></rect>
+          <rect x="56" y="80" width="8" height="34" fill="var(--primary)"></rect>
+          <rect x="6" y="56" width="34" height="8" fill="var(--primary)"></rect>
+          <rect x="80" y="56" width="34" height="8" fill="var(--primary)"></rect>
+          <rect x="30" y="30" width="8" height="8" fill="var(--primary)"></rect>
+          <rect x="82" y="30" width="8" height="8" fill="var(--primary)"></rect>
+          <rect x="30" y="82" width="8" height="8" fill="var(--primary)"></rect>
+          <rect x="82" y="82" width="8" height="8" fill="var(--primary)"></rect>
+          <rect x="44" y="44" width="8" height="32" fill="var(--bg)"></rect>
+          <rect x="68" y="44" width="8" height="32" fill="var(--bg)"></rect>
+          <rect x="52" y="56" width="16" height="8" fill="var(--bg)"></rect>
+        </svg>
+        OpenHire
       </div>
 
       <nav class="nav-links">
@@ -382,6 +395,7 @@ function renderNavbar(activePage = '') {
             <div class="nav-menu-dropdown" id="navMenuDropdown" hidden>
               <a href="profile.html">Profile</a>
               <a href="profile.html#api-keys">API Keys</a>
+              <a href="https://forms.gle/H31Jz9UVUzJejvcQ6" target="_blank" rel="noopener noreferrer">Feedback</a>
               <div class="nav-menu-divider"></div>
               <button type="button" class="nav-menu-item-btn" onclick="logoutUser()">Sign out</button>
             </div>

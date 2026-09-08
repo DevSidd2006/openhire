@@ -135,11 +135,10 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
-.brand-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--primary);
-  border-radius: 50%;
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .nav-links {
