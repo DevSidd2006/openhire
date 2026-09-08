@@ -25,6 +25,7 @@
     <button type="button" class="tab-btn active" data-tab="users">Users</button>
     <button type="button" class="tab-btn" data-tab="moderation">Moderation</button>
     <button type="button" class="tab-btn" data-tab="metrics">Metrics</button>
+    <button type="button" class="tab-btn" data-tab="status">Status</button>
   </div>
 
   <section id="usersTab" class="admin-tab">
@@ -97,6 +98,20 @@
     </div>
     <div class="form-status" id="metricsStatus"></div>
   </section>
+
+  <section id="statusTab" class="admin-tab" hidden>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="font-size:1.05rem;">System status</h3>
+        <button type="button" class="btn-secondary" id="statusRefreshBtn">Refresh</button>
+      </div>
+      <div class="chip-row" id="statusFlags"></div>
+      <table class="data-table" id="statusTable">
+        <tbody id="statusTableBody"></tbody>
+      </table>
+    </div>
+    <div class="form-status" id="statusFormStatus"></div>
+  </section>
 </main>
 
 <script src="js/auth.js"></script>
@@ -128,7 +143,14 @@ document.getElementById('adminTabBar').addEventListener('click', (event) => {
     metricsLoaded = true;
     loadMetrics();
   }
+  if (btn.dataset.tab === 'status') {
+    // Live health check - refetch every time the tab is opened, not just
+    // the first time, since a stale DB-connectivity result is worse than
+    // an extra request.
+    loadSystemStatus();
+  }
 });
+document.getElementById('statusRefreshBtn').addEventListener('click', loadSystemStatus);
 
 function roleDropdown(currentType) {
   const roles = ['candidate', 'recruiter', 'admin'];
@@ -406,6 +428,68 @@ async function loadMetrics() {
   } catch (err) {
     status.textContent = err.message || 'Failed to load metrics.';
     status.className = 'form-status error';
+  }
+}
+
+function statusChip(label, ok) {
+  const chip = document.createElement('span');
+  chip.className = `chip ${ok ? 'chip-success' : 'chip-danger'}`;
+  chip.textContent = label;
+  return chip;
+}
+
+function statusRow(label, value) {
+  const tr = document.createElement('tr');
+  const th = document.createElement('th');
+  th.textContent = label;
+  const td = document.createElement('td');
+  td.textContent = value;
+  tr.appendChild(th);
+  tr.appendChild(td);
+  return tr;
+}
+
+async function loadSystemStatus() {
+  const formStatus = document.getElementById('statusFormStatus');
+  const flags = document.getElementById('statusFlags');
+  const body = document.getElementById('statusTableBody');
+  formStatus.textContent = 'Checking...';
+  formStatus.className = 'form-status';
+  try {
+    const s = await fetchAdminSystemStatus();
+
+    flags.innerHTML = '';
+    flags.appendChild(statusChip(
+      s.database.connected ? 'Database: connected' : 'Database: unreachable',
+      s.database.connected,
+    ));
+    flags.appendChild(statusChip(
+      s.jwt_secret_is_placeholder ? 'JWT secret: PLACEHOLDER' : 'JWT secret: configured',
+      !s.jwt_secret_is_placeholder,
+    ));
+    flags.appendChild(statusChip(
+      s.auth_enabled ? 'Auth: enabled' : 'Auth: disabled',
+      s.auth_enabled,
+    ));
+
+    body.innerHTML = '';
+    body.appendChild(statusRow('Environment', s.environment));
+    body.appendChild(statusRow('Persistence', s.persistence));
+    body.appendChild(statusRow(
+      'Database latency',
+      s.database.latency_ms != null ? `${s.database.latency_ms} ms` : (s.database.error || 'n/a'),
+    ));
+    body.appendChild(statusRow('LLM provider', s.providers.llm));
+    body.appendChild(statusRow('Embedding provider', s.providers.embedding));
+    body.appendChild(statusRow('Audio provider', s.providers.audio));
+    body.appendChild(statusRow('TTS provider', s.providers.tts));
+    body.appendChild(statusRow('Evaluations running', s.evaluation_queue.running));
+
+    formStatus.textContent = `Last checked ${new Date().toLocaleTimeString()}.`;
+    formStatus.className = 'form-status success';
+  } catch (err) {
+    formStatus.textContent = err.message || 'Failed to load system status.';
+    formStatus.className = 'form-status error';
   }
 }
 </script>

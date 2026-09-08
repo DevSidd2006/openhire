@@ -15,9 +15,12 @@ every other service in this codebase.
 """
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+from core.config import AppSettings
 from core.errors import BadRequestError, ConflictError, NotFoundError, UnauthorizedError
 from core.logging import get_logger, log_context
 from repositories.interfaces import (
@@ -33,6 +36,10 @@ from repositories.interfaces import (
     UserRepository,
 )
 from services.auth_service import AuthService
+from services.evaluation_dispatcher import EvaluationDispatcher
+
+if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
+    from repositories.postgres import PostgresConnectionPool
 
 logger = get_logger("services.admin")
 
@@ -59,7 +66,17 @@ class AdminService:
         application_repository: ApplicationRepository,
         audit_log_repository: AuditLogRepository,
         auth_service: AuthService,
+        settings: Optional[AppSettings] = None,
+        database_pool: Optional["PostgresConnectionPool"] = None,
+        evaluation_dispatcher: Optional[EvaluationDispatcher] = None,
     ) -> None:
+        # settings/database_pool/evaluation_dispatcher are optional and only
+        # used by get_system_status - existing call sites (tests, older
+        # wiring) that don't pass them keep working; get_system_status
+        # itself requires `settings` and raises without it, see below.
+        self._settings = settings
+        self._database_pool = database_pool
+        self._evaluation_dispatcher = evaluation_dispatcher
         self._users = user_repository
         self._jobs = job_repository
         self._candidates = candidate_repository
@@ -250,6 +267,68 @@ class AdminService:
             "users": user_counts,
             "jobs": {"active": active_jobs, "hidden": hidden_jobs},
             "applications": {"total": len(applications), "hidden": hidden_applications},
+        }
+
+    # -- System status --------------------------------------------------
+
+    _DB_PING_TIMEOUT_SECONDS = 2.0
+
+    async def get_system_status(self) -> dict:
+        """Live backend health for the admin dashboard (GET
+        /admin/system/status): which persistence/provider config is
+        actually active, whether the DB is reachable right now (a live
+        `SELECT 1`, not just "a pool object exists"), whether prod is still
+        signing tokens with the published placeholder secret, and how many
+        evaluations this process currently has in flight.
+
+        Requires `settings` to have been supplied at construction - raises
+        RuntimeError otherwise, since that means core/dependencies.py's
+        wiring is missing something, not that the caller sent a bad
+        request."""
+        if self._settings is None:
+            raise RuntimeError(
+                "AdminService.get_system_status requires `settings` - "
+                "construct AdminService with settings=... (see "
+                "core/dependencies.py:get_admin_service)."
+            )
+        settings = self._settings
+
+        database = {"connected": False, "latency_ms": None, "error": None}
+        if self._database_pool is None:
+            database["error"] = "no DATABASE_URL configured - using in-memory persistence"
+        else:
+            start = time.perf_counter()
+            try:
+                pool = await asyncio.wait_for(
+                    self._database_pool.get(), timeout=self._DB_PING_TIMEOUT_SECONDS
+                )
+                await asyncio.wait_for(
+                    pool.fetchval("SELECT 1"), timeout=self._DB_PING_TIMEOUT_SECONDS
+                )
+                database["connected"] = True
+                database["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
+            except Exception as exc:  # live health probe - never let this 500 the dashboard
+                database["error"] = str(exc)
+
+        return {
+            "environment": settings.environment,
+            "persistence": "postgres" if self._database_pool is not None else "memory",
+            "auth_enabled": settings.auth_enabled,
+            "jwt_secret_is_placeholder": settings.jwt_secret_is_default,
+            "providers": {
+                "llm": settings.llm_provider,
+                "embedding": settings.embedding_provider,
+                "audio": settings.audio_provider,
+                "tts": settings.tts_provider,
+            },
+            "database": database,
+            "evaluation_queue": {
+                "running": (
+                    self._evaluation_dispatcher.running_count
+                    if self._evaluation_dispatcher is not None
+                    else 0
+                ),
+            },
         }
 
 

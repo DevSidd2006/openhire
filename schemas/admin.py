@@ -95,6 +95,37 @@ class AdminMetricsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# GET /admin/system/status
+# ---------------------------------------------------------------------------
+
+class DatabaseStatus(BaseModel):
+    connected: bool
+    latency_ms: Optional[float] = None
+    error: Optional[str] = None
+
+
+class EvaluationQueueStatus(BaseModel):
+    running: int
+
+
+class ProviderStatus(BaseModel):
+    llm: str
+    embedding: str
+    audio: str
+    tts: str
+
+
+class SystemStatusResponse(BaseModel):
+    environment: str
+    persistence: str
+    auth_enabled: bool
+    jwt_secret_is_placeholder: bool
+    providers: ProviderStatus
+    database: DatabaseStatus
+    evaluation_queue: EvaluationQueueStatus
+
+
+# ---------------------------------------------------------------------------
 # POST /admin/impersonate/{user_id}
 # ---------------------------------------------------------------------------
 
@@ -113,5 +144,9 @@ __all__ = [
     "JobCounts",
     "ApplicationCounts",
     "AdminMetricsResponse",
+    "DatabaseStatus",
+    "EvaluationQueueStatus",
+    "ProviderStatus",
+    "SystemStatusResponse",
     "ImpersonateResponse",
 ]

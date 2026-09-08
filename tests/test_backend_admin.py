@@ -791,6 +791,127 @@ class TestAdminServiceMetrics:
 
 
 # ---------------------------------------------------------------------------
+# AdminService.get_system_status
+# ---------------------------------------------------------------------------
+
+class _FakeAsyncpgPool:
+    def __init__(self, *, fail: bool = False):
+        self._fail = fail
+
+    async def fetchval(self, _query):
+        if self._fail:
+            raise ConnectionError("simulated DB outage")
+        return 1
+
+
+class _FakeConnectionPool:
+    """Duck-types repositories.postgres.pool.PostgresConnectionPool's only
+    method AdminService.get_system_status calls."""
+
+    def __init__(self, *, fail: bool = False):
+        self._asyncpg_pool = _FakeAsyncpgPool(fail=fail)
+
+    async def get(self):
+        return self._asyncpg_pool
+
+
+class _FakeDispatcher:
+    def __init__(self, running_count: int = 0):
+        self.running_count = running_count
+
+
+def _system_status_service(*, database_pool=None, evaluation_dispatcher=None, settings=None):
+    user_repo = InMemoryUserRepository()
+    settings = settings or AppSettings()
+    return AdminService(
+        user_repository=user_repo,
+        job_repository=_Jobs(),
+        candidate_repository=_Candidates(),
+        application_repository=_Applications(),
+        audit_log_repository=InMemoryAuditLogRepository(),
+        auth_service=AuthService(user_repository=user_repo, settings=settings),
+        settings=settings,
+        database_pool=database_pool,
+        evaluation_dispatcher=evaluation_dispatcher,
+    )
+
+
+class TestAdminServiceSystemStatus:
+    @pytest.mark.asyncio
+    async def test_raises_without_settings(self):
+        user_repo = InMemoryUserRepository()
+        service = AdminService(
+            user_repository=user_repo,
+            job_repository=_Jobs(),
+            candidate_repository=_Candidates(),
+            application_repository=_Applications(),
+            audit_log_repository=InMemoryAuditLogRepository(),
+            auth_service=AuthService(user_repository=user_repo, settings=AppSettings()),
+        )
+        with pytest.raises(RuntimeError):
+            await service.get_system_status()
+
+    @pytest.mark.asyncio
+    async def test_no_database_pool_reports_memory_persistence(self):
+        service = _system_status_service()
+        status = await service.get_system_status()
+        assert status["persistence"] == "memory"
+        assert status["database"]["connected"] is False
+        assert status["database"]["error"]
+
+    @pytest.mark.asyncio
+    async def test_reachable_database_reports_connected_with_latency(self):
+        service = _system_status_service(database_pool=_FakeConnectionPool())
+        status = await service.get_system_status()
+        assert status["persistence"] == "postgres"
+        assert status["database"]["connected"] is True
+        assert status["database"]["latency_ms"] is not None
+        assert status["database"]["error"] is None
+
+    @pytest.mark.asyncio
+    async def test_unreachable_database_reports_disconnected_not_raise(self):
+        service = _system_status_service(database_pool=_FakeConnectionPool(fail=True))
+        status = await service.get_system_status()
+        assert status["database"]["connected"] is False
+        assert "simulated DB outage" in status["database"]["error"]
+
+    @pytest.mark.asyncio
+    async def test_reports_jwt_secret_placeholder_flag(self):
+        placeholder_settings = AppSettings()
+        real_settings = AppSettings(jwt_secret_key="a-real-generated-secret")
+
+        placeholder_status = await _system_status_service(settings=placeholder_settings).get_system_status()
+        real_status = await _system_status_service(settings=real_settings).get_system_status()
+
+        assert placeholder_status["jwt_secret_is_placeholder"] is True
+        assert real_status["jwt_secret_is_placeholder"] is False
+
+    @pytest.mark.asyncio
+    async def test_reports_evaluation_queue_running_count(self):
+        service = _system_status_service(evaluation_dispatcher=_FakeDispatcher(running_count=3))
+        status = await service.get_system_status()
+        assert status["evaluation_queue"]["running"] == 3
+
+    @pytest.mark.asyncio
+    async def test_no_dispatcher_reports_zero_running(self):
+        service = _system_status_service()
+        status = await service.get_system_status()
+        assert status["evaluation_queue"]["running"] == 0
+
+    @pytest.mark.asyncio
+    async def test_reports_provider_config(self):
+        settings = AppSettings()
+        service = _system_status_service(settings=settings)
+        status = await service.get_system_status()
+        assert status["providers"] == {
+            "llm": settings.llm_provider,
+            "embedding": settings.embedding_provider,
+            "audio": settings.audio_provider,
+            "tts": settings.tts_provider,
+        }
+
+
+# ---------------------------------------------------------------------------
 # AuthService.issue_tokens_for_user
 # ---------------------------------------------------------------------------
 

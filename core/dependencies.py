@@ -251,6 +251,9 @@ def get_admin_service(request: Request) -> AdminService:
         auth_service=AuthService(
             user_repository=container.user_repository, settings=container.settings
         ),
+        settings=container.settings,
+        database_pool=container.database_pool,
+        evaluation_dispatcher=container.evaluation_dispatcher,
     )
 
 

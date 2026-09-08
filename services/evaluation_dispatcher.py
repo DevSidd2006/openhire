@@ -65,6 +65,15 @@ class EvaluationDispatcher(Protocol):
 
     def schedule(self, evaluation_id: str, run: Callable[[], Awaitable[None]]) -> None: ...
 
+    @property
+    def running_count(self) -> int:
+        """How many evaluations this dispatcher currently has in flight, in
+        THIS process only. Exists for /admin/system/status (core/config.py's
+        module docstring already warns this dispatcher's in-flight work does
+        not survive a restart - this number is the same caveat, made
+        visible in the admin UI instead of only in a startup log line)."""
+        ...
+
 
 class AsyncTaskEvaluationDispatcher:
     """TEMPORARY local dispatcher - see module docstring.
@@ -78,6 +87,10 @@ class AsyncTaskEvaluationDispatcher:
 
     def __init__(self) -> None:
         self._tasks: Set[asyncio.Task] = set()
+
+    @property
+    def running_count(self) -> int:
+        return len(self._tasks)
 
     def schedule(self, evaluation_id: str, run: Callable[[], Awaitable[None]]) -> None:
         task = asyncio.create_task(run())

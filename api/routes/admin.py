@@ -17,6 +17,8 @@ Endpoints (grown across the admin console plan's phases):
   - GET /admin/applications: list applications, optionally including hidden ones
   - PATCH /admin/applications/{application_id}: hide or unhide an application
   - GET /admin/metrics: simple platform counts (users/jobs/applications)
+  - GET /admin/system/status: live backend health (persistence, providers,
+    a live DB ping, JWT placeholder-secret check, evaluation queue depth)
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ from schemas.admin import (
     AdminUpdateUserRequest,
     AdminUserListResponse,
     ImpersonateResponse,
+    SystemStatusResponse,
 )
 from schemas.auth import UserProfileResponse
 from services.admin_service import AdminService
@@ -161,6 +164,22 @@ async def get_metrics(
     """GET /admin/metrics - simple platform counts: users by type, jobs
     active/hidden, applications total/hidden."""
     return AdminMetricsResponse.model_validate(await service.get_metrics())
+
+
+@router.get("/system/status", response_model=SystemStatusResponse)
+async def get_system_status(
+    service: AdminService = Depends(get_admin_service),
+    principal: Principal = Depends(require_admin),
+) -> SystemStatusResponse:
+    """GET /admin/system/status - live backend health for the admin
+    dashboard: persistence backend, provider config, a live DB
+    connectivity check (not just "a pool object exists"), whether prod is
+    still signing tokens with the published placeholder JWT secret, and how
+    many evaluations this process currently has running.
+
+    The database check never raises - a DB outage is reported as
+    `database.connected=false` with `database.error` set, not a 500."""
+    return SystemStatusResponse.model_validate(await service.get_system_status())
 
 
 @router.post("/impersonate/{user_id}", response_model=ImpersonateResponse)

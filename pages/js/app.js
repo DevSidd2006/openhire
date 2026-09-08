@@ -230,6 +230,13 @@ async function fetchAdminMetrics() {
   return apiRequest('/admin/metrics');
 }
 
+/** GET /admin/system/status - live backend health for the admin Status tab
+ * (persistence backend, provider config, a live DB ping, JWT
+ * placeholder-secret flag, evaluation queue depth). */
+async function fetchAdminSystemStatus() {
+  return apiRequest('/admin/system/status');
+}
+
 /** Creates the interview session for an application that is already
  * SHORTLISTED and has none yet - fetches the full job/resume records
  * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
@@ -371,10 +378,7 @@ function renderNavbar(activePage = '') {
       <div class="nav-right">
         ${user ? `
           <div class="nav-menu">
-            <button type="button" class="user-badge nav-menu-trigger" onclick="toggleNavMenu(event)">
-              <span>${user.name}</span>
-              <span class="role-tag">${user.role}</span>
-            </button>
+            <button type="button" class="user-avatar nav-menu-trigger" id="userAvatarTrigger" onclick="toggleNavMenu(event)" aria-label="Account menu"></button>
             <div class="nav-menu-dropdown" id="navMenuDropdown" hidden>
               <a href="profile.html">Profile</a>
               <a href="profile.html#api-keys">API Keys</a>
@@ -388,6 +392,14 @@ function renderNavbar(activePage = '') {
       </div>
     </header>
   `;
+
+  const avatarTrigger = document.getElementById('userAvatarTrigger');
+  if (avatarTrigger && user) {
+    // user.name is user-controlled - set via DOM properties, not interpolated
+    // into the HTML template string above, per the XSS-safety convention.
+    avatarTrigger.textContent = (user.name || '?').trim().charAt(0).toUpperCase();
+    avatarTrigger.title = user.name;
+  }
 
   const bannerContainer = document.getElementById('impersonationBanner');
   if (bannerContainer) {
