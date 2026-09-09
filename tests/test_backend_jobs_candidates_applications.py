@@ -305,21 +305,32 @@ class TestJobService:
         assert rubric.status == "approved"
 
     @pytest.mark.asyncio
-    async def test_rubric_generation_failure_fails_job_creation(self):
-        """A job must never be left half-created (JD analyzed, no rubric) -
-        mirrors test_job_analysis_failure_is_a_dependency_error_not_a_fabricated_job."""
+    async def test_rubric_generation_failure_archives_the_job_and_raises(self):
+        """The job row must be saved BEFORE the rubric is drafted -
+        PostgresRubricRepository's job_rubrics.job_id has a foreign-key
+        constraint on jobs.job_id, so a rubric cannot be inserted for a job
+        that doesn't exist yet. Since there is no cross-repository
+        transaction to roll the JobRecord back with, a rubric failure
+        instead archives the just-created job as a compensating action, so
+        it is never left live-but-unscorable."""
+
+        job_repo = InMemoryJobRepository()
 
         class _BrokenGenerator:
             async def execute(self, job_description, **kwargs):
                 raise RuntimeError("rubric LLM exploded")
 
         service = JobService(
-            job_repository=InMemoryJobRepository(),
+            job_repository=job_repo,
             rubric_repository=InMemoryRubricRepository(),
             rubric_generator_factory=lambda: _BrokenGenerator(),
         )
         with pytest.raises(DependencyError):
-            await service.create_job(description=_JD_TEXT)
+            await service.create_job(description=_JD_TEXT, job_id="job_broken_rubric")
+
+        archived = await job_repo.get("job_broken_rubric")
+        assert archived is not None, "the JobRecord must still exist (it was saved before the FK-dependent rubric step)"
+        assert archived.is_active is False, "a job whose rubric failed must be archived, not left live"
 
     @pytest.mark.asyncio
     async def test_create_job_without_a_rubric_repository_skips_auto_rubric(self):
@@ -330,6 +341,51 @@ class TestJobService:
         service = JobService(job_repository=InMemoryJobRepository())
         job = await service.create_job(description=_JD_TEXT)
         assert job.job_id is not None
+
+    @pytest.mark.asyncio
+    async def test_create_practice_job_stamps_is_practice_and_creator(self):
+        service = JobService(job_repository=InMemoryJobRepository())
+        job = await service.create_job(
+            description=_JD_TEXT, is_practice=True, created_by_user_id="user_candidate1",
+        )
+        assert job.is_practice is True
+        assert job.created_by_user_id == "user_candidate1"
+
+    @pytest.mark.asyncio
+    async def test_create_real_job_defaults_to_not_practice(self):
+        service = JobService(job_repository=InMemoryJobRepository())
+        job = await service.create_job(description=_JD_TEXT)
+        assert job.is_practice is False
+        assert job.created_by_user_id is None
+
+    @pytest.mark.asyncio
+    async def test_list_jobs_excludes_practice_jobs(self):
+        repo = InMemoryJobRepository()
+        service = JobService(job_repository=repo)
+        real = await service.create_job(description=_JD_TEXT)
+        practice = await service.create_job(
+            description=_JD_TEXT, is_practice=True, created_by_user_id="user_candidate1",
+        )
+
+        listed = await service.list_jobs()
+        listed_ids = {j.job_id for j in listed}
+        assert real.job_id in listed_ids
+        assert practice.job_id not in listed_ids
+
+    @pytest.mark.asyncio
+    async def test_list_practice_jobs_for_user_is_scoped_to_that_user(self):
+        repo = InMemoryJobRepository()
+        service = JobService(job_repository=repo)
+        mine = await service.create_job(
+            description=_JD_TEXT, is_practice=True, created_by_user_id="user_a",
+        )
+        await service.create_job(
+            description=_JD_TEXT, is_practice=True, created_by_user_id="user_b",
+        )
+        await service.create_job(description=_JD_TEXT)  # a real job
+
+        mine_list = await service.list_practice_jobs_for_user("user_a")
+        assert [j.job_id for j in mine_list] == [mine.job_id]
 
 
 # ---------------------------------------------------------------------------
@@ -756,6 +812,22 @@ class TestJobsApi:
         response = client.get("/jobs/never-existed")
         assert response.status_code == 404
         assert response.json()["error"] == "not_found"
+
+    def test_practice_job_is_excluded_from_the_default_listing(self, client):
+        practice = client.post("/jobs", json={"description": _JD_TEXT, "is_practice": True})
+        assert practice.status_code == 201
+        assert practice.json()["is_practice"] is True
+
+        listed = client.get("/jobs").json()
+        assert not any(j["job_id"] == practice.json()["job_id"] for j in listed["jobs"])
+
+    def test_practice_mine_lists_only_the_callers_own_practice_jobs(self, client):
+        practice = client.post("/jobs", json={"description": _JD_TEXT, "is_practice": True})
+        assert practice.status_code == 201
+
+        mine = client.get("/jobs/practice/mine")
+        assert mine.status_code == 200
+        assert any(j["job_id"] == practice.json()["job_id"] for j in mine.json()["jobs"])
 
     def test_create_job_requires_nonempty_description(self, client):
         response = client.post("/jobs", json={"description": ""})

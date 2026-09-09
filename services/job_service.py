@@ -56,7 +56,13 @@ class JobService:
         self._rubric_generator_factory = rubric_generator_factory
 
     async def create_job(
-        self, *, description: str, job_id: Optional[str] = None, openings: Optional[int] = None
+        self,
+        *,
+        description: str,
+        job_id: Optional[str] = None,
+        openings: Optional[int] = None,
+        is_practice: bool = False,
+        created_by_user_id: Optional[str] = None,
     ) -> JobRecord:
         """Analyze raw job-description text into a structured `JobDescription`
         and store it.
@@ -96,32 +102,43 @@ class JobService:
         if openings is not None and openings >= 1:
             job_description = job_description.model_copy(update={"openings": openings})
 
-        # Rubric BEFORE the job is persisted: this product's flow has no
-        # recruiter step between posting a job and the leaderboard
-        # (shortlisting is rubric-decided), so a job must never exist
-        # without an approved rubric - if rubric generation fails, no
-        # JobRecord should be saved at all, exactly like a failed
-        # JDAnalyzerAgent call above never produces one either.
-        if self._rubrics is not None:
-            await self._draft_and_approve_rubric(job_id=job_id, job_description=job_description)
-
-        record = JobRecord(job_id=job_id, job=job_description, is_active=True)
+        record = JobRecord(
+            job_id=job_id,
+            job=job_description,
+            is_active=True,
+            is_practice=is_practice,
+            created_by_user_id=created_by_user_id,
+        )
         stored = await self._jobs.save(record)
         logger.info(
             "job created",
             extra=log_context(event="job_created", job_id=job_id,
                               competency_count=len(job_description.competencies)),
         )
+
+        # Rubric AFTER the job is persisted: PostgresRubricRepository's
+        # job_rubrics.job_id has a foreign-key constraint on jobs.job_id, so
+        # a rubric cannot be inserted for a job row that does not exist yet.
+        # This product's flow has no recruiter step between posting a job
+        # and the leaderboard (shortlisting is rubric-decided), so a job
+        # must never be USABLE without an approved rubric - if rubric
+        # generation fails, the just-created job is archived as a
+        # compensating action (no cross-repository transaction exists to
+        # roll the JobRecord back with) rather than left live and
+        # silently unscorable.
+        if self._rubrics is not None:
+            await self._draft_and_approve_rubric(job_id=job_id, job_description=job_description)
+
         return stored
 
     async def _draft_and_approve_rubric(
         self, *, job_id: str, job_description: JobDescription
     ) -> None:
-        """Make the job scorable the instant it is created - this product's
-        flow has no recruiter step between posting a job and the
+        """Make the job scorable immediately after creation - this
+        product's flow has no recruiter step between posting a job and the
         leaderboard (shortlisting is rubric-decided), so unlike the old
         manual "draft, then separately approve" flow on job-detail.html, a
-        job must never exist without an approved rubric.
+        job must never be left usable without an approved rubric.
 
         Reuses the exact same generation + approval calls
         `POST /jobs/{id}/rubric/draft` and `/approve` already make
@@ -129,9 +146,8 @@ class JobService:
         `JobRubric.validate_approvable()`, so a malformed rubric still
         cannot become active.
 
-        Raises DependencyError on any failure - a job is never left
-        half-created (JD analyzed, no rubric), mirroring how a failed
-        JDAnalyzerAgent call above already aborts job creation entirely.
+        Raises DependencyError on any failure, after archiving the job so
+        it does not linger in a live-but-unscorable state.
         """
         generator = self._rubric_generator_factory() if self._rubric_generator_factory else RubricGeneratorAgent()
         try:
@@ -145,8 +161,10 @@ class JobService:
                 exc,
                 extra=log_context(event="rubric_auto_generation_failed", job_id=job_id),
             )
+            await self._jobs.archive(job_id)
             raise DependencyError(
-                "The job's scoring rubric could not be generated. Please try again.",
+                "The job's scoring rubric could not be generated, so the job was not "
+                "published. Please try again.",
                 internal_detail=f"rubric auto-draft/approve failed for job_id={job_id!r}: {exc}",
                 context={"job_id": job_id},
             ) from exc
@@ -161,7 +179,23 @@ class JobService:
         return record
 
     async def list_jobs(self, *, include_archived: bool = False) -> list[JobRecord]:
-        return await self._jobs.list_jobs(include_archived=include_archived)
+        """Real, recruiter-posted jobs only - excludes practice jobs a
+        candidate created for themselves (see JobRecord.is_practice),
+        matching the "recruiters never see practice jobs, not even in the
+        job-management view" requirement. Filtered here in Python rather
+        than in the repository query, the same "acceptable at today's
+        scale" precedent AdminService.get_metrics already established."""
+        records = await self._jobs.list_jobs(include_archived=include_archived)
+        return [r for r in records if not r.is_practice]
+
+    async def list_practice_jobs_for_user(self, user_id: str) -> list[JobRecord]:
+        """A candidate's own practice jobs (any they created), for their
+        "My Practice Interviews" dashboard view. Never returns another
+        user's practice jobs - admin's own listing (AdminService/api/routes
+        /admin.py) is the only place ALL practice jobs across every
+        candidate are visible."""
+        records = await self._jobs.list_jobs(include_archived=True)
+        return [r for r in records if r.is_practice and r.created_by_user_id == user_id]
 
     async def update_job(self, job_id: str, patch: Dict[str, Any]) -> JobRecord:
         """Apply a partial field update to a stored job.

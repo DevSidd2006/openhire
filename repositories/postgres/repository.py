@@ -72,6 +72,8 @@ def _job_record_from_row(row: asyncpg.Record) -> JobRecord:
         job_id=row["job_id"],
         job=JobDescription.model_validate(row["job"]),
         is_active=row["is_active"],
+        is_practice=row["is_practice"],
+        created_by_user_id=row["created_by_user_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -211,17 +213,22 @@ class PostgresJobRepository(JobRepository):
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO jobs (job_id, job, is_active, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, now())
+                INSERT INTO jobs
+                    (job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, now())
                 ON CONFLICT (job_id) DO UPDATE
                     SET job = EXCLUDED.job,
                         is_active = EXCLUDED.is_active,
+                        is_practice = EXCLUDED.is_practice,
+                        created_by_user_id = EXCLUDED.created_by_user_id,
                         updated_at = now()
-                RETURNING job_id, job, is_active, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
                 """,
                 record.job_id,
                 record.job.model_dump(mode="json"),
                 record.is_active,
+                record.is_practice,
+                record.created_by_user_id,
                 record.created_at,
             )
         return _job_record_from_row(row)
@@ -253,7 +260,7 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = false, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )
@@ -267,7 +274,7 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = true, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )

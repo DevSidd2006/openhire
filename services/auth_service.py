@@ -519,7 +519,13 @@ class AuthService:
         elif user_type == "candidate":
             return frozenset(["candidate:read"])
         elif user_type == "admin":
-            return frozenset(["admin:read", "admin:write"])
+            # Admin has full system access (per product requirement: admin
+            # can see every recruiter's jobs, every candidate's application,
+            # every result and leaderboard) - a superset of recruiter, not a
+            # disjoint role, so admin must also carry recruiter's scopes or
+            # every recruiter:read/write-gated endpoint (e.g. the
+            # post-interview leaderboard, bug-status triage) 403s an admin.
+            return frozenset(["admin:read", "admin:write", "recruiter:read", "recruiter:write"])
         else:
             return frozenset()
 

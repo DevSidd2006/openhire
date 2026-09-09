@@ -35,6 +35,10 @@ class CreateJobRequest(BaseModel):
     # Optional caller-supplied id. Generated (job_<uuid8>) if omitted - see
     # JobService.create_job.
     job_id: Optional[str] = Field(default=None, min_length=1)
+    # A candidate creating their own JD to practice against, rather than a
+    # recruiter posting a real opening. GET /jobs excludes these; only the
+    # creating candidate (GET /jobs/practice/mine) and admin see them.
+    is_practice: bool = False
     openings: Optional[int] = Field(default=1, ge=1, description="Number of openings/vacancies")
 
 
@@ -42,6 +46,7 @@ class JobResponse(BaseModel):
     job_id: str
     job: JobDescription
     is_active: bool
+    is_practice: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -49,6 +54,7 @@ class JobResponse(BaseModel):
     def from_record(cls, record: JobRecord) -> "JobResponse":
         return cls(
             job_id=record.job_id, job=record.job, is_active=record.is_active,
+            is_practice=record.is_practice,
             created_at=record.created_at, updated_at=record.updated_at,
         )
 

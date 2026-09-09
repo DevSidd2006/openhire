@@ -345,6 +345,16 @@ class JobRecord(BaseModel):
     job_id: str
     job: JobDescription
     is_active: bool = True
+    # A candidate-created practice job (JD they pasted themselves, to
+    # rehearse for) is stored as an ordinary JobRecord through the same
+    # pipeline as a recruiter's real posting - is_practice/created_by_user_id
+    # are the only two fields that distinguish it, so GET /jobs (real
+    # postings, browsed by candidates and recruiters alike) can exclude it
+    # and a candidate's own "My Practice Interviews" view can find it again.
+    # Admin's job listing (api/routes/admin.py) does NOT filter on this -
+    # admin sees everything, practice included.
+    is_practice: bool = False
+    created_by_user_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 

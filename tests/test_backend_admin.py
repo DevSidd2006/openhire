@@ -30,6 +30,19 @@ class TestAdminPrincipalType:
         assert "admin:read" in scopes
         assert "admin:write" in scopes
 
+    def test_admin_also_gets_recruiter_scopes(self):
+        """Admin has full system access - every recruiter's jobs, every
+        candidate's application, every result and leaderboard - so admin
+        must be a superset of recruiter, not a disjoint role. Otherwise
+        endpoints gated by require_scopes("recruiter:read"/"recruiter:write")
+        (e.g. the post-interview leaderboard, bug-status triage) 403 an
+        admin, which happened for real before this fix."""
+        settings = AppSettings()
+        service = AuthService(user_repository=InMemoryUserRepository(), settings=settings)
+        scopes = service._get_scopes_for_user_type("admin")
+        assert "recruiter:read" in scopes
+        assert "recruiter:write" in scopes
+
 
 # ---------------------------------------------------------------------------
 # AuditLogRecord / AuditLogRepository

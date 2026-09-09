@@ -55,9 +55,26 @@ async def create_job(
     teammate; see the Chunk 2 handoff.
     """
     record = await service.create_job(
-        description=payload.description, job_id=payload.job_id, openings=payload.openings
+        description=payload.description,
+        job_id=payload.job_id,
+        openings=payload.openings,
+        is_practice=payload.is_practice,
+        created_by_user_id=(principal.subject_id or "user_anonymous") if payload.is_practice else None,
     )
     return JobResponse.from_record(record)
+
+
+@router.get("/practice/mine", response_model=JobListResponse)
+async def list_my_practice_jobs(
+    service: JobService = Depends(get_job_service),
+    principal: Principal = Depends(require_authenticated),
+) -> JobListResponse:
+    """GET /jobs/practice/mine - the calling candidate's own practice jobs
+    (mock-interview JDs they created for themselves), newest first. Never
+    another user's - see JobService.list_practice_jobs_for_user."""
+    user_id = principal.subject_id or "user_anonymous"
+    records = await service.list_practice_jobs_for_user(user_id)
+    return JobListResponse.from_records(records)
 
 
 @router.get("/{job_id}", response_model=JobResponse)

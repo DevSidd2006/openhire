@@ -23,6 +23,22 @@
 
   <div class="card">
     <div class="card-header">
+      <h3 class="card-title" style="font-size:1.05rem;">Practice Interview</h3>
+    </div>
+    <p class="card-sub" style="margin-top:0;">
+      Paste any job description to rehearse for it - same rubric-scored voice
+      interview and report as a real application, just for practice. Only you
+      (and platform admins) can see practice interviews.
+    </p>
+    <textarea id="practiceJdText" class="form-control" rows="5"
+      placeholder="Paste a job description here..." style="width:100%; margin-bottom:0.75rem;"></textarea>
+    <button class="btn-primary" id="practiceCreateBtn">Start practice interview</button>
+    <div class="form-status" id="practiceStatus"></div>
+    <div id="practiceJobList" style="margin-top:1rem;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
       <h3 class="card-title" style="font-size:1.05rem;">Available Positions</h3>
       <span class="tag">Active</span>
     </div>
@@ -138,6 +154,45 @@
       }).join('');
     } catch (err) {
       appListEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load applications: ${err.message}</p>`;
+    }
+  })();
+
+  document.getElementById('practiceCreateBtn').addEventListener('click', async () => {
+    const status = document.getElementById('practiceStatus');
+    const description = document.getElementById('practiceJdText').value.trim();
+    if (!description) {
+      status.textContent = 'Paste a job description first.';
+      status.className = 'form-status error';
+      return;
+    }
+    status.textContent = 'Analyzing job description…';
+    status.className = 'form-status';
+    try {
+      const job = await apiRequest('/jobs', {
+        method: 'POST',
+        body: { description, is_practice: true },
+      });
+      window.location.href = `apply.html?job_id=${encodeURIComponent(job.job_id)}`;
+    } catch (err) {
+      status.textContent = err.message || 'Could not create the practice interview.';
+      status.className = 'form-status error';
+    }
+  });
+
+  (async () => {
+    const listEl = document.getElementById('practiceJobList');
+    try {
+      const practiceRaw = await apiRequest('/jobs/practice/mine');
+      const practice = (practiceRaw.jobs || []).map(normalizeJob);
+      if (!practice.length) return;
+      listEl.innerHTML = practice.map(job => `
+        <div class="job-card" style="margin-bottom:0.5rem;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
+          <h4 style="font-weight:600; font-size:0.95rem; margin-bottom:0.25rem;">${job.title}</h4>
+          <span class="tag">Practice</span>
+        </div>
+      `).join('');
+    } catch (err) {
+      listEl.innerHTML = `<p class="card-sub" style="color:var(--danger, #ef4444);">Could not load practice interviews: ${err.message}</p>`;
     }
   })();
 

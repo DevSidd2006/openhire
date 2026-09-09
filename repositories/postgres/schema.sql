@@ -39,17 +39,28 @@ BEGIN;
 -- JSONB - no repository method queries into an individual field of it.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS jobs (
-    job_id      text PRIMARY KEY,
-    job         jsonb NOT NULL,
-    is_active   boolean NOT NULL DEFAULT true,
-    created_at  timestamptz NOT NULL DEFAULT now(),
-    updated_at  timestamptz
+    job_id              text PRIMARY KEY,
+    job                 jsonb NOT NULL,
+    is_active           boolean NOT NULL DEFAULT true,
+    is_practice         boolean NOT NULL DEFAULT false,
+    created_by_user_id  text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz
 );
+
+-- Add jobs.is_practice/created_by_user_id for databases created before the
+-- candidate mock-interview feature.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL DEFAULT false;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS created_by_user_id text;
 
 -- Backs JobRepository.list_jobs(include_archived): "newest first",
 -- filtered to is_active unless archived postings were asked for.
 CREATE INDEX IF NOT EXISTS idx_jobs_is_active_created_at
     ON jobs (is_active, created_at DESC);
+
+-- Backs the candidate-facing "My Practice Interviews" lookup.
+CREATE INDEX IF NOT EXISTS idx_jobs_created_by_user_id
+    ON jobs (created_by_user_id) WHERE created_by_user_id IS NOT NULL;
 
 -- ---------------------------------------------------------------------
 -- users — User authentication and profile information for candidates
