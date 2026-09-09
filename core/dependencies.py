@@ -155,6 +155,7 @@ def get_job_service(request: Request) -> JobService:
     return JobService(
         job_repository=container.job_repository,
         jd_analyzer_factory=container.jd_analyzer_factory_for(request.app),
+        rubric_repository=container.rubric_repository,
     )
 
 

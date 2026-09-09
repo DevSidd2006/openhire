@@ -278,6 +278,59 @@ class TestJobService:
         with pytest.raises(DependencyError):
             await service.create_job(description=_JD_TEXT)
 
+    @pytest.mark.asyncio
+    async def test_create_job_drafts_and_approves_a_rubric_automatically(self):
+        """The product flow has no recruiter step between posting a job and
+        the leaderboard - shortlisting is rubric-decided, so a job must be
+        scorable the instant it is created, not after a separate manual
+        draft-then-approve visit to job-detail.html."""
+
+        class _StubGenerator:
+            async def execute(self, job_description, **kwargs):
+                return {"rubric": approved_rubric(version=1).model_copy(
+                    update={"job_id": None, "status": "draft"}
+                )}
+
+        rubric_repo = InMemoryRubricRepository()
+        service = JobService(
+            job_repository=InMemoryJobRepository(),
+            rubric_repository=rubric_repo,
+            rubric_generator_factory=lambda: _StubGenerator(),
+        )
+        job = await service.create_job(description=_JD_TEXT)
+
+        rubric = await rubric_repo.get_approved_for_job(job.job_id)
+        assert rubric is not None
+        assert rubric.job_id == job.job_id
+        assert rubric.status == "approved"
+
+    @pytest.mark.asyncio
+    async def test_rubric_generation_failure_fails_job_creation(self):
+        """A job must never be left half-created (JD analyzed, no rubric) -
+        mirrors test_job_analysis_failure_is_a_dependency_error_not_a_fabricated_job."""
+
+        class _BrokenGenerator:
+            async def execute(self, job_description, **kwargs):
+                raise RuntimeError("rubric LLM exploded")
+
+        service = JobService(
+            job_repository=InMemoryJobRepository(),
+            rubric_repository=InMemoryRubricRepository(),
+            rubric_generator_factory=lambda: _BrokenGenerator(),
+        )
+        with pytest.raises(DependencyError):
+            await service.create_job(description=_JD_TEXT)
+
+    @pytest.mark.asyncio
+    async def test_create_job_without_a_rubric_repository_skips_auto_rubric(self):
+        """Backward compatible: callers that construct JobService without a
+        rubric_repository (as most of this test file's other tests do) keep
+        working exactly as before - only the real app wiring
+        (core/dependencies.py) always supplies one."""
+        service = JobService(job_repository=InMemoryJobRepository())
+        job = await service.create_job(description=_JD_TEXT)
+        assert job.job_id is not None
+
 
 # ---------------------------------------------------------------------------
 # CandidateService

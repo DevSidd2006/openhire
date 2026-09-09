@@ -19,9 +19,10 @@ import uuid
 from typing import Any, Dict, Optional
 
 from agents.jd_analyzer.agent import JDAnalyzerAgent
+from agents.rubric_generator.agent import RubricGeneratorAgent
 from core.errors import ConflictError, DependencyError, NotFoundError
 from core.logging import get_logger, log_context
-from repositories.interfaces import JobRecord, JobRepository
+from repositories.interfaces import JobRecord, JobRepository, RubricRepository
 from schemas.job import JobDescription
 
 logger = get_logger("services.job")
@@ -39,12 +40,20 @@ class JobService:
         *,
         job_repository: JobRepository,
         jd_analyzer_factory=None,
+        rubric_repository: Optional[RubricRepository] = None,
+        rubric_generator_factory=None,
     ) -> None:
         self._jobs = job_repository
         # The same wiring-seam pattern as InterviewService's
         # `interviewer_factory`: None means "let JDAnalyzerAgent resolve its
         # own default LLM provider", which is what a real deployment does.
         self._jd_analyzer_factory = jd_analyzer_factory
+        # `rubric_repository` is optional so existing/other-test callers that
+        # only care about job CRUD (most of this file) are unaffected - only
+        # core/dependencies.py's real wiring supplies one, which is what
+        # makes auto-rubric-on-create active in the actual app.
+        self._rubrics = rubric_repository
+        self._rubric_generator_factory = rubric_generator_factory
 
     async def create_job(
         self, *, description: str, job_id: Optional[str] = None, openings: Optional[int] = None
@@ -87,6 +96,15 @@ class JobService:
         if openings is not None and openings >= 1:
             job_description = job_description.model_copy(update={"openings": openings})
 
+        # Rubric BEFORE the job is persisted: this product's flow has no
+        # recruiter step between posting a job and the leaderboard
+        # (shortlisting is rubric-decided), so a job must never exist
+        # without an approved rubric - if rubric generation fails, no
+        # JobRecord should be saved at all, exactly like a failed
+        # JDAnalyzerAgent call above never produces one either.
+        if self._rubrics is not None:
+            await self._draft_and_approve_rubric(job_id=job_id, job_description=job_description)
+
         record = JobRecord(job_id=job_id, job=job_description, is_active=True)
         stored = await self._jobs.save(record)
         logger.info(
@@ -95,6 +113,43 @@ class JobService:
                               competency_count=len(job_description.competencies)),
         )
         return stored
+
+    async def _draft_and_approve_rubric(
+        self, *, job_id: str, job_description: JobDescription
+    ) -> None:
+        """Make the job scorable the instant it is created - this product's
+        flow has no recruiter step between posting a job and the
+        leaderboard (shortlisting is rubric-decided), so unlike the old
+        manual "draft, then separately approve" flow on job-detail.html, a
+        job must never exist without an approved rubric.
+
+        Reuses the exact same generation + approval calls
+        `POST /jobs/{id}/rubric/draft` and `/approve` already make
+        (api/routes/rubrics.py) - RubricRepository.approve() itself enforces
+        `JobRubric.validate_approvable()`, so a malformed rubric still
+        cannot become active.
+
+        Raises DependencyError on any failure - a job is never left
+        half-created (JD analyzed, no rubric), mirroring how a failed
+        JDAnalyzerAgent call above already aborts job creation entirely.
+        """
+        generator = self._rubric_generator_factory() if self._rubric_generator_factory else RubricGeneratorAgent()
+        try:
+            result = await generator.execute(job_description=job_description)
+            drafted = result["rubric"]
+            saved = await self._rubrics.save(drafted.model_copy(update={"job_id": job_id, "version": 1}))
+            await self._rubrics.approve(saved.rubric_id)
+        except Exception as exc:
+            logger.error(
+                "rubric auto-generation failed: %s",
+                exc,
+                extra=log_context(event="rubric_auto_generation_failed", job_id=job_id),
+            )
+            raise DependencyError(
+                "The job's scoring rubric could not be generated. Please try again.",
+                internal_detail=f"rubric auto-draft/approve failed for job_id={job_id!r}: {exc}",
+                context={"job_id": job_id},
+            ) from exc
 
     async def get_job(self, job_id: str) -> JobRecord:
         record = await self._jobs.get(job_id)

@@ -45,14 +45,22 @@ def _draft(client, job_id):
     return response.json()
 
 
-def test_drafting_does_not_make_the_job_scorable(client, job_id):
-    """A draft is not an approval. Until a human approves, the job has no
-    active rubric and must say so rather than returning an empty one."""
+def test_drafting_a_new_version_does_not_replace_the_active_rubric(client, job_id):
+    """A draft is not an approval. Job creation already auto-drafts and
+    auto-approves version 1 (services/job_service.py - there is no
+    recruiter step between posting a job and the leaderboard), so a fresh
+    draft here is version 2, and version 1 must stay active until version 2
+    is separately approved."""
+    active_before = client.get(f"/jobs/{job_id}/rubric").json()
+    assert active_before["status"] == "approved"
+    assert active_before["version"] == 1
+
     draft = _draft(client, job_id)
     assert draft["status"] == "draft"
+    assert draft["version"] == 2
 
-    active = client.get(f"/jobs/{job_id}/rubric")
-    assert active.status_code == 404
+    active = client.get(f"/jobs/{job_id}/rubric").json()
+    assert active["rubric_id"] == active_before["rubric_id"], "drafting must never replace the active rubric"
 
 
 def test_approving_makes_the_rubric_active(client, job_id):
@@ -120,7 +128,9 @@ def test_match_leaderboard_reports_the_rubric_version_it_ranks_under(client, job
     assert body["rubric_version"] == draft["version"]
 
 
-def test_leaderboard_without_an_approved_rubric_reports_no_version(client, job_id):
-    _draft(client, job_id)  # drafted but never approved
+def test_leaderboard_reports_the_auto_approved_rubric_version_immediately(client, job_id):
+    """No manual draft/approve is needed for the ordinary flow: job creation
+    already produced an approved rubric (version 1), so the leaderboard is
+    scorable from the moment the job exists."""
     body = client.get(f"/jobs/{job_id}/match-leaderboard").json()
-    assert body["rubric_version"] is None
+    assert body["rubric_version"] == 1

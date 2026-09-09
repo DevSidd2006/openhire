@@ -113,28 +113,18 @@ async def test_resume_submission_reaches_the_final_leaderboard(client):
         "/applications", json={"job_id": job_id, "candidate_id": candidate_id}
     ).json()["application"]["application_id"]
 
-    # -- 2. Matching with NO approved rubric -------------------------------
-    # This used to be a dead end: nothing was scored and nothing was
-    # returned, so the candidate-facing page reported a rejection.
-    run = client.post(f"/jobs/{job_id}/match").json()
-    ours = next(a for a in run["applications"] if a["application_id"] == application_id)
-    assert ours["status"] == "scoring_pending", "unscorable must be a distinct state"
-    assert ours["matching_score"] is None, "no rubric means no evidence-bound score"
-    assert ours["semantic_score"] is not None, "the rubric-free score must still exist"
-    assert 0.0 <= ours["semantic_score"] <= 1.0
-
-    board = client.get(f"/jobs/{job_id}/match-leaderboard").json()
-    assert board["rubric_version"] is None
-    assert board["rows"] == [], "nothing may be ranked without a rubric"
-    assert [r["application_id"] for r in board["scoring_pending"]] == [application_id]
-
-    # -- 3. The recruiter drafts and approves a rubric ---------------------
-    draft = client.post(f"/jobs/{job_id}/rubric/draft").json()
-    assert draft["status"] == "draft", "drafting must never make a job scorable"
-    approved = client.post(f"/jobs/{job_id}/rubric/{draft['rubric_id']}/approve").json()
+    # -- 2/3. A job is scorable from the moment it is posted ---------------
+    # There is no recruiter step between posting a job and the leaderboard:
+    # JobService auto-drafts and auto-approves a rubric (version 1) as part
+    # of job creation itself (services/job_service.py), so matching against
+    # a freshly created job already has a real, evidence-bound rubric score
+    # - there is no manual draft/approve step and no "scoring_pending"
+    # dead-end for the ordinary flow.
+    approved = client.get(f"/jobs/{job_id}/rubric").json()
     assert approved["status"] == "approved"
+    assert approved["version"] == 1
 
-    # -- 4. Matching WITH a rubric -----------------------------------------
+    # -- 4. Matching WITH the auto-approved rubric --------------------------
     run = client.post(f"/jobs/{job_id}/match").json()
     assert run["matched"] == 1, "the parked application must be picked up, not stranded"
     ours = next(a for a in run["applications"] if a["application_id"] == application_id)
