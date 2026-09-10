@@ -23,6 +23,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 
 from api.errors import InvalidRequestError
+from api.exceptions import SessionNotFoundError
 from core.errors import ConflictError, NotFoundError
 from api.models import (
     CreateSessionRequest,
@@ -43,6 +44,7 @@ from core.dependencies import (
 )
 from core.security import Principal, require_authenticated
 from repositories.interfaces import EvaluationJob, EvaluationStatus
+from schemas.application import ApplicationStatus
 from services.application_service import ApplicationService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
@@ -170,6 +172,30 @@ async def create_session(
                 "An application must be shortlisted before an interview can be linked to it",
                 internal_detail=f"application_id={payload.application_id!r} status={application.status.value!r}",
             )
+
+        # A client retry (e.g. after its own timeout while this endpoint's
+        # LLM-backed create_session call was still in flight) must not spin
+        # up a second, competing session and silently re-point
+        # application.session_id at it - repositories/interfaces.py's
+        # SessionRecord docstring documents session_id as set once and never
+        # changing, but link_interview_session below has no way to know
+        # that on its own, and would happily overwrite it. So: if this
+        # application already has a session linked and that session is not
+        # dead (FAILED), this call is treated as a retry of the SAME
+        # request and returns the existing session unchanged, making no new
+        # LLM call and clobbering nothing.
+        if application.status == ApplicationStatus.INTERVIEW_LINKED and application.session_id is not None:
+            try:
+                existing_runner = await service.get_runner(application.session_id)
+            except SessionNotFoundError:
+                existing_runner = None
+            if existing_runner is not None and existing_runner.status != SessionStatus.FAILED:
+                return CreateSessionResponse(
+                    session_id=application.session_id,
+                    status=existing_runner.status,
+                    current_question=QuestionView.from_domain(existing_runner.get_current_question()),
+                    application_id=payload.application_id,
+                )
 
     session_id, runner = await service.create_session(
         job_description=payload.job_description,

@@ -15,6 +15,7 @@ from api.models_applications import (
 from api.models_recruiter import (
     ApplicationEvaluationResponse,
     ApplicationInterviewResponse,
+    ApplicationTranscriptResponse,
     InterviewStatusView,
 )
 from core.dependencies import (
@@ -22,9 +23,11 @@ from core.dependencies import (
     get_candidate_service,
     get_evaluation_service,
     get_interview_service,
+    get_transcript_repository,
 )
 from core.errors import BadRequestError
 from core.security import Principal, require_authenticated, require_scopes
+from repositories.interfaces import TranscriptRepository
 from services.application_service import ApplicationService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
@@ -210,3 +213,32 @@ async def get_application_evaluation(
     if application.session_id is not None:
         evaluation = await evaluations.get_evaluation_for_session(application.session_id)
     return ApplicationEvaluationResponse(application_id=application_id, evaluation=evaluation)
+
+
+@router.get("/{application_id}/transcript", response_model=ApplicationTranscriptResponse)
+async def get_application_transcript(
+    application_id: str,
+    applications: ApplicationService = Depends(get_application_service),
+    interviews: InterviewService = Depends(get_interview_service),
+    transcripts: TranscriptRepository = Depends(get_transcript_repository),
+    principal: Principal = Depends(require_scopes("recruiter:read")),
+) -> ApplicationTranscriptResponse:
+    """GET /applications/{application_id}/transcript - the raw sealed
+    interview transcript for this application, so a recruiter (and admin,
+    which carries recruiter:read - core/security.py) can read exactly what
+    was said after the interview, not only its downstream score/report.
+
+    `transcript=None` means no interview has been linked yet, or one has
+    but hasn't sealed (and so persisted a transcript) yet - a normal,
+    valid state, not an error, exactly like the sibling `/evaluation`
+    endpoint's `evaluation=None`.
+
+    Errors: 404 `not_found` if the application itself does not exist.
+    """
+    application = await applications.get_application(application_id)
+    transcript = None
+    if application.session_id is not None:
+        record = await interviews.get_record(application.session_id)
+        if record.interview_id is not None:
+            transcript = await transcripts.get(record.interview_id)
+    return ApplicationTranscriptResponse(application_id=application_id, transcript=transcript)

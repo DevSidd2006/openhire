@@ -45,10 +45,10 @@
   <div class="card-header" style="margin-bottom:1.5rem;">
     <div>
       <h2 class="card-title">Resume Screening & Candidate Resumes</h2>
-      <p class="card-sub" id="screeningMeta">Review all applicant resumes, automated shortlisting statuses, and match fit.</p>
+      <p class="card-sub" id="screeningMeta">Every applicant is scored and shortlisted automatically the moment they apply - review the results below.</p>
     </div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <button class="btn-secondary" onclick="runMatching()">Run Auto-Matcher</button>
+      <button class="btn-secondary" onclick="runMatching()" title="Applications are already scored on apply - this only retries anyone stuck pending (e.g. a scoring failure, or a rubric approved after they applied)">Retry Pending Scores</button>
       <button class="btn-outline" onclick="goToLeaderboard()">Final Leaderboard</button>
       <button class="btn-outline" onclick="window.history.back()">Back</button>
     </div>
@@ -215,10 +215,12 @@
             ${row.band ? `<span class="tag">${escapeHtml(row.band)}</span>` : ''}
             <button class="btn-primary" style="padding:0.25rem 0.65rem; font-size:11.5px;"
               onclick="viewResume('${row.candidate_id}')">📄 View Resume</button>
-            <button class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:11.5px;"
-              onclick="decide('${row.application_id}', 'shortlist')">Shortlist</button>
-            <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;"
-              onclick="decide('${row.application_id}', 'reject')">Reject</button>
+            ${row.status !== 'shortlisted' && row.status !== 'interview_linked' ? `
+            <button class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:11.5px;" title="Manual override - the automated decision above already ran"
+              onclick="decide('${row.application_id}', 'shortlist')">Override: Shortlist</button>` : ''}
+            ${row.status !== 'rejected' ? `
+            <button class="btn-outline" style="padding:0.25rem 0.6rem; font-size:11.5px;" title="Manual override - the automated decision above already ran"
+              onclick="decide('${row.application_id}', 'reject')">Override: Reject</button>` : ''}
           </div>
         </div>
         <p class="card-sub" style="margin:0.4rem 0 0;">${escapeHtml(row.explanation)}</p>
@@ -241,10 +243,11 @@
       const banner = document.getElementById('rubricBanner');
       banner.style.display = 'block';
       banner.innerHTML = data.rubric_version
-        ? `<p class="card-sub" style="margin:0;">Automated scoring active against <strong>rubric v${data.rubric_version}</strong>.</p>`
+        ? `<p class="card-sub" style="margin:0;">Every applicant is scored and shortlisted automatically on apply, against <strong>rubric v${data.rubric_version}</strong> - no recruiter action required.</p>`
         : `<p class="card-sub" style="margin:0;">
-             This job has <strong>no approved rubric yet</strong>. Semantic screening is active.
-             <a href="job-detail.html?job_id=${encodeURIComponent(jobId)}">Draft and approve a rubric for deeper evidence-bound matching →</a>
+             This job has <strong>no approved rubric yet</strong>, so applicants are parked with only a semantic screening score
+             until one is approved - automated shortlisting begins immediately once it is.
+             <a href="job-detail.html?job_id=${encodeURIComponent(jobId)}">Draft and approve a rubric →</a>
            </p>`;
 
       const rows = data.rows || [];
@@ -403,10 +406,12 @@
     }
     try {
       const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
-      alert(`Auto-Matcher ran: ${result.matched} scored, ${result.shortlisted} auto-shortlisted, ${result.rejected} rejected.`);
+      alert(result.matched > 0
+        ? `Retried ${result.matched} pending applicant(s): ${result.shortlisted} shortlisted, ${result.rejected} rejected.`
+        : 'Nothing was pending - every applicant was already scored on apply.');
       loadScreening();
     } catch (err) {
-      alert(`Could not run the matcher: ${err.message}`);
+      alert(`Could not retry pending scores: ${err.message}`);
     }
   }
 

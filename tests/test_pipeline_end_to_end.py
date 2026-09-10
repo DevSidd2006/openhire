@@ -9,22 +9,23 @@ patching something in between.
 The chain, in order:
 
     resume submission -> parse -> application
-      -> matching with NO rubric      (semantic score only; nothing decided)
-      -> rubric draft + approve
-      -> matching WITH a rubric       (evidence-bound score; still nothing decided)
-      -> recruiter shortlists         (the ONLY thing that advances anyone)
-      -> interview session linked
+      -> apply() auto-scores against the job's rubric immediately, with no
+         recruiter action, and decides shortlist/reject right there
+      -> interview session links automatically once SHORTLISTED
       -> interview driven to sealed
       -> evaluation
       -> final leaderboard
 
-Two invariants are asserted throughout rather than at the end, because they
-are the ones a refactor is most likely to break quietly:
+There is deliberately no manual recruiter shortlist/reject/approval step
+anywhere in this chain (a product correction, not an oversight) - the
+`POST /applications/{id}/shortlist`/`reject` endpoints still exist as a
+manual OVERRIDE a recruiter can use later, but nothing in the ordinary flow
+requires or waits on one.
 
-  * Scoring never decides. A scored application stays SUBMITTED; only the
-    recruiter's explicit shortlist call moves it on.
-  * The resume leaderboard and the final leaderboard are different rankings
-    at different stages, and a resume score never appears in the final one.
+The invariant asserted throughout rather than at the end, because it is the
+one a refactor is most likely to break quietly: the resume leaderboard and
+the final leaderboard are different rankings at different stages, and a
+resume score never appears in the final one.
 """
 import json
 
@@ -124,14 +125,13 @@ async def test_resume_submission_reaches_the_final_leaderboard(client):
     assert approved["status"] == "approved"
     assert approved["version"] == 1
 
-    # -- 4. Matching WITH the auto-approved rubric --------------------------
+    # -- 4. apply() already scored and decided; /match is a genuine no-op --
     run = client.post(f"/jobs/{job_id}/match").json()
-    assert run["matched"] == 1, "the parked application must be picked up, not stranded"
-    ours = next(a for a in run["applications"] if a["application_id"] == application_id)
-    assert ours["matching_score"] is not None
-    # Automated shortlisting on matching
-    assert ours["status"] in ("shortlisted", "submitted"), "matching scores and shortlists qualifying candidates"
-    assert ours["semantic_score"] is not None, "the semantic score must survive rubric scoring"
+    assert run["matched"] == 0, "apply() already scored this application; nothing left to match"
+    application = client.get(f"/applications/{application_id}").json()["application"]
+    assert application["matching_score"] is not None
+    assert application["status"] == "shortlisted", "apply() scores and shortlists qualifying candidates immediately"
+    assert application["semantic_score"] is not None, "the semantic score must survive rubric scoring"
 
     board = client.get(f"/jobs/{job_id}/match-leaderboard").json()
     assert board["rubric_version"] == approved["version"]
@@ -143,7 +143,8 @@ async def test_resume_submission_reaches_the_final_leaderboard(client):
         v["cited_spans"] for v in row["competency_verdicts"]
     ), "at least one verdict must quote the resume it was derived from"
 
-    # -- 5. Only a recruiter advances anyone -------------------------------
+    # -- 5. Already shortlisted automatically; the manual override is a
+    # no-op here, confirming it doesn't fight the automated decision -----
     shortlisted = client.post(f"/applications/{application_id}/shortlist").json()
     assert shortlisted["application"]["status"] == "shortlisted"
 

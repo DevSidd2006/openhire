@@ -208,6 +208,19 @@ class ApplicationService:
             semantic_score=semantic_score,
         )
         stored = await self._applications.save(application)
+
+        # Auto-decide shortlist/reject immediately, right here - never wait
+        # for a recruiter to trigger `run_matching_for_job` (Chunk 5's
+        # product correction: there is no recruiter approval step between
+        # applying and the shortlist decision). If an approved rubric
+        # already exists for this job, score against it exactly like the
+        # batch path does; otherwise (or if that scoring call fails)
+        # `evaluate_shortlist_status` still decides from the semantic score
+        # alone rather than leaving the application parked.
+        stored = await self._auto_score_application(
+            stored, candidate_record=candidate_record, semantic_score=semantic_score,
+        )
+
         logger.info(
             "application submitted",
             extra=log_context(
@@ -216,6 +229,48 @@ class ApplicationService:
             ),
         )
         return stored
+
+    async def _auto_score_application(
+        self, application: Application, *, candidate_record, semantic_score: float | None,
+    ) -> Application:
+        """Score against the rubric immediately if one is already approved.
+
+        Deliberately does NOT fall back to deciding shortlist/reject from
+        `semantic_score` alone when no rubric exists yet - that score is
+        documented elsewhere (`TestSemanticScoreWithoutRubric`) as "never a
+        decision", only ever a ranking signal for the resume-stage
+        leaderboard. A job with no approved rubric still parks its
+        applications at SUBMITTED/SCORING_PENDING, exactly as
+        `run_matching_for_job`'s no-rubric branch already does, to be
+        rescued once a rubric is approved (unchanged, existing behaviour).
+        This method only removes the OTHER wait: once a rubric already
+        exists, there is no reason to also wait for a recruiter to trigger
+        `POST /jobs/{job_id}/match` by hand.
+        """
+        rubric = (
+            await self._rubrics.get_approved_for_job(application.job_id) if self._rubrics else None
+        )
+        if rubric is None or candidate_record.resume is None:
+            return application
+
+        try:
+            matching_score = await self._matching.compute_match(rubric, candidate_record.resume)
+        except Exception as exc:  # noqa: BLE001 - a scoring failure must not block the application itself
+            logger.error(
+                "automatic matching failed on apply, parked for a later retry: %s",
+                exc,
+                extra=log_context(
+                    event="apply_matching_failed", application_id=application.application_id,
+                ),
+            )
+            updated = application.model_copy(update={"status": ApplicationStatus.SCORING_PENDING})
+            return await self._applications.save(updated)
+
+        new_status = evaluate_shortlist_status(matching_score, semantic_score)
+        updated = application.model_copy(
+            update={"matching_score": matching_score, "status": new_status}
+        )
+        return await self._applications.save(updated)
 
     async def run_matching_for_job(self, job_id: str) -> MatchingRunResult:
         """Run matching for every SUBMITTED/SCORING_PENDING application against
@@ -400,9 +455,16 @@ class ApplicationService:
 
         Reverses an automatic REJECTED (or SUBMITTED, if the recruiter
         wants to shortlist ahead of/instead of running matching) - this is
-        purely a status change via the existing repository, never a second
-        matching computation (`run_matching_for_job`, unmodified, remains
-        the only thing that runs `ResumeMatcherAgent`).
+        purely a status change via the existing repository. If the
+        application doesn't already carry a `matching_score`, this computes
+        one via the same `MatchingService.compute_match` (`ResumeMatcherAgent`)
+        that `run_matching_for_job` uses, so downstream evaluation
+        (`services/evaluation_service.py`, which strictly requires
+        `matching_score` and never fabricates one) has something to score
+        once the candidate is interviewed. If no approved rubric exists yet,
+        or the candidate's resume record is missing, the status change still
+        proceeds without a score - never a second matching computation for
+        an application that already has one.
 
         Not valid once INTERVIEW_LINKED: at that point the candidate is
         already past the shortlisting gate, and "shortlisting" them again
@@ -417,7 +479,31 @@ class ApplicationService:
         if application.status == ApplicationStatus.SHORTLISTED:
             return application
 
-        updated = application.model_copy(update={"status": ApplicationStatus.SHORTLISTED})
+        update: dict = {"status": ApplicationStatus.SHORTLISTED}
+        if application.matching_score is None:
+            rubric = (
+                await self._rubrics.get_approved_for_job(application.job_id)
+                if self._rubrics
+                else None
+            )
+            candidate_record = (
+                await self._candidates.get(application.candidate_id) if rubric else None
+            )
+            if rubric is not None and candidate_record is not None and candidate_record.resume is not None:
+                try:
+                    update["matching_score"] = await self._matching.compute_match(
+                        rubric, candidate_record.resume
+                    )
+                except Exception as exc:  # noqa: BLE001 - a scoring failure must not block the manual override
+                    logger.error(
+                        "matching score computation failed during manual shortlist: %s",
+                        exc,
+                        extra=log_context(
+                            event="shortlist_matching_failed", application_id=application_id,
+                        ),
+                    )
+
+        updated = application.model_copy(update=update)
         stored = await self._applications.save(updated)
         logger.info(
             "application manually shortlisted",

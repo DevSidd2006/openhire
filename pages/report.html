@@ -132,6 +132,16 @@
       </div>
     </div>
 
+    <!-- Full transcript: recruiter/admin only (GET /applications/{id}/transcript
+         requires recruiter:read, which admin also carries). Hidden entirely
+         for a candidate viewer, and left empty until an interview has
+         actually sealed. -->
+    <div class="card" id="transcriptCard" style="margin-top:1.25rem; display:none;">
+      <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.75rem;">Interview Transcript</h3>
+      <p class="card-sub" style="margin-bottom:0.6rem;">Full question/answer record of this interview.</p>
+      <div id="transcriptExchanges"></div>
+    </div>
+
   </div>
 </main>
 
@@ -197,6 +207,12 @@
         : 'The multi-agent evaluation pipeline is still running. This page will refresh automatically.';
   }
 
+  // Tracked as it becomes known, from whichever branch of resolveEvaluation
+  // resolves it, so loadTranscript() below doesn't need to re-derive it -
+  // the transcript is application-centric only (GET
+  // /applications/{id}/transcript), there is no session-centric equivalent.
+  let resolvedApplicationId = appId || null;
+
   // A "no_interview" sentinel is distinct from `null`: `null` means an
   // interview happened but its evaluation hasn't been triggered/finished
   // yet (worth polling for); "no_interview" means this application has no
@@ -221,6 +237,7 @@
       const list = await apiRequest(`/applications?job_id=${encodeURIComponent(jobId)}`);
       const application = (list.applications || []).find(a => a.candidate_id === candidateId);
       if (!application) return null;
+      resolvedApplicationId = application.application_id;
       if (!application.session_id) return 'no_interview';
       const data = await apiRequest(`/applications/${encodeURIComponent(application.application_id)}/evaluation`);
       return data.evaluation;
@@ -228,11 +245,50 @@
     return undefined; // no way to look this report up at all
   }
 
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  // Recruiter/admin only (the backend endpoint itself is recruiter:read-
+  // gated, admin included; a candidate viewer never sees this section at
+  // all, matching the resume-stage vs. final-leaderboard visibility split
+  // documented elsewhere in this app).
+  async function loadTranscript() {
+    const user = getCurrentUser();
+    if (!user || user.role === 'candidate') return;
+    if (!resolvedApplicationId) return;
+
+    try {
+      const data = await apiRequest(`/applications/${encodeURIComponent(resolvedApplicationId)}/transcript`);
+      const transcript = data.transcript;
+      if (!transcript || !transcript.exchanges || !transcript.exchanges.length) return;
+
+      const card = document.getElementById('transcriptCard');
+      const container = document.getElementById('transcriptExchanges');
+      container.innerHTML = transcript.exchanges.map(([question, answer], i) => `
+        <div style="padding:0.85rem 0; ${i > 0 ? 'border-top:1px solid var(--surface-border);' : ''}">
+          <div style="font-weight:500; margin-bottom:0.35rem;">Q${i + 1}. ${escapeHtml(question.question_text)}</div>
+          <div style="color:var(--text-muted); font-size:13.5px;">${escapeHtml(answer.answer_text)}</div>
+        </div>
+      `).join('');
+      card.style.display = '';
+    } catch (err) {
+      // A recruiter/admin viewer without the right scope, or a genuinely
+      // absent transcript, both just mean the section stays hidden - never
+      // surface this as a page-level error alongside the evaluation above.
+    }
+  }
+
   let attempts = 0;
   async function loadEvaluation() {
     attempts += 1;
     try {
       const evaluation = await resolveEvaluation();
+      // Independent of evaluation status - the transcript exists as soon
+      // as the interview seals, which is often before scoring finishes.
+      loadTranscript();
       if (evaluation === undefined) {
         document.getElementById('reportHeaderMeta').textContent = 'No report to display.';
         document.getElementById('recommendationText').textContent = 'NO EVALUATION LINK PROVIDED';

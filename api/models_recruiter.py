@@ -38,6 +38,7 @@ from repositories.interfaces import (
     EvaluationStatus,
     SessionRecord,
 )
+from schemas.interview import InterviewTranscript
 from schemas.scoring import CandidateLeaderboard
 from utils.interview_session import SessionStatus
 
@@ -135,6 +136,17 @@ class ApplicationEvaluationResponse(BaseModel):
 
     application_id: str
     evaluation: Optional[EvaluationJob] = None
+
+
+class ApplicationTranscriptResponse(BaseModel):
+    """`GET /applications/{application_id}/transcript`'s body - the raw
+    sealed interview transcript (`InterviewTranscript`, unabridged, reused
+    verbatim per this module's docstring). `transcript=None` means no
+    interview has sealed yet for this application - a normal, valid state,
+    not an error, exactly like `ApplicationEvaluationResponse.evaluation`."""
+
+    application_id: str
+    transcript: Optional[InterviewTranscript] = None
 
 
 class LeaderboardResponse(BaseModel):

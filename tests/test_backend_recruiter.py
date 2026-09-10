@@ -303,6 +303,27 @@ class TestApplicationInterviewAndEvaluationStatus:
         assert client.get("/applications/never-existed/interview").status_code == 404
         assert client.get("/applications/never-existed/evaluation").status_code == 404
 
+    def test_transcript_is_null_before_any_interview(self, client, app):
+        _seed_http(app, "cand_status_5", "job_status_5", "app_status_5", run_eval=False, seal=False)
+        response = client.get("/applications/app_status_5/transcript")
+        assert response.status_code == 200
+        assert response.json()["transcript"] is None
+
+    def test_transcript_is_visible_after_the_interview_seals(self, client, app):
+        """The whole point of this endpoint: a recruiter (and admin, which
+        carries recruiter:read - core/security.py) can read the actual
+        sealed transcript, not just a persisted/completed flag."""
+        _seed_http(app, "cand_status_6", "job_status_6", "app_status_6", run_eval=False, seal=True)
+        response = client.get("/applications/app_status_6/transcript")
+        assert response.status_code == 200
+        transcript = response.json()["transcript"]
+        assert transcript is not None
+        assert transcript["is_sealed"] is True
+        assert transcript["exchanges"], "the actual question/answer exchanges must be present"
+
+    def test_unknown_application_is_404_for_transcript_too(self, client):
+        assert client.get("/applications/never-existed/transcript").status_code == 404
+
 
 # ---------------------------------------------------------------------------
 # 4. Manual shortlist / reject overrides

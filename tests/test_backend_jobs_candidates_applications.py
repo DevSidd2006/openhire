@@ -538,7 +538,9 @@ class TestApplicationServiceApply:
 class TestApplicationServiceMatching:
     @pytest.mark.asyncio
     async def test_matching_scores_a_candidate_without_deciding(self):
-        """Automated matching scores and automatically shortlists qualifying candidates."""
+        """Automated matching scores and automatically shortlists qualifying
+        candidates, immediately on apply() when a rubric already exists -
+        never waiting for a recruiter to separately trigger matching."""
         job_repo, candidate_repo, application_repo = (
             InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
         )
@@ -549,15 +551,17 @@ class TestApplicationServiceMatching:
             application_repository=application_repo,
             rubric_repository=await _seeded_rubric_repo(job.job_id),
         )
-        await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
+        application = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
 
-        result = await service.run_matching_for_job(job.job_id)
-        assert result.attempted == 1
-        assert result.errors == []
-        assert result.applications[0].matching_score is not None
-        assert result.applications[0].status in (
+        assert application.matching_score is not None
+        assert application.status in (
             ApplicationStatus.SHORTLISTED, ApplicationStatus.NEEDS_HUMAN_REVIEW,
         )
+
+        # A recruiter's subsequent bulk /match call finds nothing left to do.
+        result = await service.run_matching_for_job(job.job_id)
+        assert result.attempted == 0
+        assert result.errors == []
 
     @pytest.mark.asyncio
     async def test_matching_run_ranks_applications_by_match_score(self):
@@ -649,18 +653,24 @@ class TestApplicationServiceMatching:
             rubric_repository=await _seeded_rubric_repo(job.job_id),
             semantic_screening_service=_StubSemanticScreening(),
         )
-        await application_service.apply(job_id=job.job_id, candidate_id=good.candidate_id)
-        await application_service.apply(job_id=job.job_id, candidate_id=bad.candidate_id)
+        # Scoring now happens immediately inside apply() (a rubric already
+        # exists), not deferred to a separate recruiter-triggered /match call.
+        good_application = await application_service.apply(job_id=job.job_id, candidate_id=good.candidate_id)
+        bad_application = await application_service.apply(job_id=job.job_id, candidate_id=bad.candidate_id)
 
-        result = await application_service.run_matching_for_job(job.job_id)
-        assert result.errors == [bad.candidate_id]
-        assert result.matched_count == 1
-        good_application = next(a for a in result.applications if a.candidate_id == good.candidate_id)
         # Scoring succeeded, so qualifying candidate is auto-shortlisted.
         assert good_application.status == ApplicationStatus.SHORTLISTED
         assert good_application.matching_score is not None
         # The failed candidate is parked, never rejected: a system failure
         # must not look like a candidate failure.
+        assert bad_application.status == ApplicationStatus.SCORING_PENDING
+        assert bad_application.matching_score is None
+
+        # A later bulk /match run still finds and retries only the one that
+        # never got a real score - never re-scoring the already-decided one.
+        result = await application_service.run_matching_for_job(job.job_id)
+        assert result.errors == [bad.candidate_id]
+        assert result.matched_count == 0
         bad_application = await application_repo.get_for_job_and_candidate(
             job.job_id, bad.candidate_id
         )
@@ -697,10 +707,58 @@ class TestApplicationServiceMatching:
         # them out of it, whatever the exact score turns out to be.
         assert len(shortlist) < 2
 
-
-class TestApplicationServiceInterviewLink:
     @pytest.mark.asyncio
-    async def test_link_interview_session_requires_shortlisted_status(self):
+    async def test_manual_shortlist_computes_matching_score_when_missing(self):
+        """A recruiter's manual shortlist override on an application that
+        applied before this job had an approved rubric (so apply() itself
+        never had one to score against) must still leave the application
+        with a `matching_score`, since evaluation later strictly requires
+        one and never fabricates it."""
+        job_repo, candidate_repo, application_repo = (
+            InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
+        )
+        job = await _seed_job(job_repo)
+        candidate = await _seed_candidate(candidate_repo)
+        service_without_rubric = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
+        )
+        application = await service_without_rubric.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
+        assert application.matching_score is None
+
+        service = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
+            rubric_repository=await _seeded_rubric_repo(job.job_id),
+        )
+        shortlisted = await service.shortlist(application.application_id)
+        assert shortlisted.status == ApplicationStatus.SHORTLISTED
+        assert shortlisted.matching_score is not None
+
+    @pytest.mark.asyncio
+    async def test_manual_shortlist_without_approved_rubric_still_shortlists(self):
+        """No approved rubric means no score can honestly be computed - the
+        override must still succeed (never blocked by a missing score), just
+        without a matching_score."""
+        job_repo, candidate_repo, application_repo = (
+            InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
+        )
+        job = await _seed_job(job_repo)
+        candidate = await _seed_candidate(candidate_repo)
+        service = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
+        )
+        application = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
+
+        shortlisted = await service.shortlist(application.application_id)
+        assert shortlisted.status == ApplicationStatus.SHORTLISTED
+        assert shortlisted.matching_score is None
+
+    @pytest.mark.asyncio
+    async def test_manual_shortlist_preserves_existing_matching_score(self):
+        """An application already matched (e.g. rubric run already scored
+        it) must not be re-scored by the manual override."""
         job_repo, candidate_repo, application_repo = (
             InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
         )
@@ -710,6 +768,31 @@ class TestApplicationServiceInterviewLink:
             job_repository=job_repo, candidate_repository=candidate_repo,
             application_repository=application_repo,
             rubric_repository=await _seeded_rubric_repo(job.job_id),
+        )
+        await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
+        await service.run_matching_for_job(job.job_id)
+        application = await application_repo.get_for_job_and_candidate(job.job_id, candidate.candidate_id)
+        original_score = application.matching_score
+        assert original_score is not None
+
+        shortlisted = await service.shortlist(application.application_id)
+        assert shortlisted.matching_score == original_score
+
+
+class TestApplicationServiceInterviewLink:
+    @pytest.mark.asyncio
+    async def test_link_interview_session_requires_shortlisted_status(self):
+        job_repo, candidate_repo, application_repo = (
+            InMemoryJobRepository(), InMemoryCandidateRepository(), InMemoryApplicationRepository()
+        )
+        job = await _seed_job(job_repo)
+        candidate = await _seed_candidate(candidate_repo)
+        # No approved rubric: apply() has nothing to auto-score against, so
+        # the application stays SUBMITTED - exactly the pre-shortlist state
+        # this test needs to exercise the gate.
+        service = _application_service(
+            job_repository=job_repo, candidate_repository=candidate_repo,
+            application_repository=application_repo,
         )
         application = await service.apply(job_id=job.job_id, candidate_id=candidate.candidate_id)
 
@@ -875,7 +958,10 @@ class TestApplicationsApi:
         created = client.post("/applications", json={"job_id": job_id, "candidate_id": candidate_id})
         assert created.status_code == 201
         application_id = created.json()["application"]["application_id"]
-        assert created.json()["application"]["status"] == "submitted"
+        # Job creation already auto-drafts and approves a rubric
+        # (services/job_service.py), so apply() auto-scores and decides
+        # immediately - never left at "submitted" waiting on a recruiter.
+        assert created.json()["application"]["status"] in ("shortlisted", "rejected", "needs_human_review")
 
         fetched = client.get(f"/applications/{application_id}")
         assert fetched.status_code == 200
@@ -909,6 +995,10 @@ class TestApplicationsApi:
     def test_match_and_shortlist_endpoints(self, client):
         job_id = self._create_job(client)
         strong_id = self._create_candidate(client, _RESUME_TEXT_STRONG, "Jane Doe")
+        # Job creation already auto-approved a rubric, so apply() has
+        # already scored this application by the time /match is called -
+        # /match's job here is just to confirm it is idempotent, a genuine
+        # no-op re-run rather than double-scoring.
         client.post("/applications", json={"job_id": job_id, "candidate_id": strong_id})
 
         draft = client.post(f"/jobs/{job_id}/rubric/draft").json()
@@ -917,11 +1007,12 @@ class TestApplicationsApi:
         match_response = client.post(f"/jobs/{job_id}/match")
         assert match_response.status_code == 200
         body = match_response.json()
-        assert body["matched"] == 1
+        assert body["matched"] == 0
         assert body["job_id"] == job_id
 
         shortlist = client.get(f"/jobs/{job_id}/shortlist").json()
         assert isinstance(shortlist["applications"], list)
+        assert len(shortlist["applications"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1053,6 +1144,55 @@ class TestApplicationInterviewBridge:
         application = asyncio.run(application_repo.get("app_bridge_4"))
         assert application.status == Status.INTERVIEW_LINKED
         assert application.session_id == body["session_id"]
+
+    def test_retried_session_creation_does_not_orphan_the_linked_session(self, client, app):
+        """A client retry of POST /sessions (e.g. after its own timeout
+        while the first, still-in-flight call was slow) must not spin up a
+        second session and silently re-point application.session_id at it -
+        repositories/interfaces.py:SessionRecord documents session_id as set
+        once and never changing. The retry should be treated as asking for
+        the same session back, unchanged."""
+        from repositories.interfaces import Application, CandidateRecord
+        from schemas.application import ApplicationStatus as Status
+        from schemas.resume import ParsedResume
+        import asyncio
+
+        application_repo = app.state.container.application_repository
+        candidate_repo = app.state.container.candidate_repository
+
+        async def _seed():
+            await candidate_repo.save(CandidateRecord(
+                candidate_id="cand_bridge_5", user_id="user_anonymous",
+                resume=ParsedResume(candidate_id="cand_bridge_5", candidate_name="Test Candidate", skills=["Python"]),
+            ))
+            return await application_repo.save(
+                Application(
+                    application_id="app_bridge_5", job_id="job_bridge_5",
+                    candidate_id="cand_bridge_5", status=Status.SHORTLISTED,
+                )
+            )
+
+        asyncio.run(_seed())
+
+        payload = {
+            "candidate_id": "cand_bridge_5", "job_id": "job_bridge_5",
+            "job_description": self._job_description_payload("job_bridge_5"),
+            "parsed_resume": self._resume_payload("cand_bridge_5"),
+            "application_id": "app_bridge_5",
+        }
+        first = client.post("/sessions", json=payload)
+        assert first.status_code == 201
+        first_session_id = first.json()["session_id"]
+
+        # The "retry": same application, still SHORTLISTED-then-INTERVIEW_LINKED,
+        # POSTing /sessions again exactly as a client would after a client-side
+        # timeout.
+        second = client.post("/sessions", json=payload)
+        assert second.status_code == 201
+        assert second.json()["session_id"] == first_session_id
+
+        application = asyncio.run(application_repo.get("app_bridge_5"))
+        assert application.session_id == first_session_id
 
 
 class TestSemanticScoreWithoutRubric:
