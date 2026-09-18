@@ -9,9 +9,94 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
 <link rel="stylesheet" href="css/style.css">
+<style>
+  .site-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 clamp(1rem, 4vw, 2.5rem);
+    background: rgba(247, 246, 243, 0.85);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--surface-border);
+  }
+  .site-nav .brand,
+  .site-nav .links a {
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .site-nav .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .mark-tile {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mark-tile img { width: 24px; height: 24px; }
+  .site-nav .links,
+  .site-nav .right {
+    display: flex;
+    align-items: center;
+  }
+  .site-nav .links { gap: 0.35rem; }
+  .site-nav .links a {
+    color: var(--ink-3);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius);
+  }
+  .site-nav .right { gap: 0.9rem; }
+  .site-nav .github-link {
+    color: var(--ink-2);
+    text-decoration: none;
+    display: inline-flex;
+  }
+  .site-nav .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.7rem 1.4rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 0.86rem;
+    font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .site-nav .links { display: none; }
+  }
+</style>
 </head>
 <body>
-<div id="navbarContainer"></div>
+<nav class="site-nav">
+  <a href="index.html" class="brand">
+    <span class="mark-tile"><img src="assets/openhire.svg" alt="OpenHire logo"></span>
+    OpenHire
+  </a>
+  <div class="links">
+    <a href="index.html#how">How it works</a>
+    <a href="index.html#features">Features</a>
+  </div>
+  <div class="right">
+    <a class="github-link" href="https://github.com/DevSidd2006/openhire" aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-hidden="true"></i></a>
+    <a href="login.html" class="btn btn-primary" aria-current="page"><i class="ph-bold ph-arrow-right" aria-hidden="true"></i>Get Started</a>
+  </div>
+</nav>
 <div id="impersonationBanner"></div>
 
 <main class="auth-shell">
@@ -47,8 +132,6 @@
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
 <script>
-  renderNavbar();
-
   async function handleLoginSubmit() {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
@@ -114,5 +197,3 @@
     }
   }
 </script>
-</body>
-</html>
