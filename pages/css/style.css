@@ -531,6 +531,31 @@ button:disabled {
 }
 .auth-social-btn:active { transform: scale(0.99); }
 .auth-social-btn i { font-size: 1rem; color: #0A66C2; }
+@property --soon-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.auth-soon-badge {
+  --soon-angle: 0deg;
+  margin-left: 0.35rem;
+  padding: 0.18rem 0.65rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    conic-gradient(from var(--soon-angle), #0A66C2, #7c5cff, #22d3ee, #0A66C2) border-box;
+  color: var(--ink-2);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  animation: soon-spin 2.5s linear infinite;
+}
+@keyframes soon-spin { to { --soon-angle: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .auth-soon-badge { animation: none; }
+}
 .auth-divider {
   display: flex;
   align-items: center;
