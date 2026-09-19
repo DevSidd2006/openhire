@@ -80,6 +80,9 @@
   @media (max-width: 640px) {
     .site-nav .links { display: none; }
   }
+  @media (max-width: 420px) {
+    .site-nav .github-link { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -93,7 +96,7 @@
     <a href="index.html#features">Features</a>
   </div>
   <div class="right">
-    <a class="github-link" href="https://github.com/DevSidd2006/openhire" aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-hidden="true"></i></a>
+    <a class="github-link"  aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-placeholder="false" aria-disabled="true" ></i></a>
     <a href="login.html" class="btn btn-primary" aria-current="page"><i class="ph-bold ph-arrow-right" aria-hidden="true"></i>Get Started</a>
   </div>
 </nav>
@@ -108,6 +111,11 @@
     <p class="auth-sub">Enter your credentials to access your account.</p>
 
     <div id="errorMessage" class="alert alert-danger auth-error" style="display:none; margin-bottom:1rem;"></div>
+
+    <div class="auth-social">
+      <button type="button" class="auth-social-btn" disabled title="LinkedIn sign-in coming soon"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn</button>
+    </div>
+    <div class="auth-divider">or</div>
 
     <form class="auth-form" onsubmit="event.preventDefault(); handleLoginSubmit();">
       <div class="form-group">

@@ -506,6 +506,50 @@ button:disabled {
 .btn-sm { padding: 0.32rem 0.7rem; min-height: 28px; font-size: 0.75rem; }
 .btn-lg { padding: 0.8rem 1.25rem; font-size: 1rem; }
 
+.auth-social {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.auth-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.8rem 1rem;
+  font-weight: 500;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform 120ms var(--ease-out);
+}
+.auth-social-btn:hover {
+  border-color: var(--surface-border-light);
+  background: var(--surface-hover);
+}
+.auth-social-btn:active { transform: scale(0.99); }
+.auth-social-btn i { font-size: 1rem; color: #0A66C2; }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.35rem 0 1rem;
+  color: var(--ink-3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--surface-border);
+}
+
 /* Result / state tiles (apply outcome, empty states) */
 .result-icon {
   width: 56px;
