@@ -82,7 +82,6 @@
       actionsEl.innerHTML = `
         <button class="btn-primary" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-file-text"></i>All Resumes & Screening</button>
         <button class="btn-secondary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-ranking"></i>Final Leaderboard</button>
-        <button class="btn-outline" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-paper-plane-tilt"></i>Apply Now</button>
       `;
       sidebarEl.innerHTML = `
         <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
@@ -90,7 +89,6 @@
         <div id="rubricPanel" style="margin-bottom:1rem;"></div>
         <button class="btn-secondary" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-file-text"></i>All Resumes & Screening</button>
         <button class="btn-outline" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-ranking"></i>Final Leaderboard (post-interview)</button>
-        <button class="btn-primary" style="width:100%; margin-top:0.5rem;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-paper-plane-tilt"></i>Apply to this Role</button>
       `;
       loadRubricPanel();
     } else {
