@@ -178,14 +178,7 @@ class ApplicationService:
                 internal_detail=f"candidate {candidate_id!r} owned by {candidate_record.user_id!r}, not {user_id!r}",
             )
 
-        # Security fix: Prevent recruiters from applying to jobs.
-        # Since a candidate_record only exists if the user signed up as a candidate,
-        # and recruiters cannot sign up as both, the existence of candidate_record
-        # for a user_id is already a strong signal. However, to be explicit:
-        # In a full implementation, we would check the UserRecord.user_type.
-        # Given the current architecture, the candidate_record check above handles
-        # the identity, and the business logic ensures recruiters don't have
-        # candidate records unless intended.
+        # Semantic screening on initial application
 
         existing = await self._applications.get_for_job_and_candidate(job_id, candidate_id)
         if existing is not None:
