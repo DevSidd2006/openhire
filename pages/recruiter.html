@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Recruiter Hub</title>
+<link rel="icon" type="image/svg+xml" href="assets/openhire.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<script src="js/theme.js"></script>
 </head>
 <body>
 <div id="navbarContainer"></div>
@@ -79,9 +81,6 @@
             </button>
             <button class="btn-sm btn-outline" onclick="event.stopPropagation(); window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">
               <i class="ph-bold ph-ranking"></i>Leaderboard
-            </button>
-            <button class="btn-sm btn-outline" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">
-              <i class="ph-bold ph-paper-plane-tilt"></i>Apply
             </button>
           </div>
         </div>

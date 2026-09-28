@@ -6,6 +6,7 @@ from typing import List, Literal, Optional, Any
 from pydantic import BaseModel, Field
 
 from schemas.rubric import CompetencyVerdict
+from schemas.types import NonEmptyStr
 
 # The full evidence-type vocabulary (P2). "supporting"/"contradicting" mirror
 # the judgment an evidence item backs; "insufficient" marks a genuine
@@ -40,7 +41,7 @@ class EvidenceItem(BaseModel):
     competency: Optional[str] = None  # criterion/competency this evidence relates to, when applicable
     timestamp_start: Optional[float] = None  # In seconds
     timestamp_end: Optional[float] = None
-    text: str = Field(min_length=1)  # The actual evidence text - never empty, never fabricated
+    text: NonEmptyStr  # The actual evidence text - never empty, never fabricated
     relevance: float = Field(ge=0.0, le=1.0, description="Relevance score")
     agent: str  # Which agent generated this
     explanation: str  # Why this is evidence

@@ -375,6 +375,9 @@ function renderNavbar(activePage = '') {
       </nav>
 
       <div class="nav-right">
+        <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" onclick="toggleTheme()" aria-label="Switch to dark theme" title="Switch to dark theme">
+          <i class="ph-bold ph-moon" aria-hidden="true"></i>
+        </button>
         ${user ? `
           <div class="nav-menu">
             <button type="button" class="user-avatar nav-menu-trigger" id="userAvatarTrigger" onclick="toggleNavMenu(event)" aria-label="Account menu"></button>
@@ -392,6 +395,8 @@ function renderNavbar(activePage = '') {
       </div>
     </header>
   `;
+
+  if (typeof updateThemeToggle === 'function') updateThemeToggle();
 
   const avatarTrigger = document.getElementById('userAvatarTrigger');
   if (avatarTrigger && user) {

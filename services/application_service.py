@@ -178,6 +178,8 @@ class ApplicationService:
                 internal_detail=f"candidate {candidate_id!r} owned by {candidate_record.user_id!r}, not {user_id!r}",
             )
 
+        # Semantic screening on initial application
+
         existing = await self._applications.get_for_job_and_candidate(job_id, candidate_id)
         if existing is not None:
             raise ConflictError(

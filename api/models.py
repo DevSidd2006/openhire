@@ -20,6 +20,7 @@ from schemas.interview import InterviewQuestion, InterviewState
 from schemas.job import JobDescription
 from schemas.resume import ParsedResume
 from utils.interview_session import SessionStatus
+from schemas.types import NonEmptyStr
 
 if TYPE_CHECKING:
     from utils.interview_session import AnswerSubmissionResult
@@ -168,7 +169,7 @@ class SessionStateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class SubmitAnswerRequest(BaseModel):
-    answer_text: str = Field(min_length=1, max_length=10_000)
+    answer_text: NonEmptyStr = Field(max_length=10_000)
 
 
 class SubmitAnswerResponse(BaseModel):

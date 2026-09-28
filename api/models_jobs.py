@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from repositories.interfaces import JobRecord
 from schemas.job import JobDescription
+from schemas.types import NonEmptyStr
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ class CreateJobRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    description: str = Field(min_length=1, max_length=20_000)
+    description: NonEmptyStr = Field(max_length=20_000)
     # Optional caller-supplied id. Generated (job_<uuid8>) if omitted - see
     # JobService.create_job.
     job_id: Optional[str] = Field(default=None, min_length=1)

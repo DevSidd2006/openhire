@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Job Details</title>
+<link rel="icon" type="image/svg+xml" href="assets/openhire.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<script src="js/theme.js"></script>
 </head>
 <body>
 <div id="navbarContainer"></div>
@@ -81,7 +83,6 @@
       actionsEl.innerHTML = `
         <button class="btn-primary" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-file-text"></i>All Resumes & Screening</button>
         <button class="btn-secondary" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-ranking"></i>Final Leaderboard</button>
-        <button class="btn-outline" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-paper-plane-tilt"></i>Apply Now</button>
       `;
       sidebarEl.innerHTML = `
         <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
@@ -89,7 +90,6 @@
         <div id="rubricPanel" style="margin-bottom:1rem;"></div>
         <button class="btn-secondary" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-file-text"></i>All Resumes & Screening</button>
         <button class="btn-outline" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-ranking"></i>Final Leaderboard (post-interview)</button>
-        <button class="btn-primary" style="width:100%; margin-top:0.5rem;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-paper-plane-tilt"></i>Apply to this Role</button>
       `;
       loadRubricPanel();
     } else {
