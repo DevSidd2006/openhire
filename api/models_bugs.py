@@ -10,6 +10,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from repositories.interfaces import BugReportRecord, BugSeverity, BugStatus
+from schemas.types import NonEmptyStr
 
 
 # ---------------------------------------------------------------------------
@@ -19,8 +20,8 @@ from repositories.interfaces import BugReportRecord, BugSeverity, BugStatus
 class FileBugReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field(min_length=1, max_length=200)
-    description: str = Field(min_length=1, max_length=5000)
+    title: NonEmptyStr = Field(max_length=200)
+    description: NonEmptyStr = Field(max_length=5000)
     severity: BugSeverity = BugSeverity.MEDIUM
     # The page the reporter was on when they hit the bug (e.g.
     # "leaderboard.html") - optional context, never validated against a

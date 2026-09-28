@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Sign Up</title>
+<link rel="icon" type="image/svg+xml" href="assets/openhire.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<script src="js/theme.js"></script>
 <style>
   .site-nav {
     position: fixed;
@@ -128,6 +130,7 @@
   </div>
   <div class="right">
     <a class="github-link" href="https://github.com/DevSidd2006/openhire" aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-hidden="true"></i></a>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" onclick="toggleTheme()" aria-label="Switch to dark theme" title="Switch to dark theme"><i class="ph-bold ph-moon" aria-hidden="true"></i></button>
     <a href="login.html" class="btn btn-primary"><i class="ph-bold ph-arrow-right" aria-hidden="true"></i>Get Started</a>
   </div>
 </nav>

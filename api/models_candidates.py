@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from repositories.interfaces import CandidateRecord
 from schemas.resume import ParsedResume
+from schemas.types import NonEmptyStr
 
 
 # ---------------------------------------------------------------------------
@@ -26,8 +27,8 @@ class RegisterCandidateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    resume_text: str = Field(min_length=1, max_length=50_000)
-    candidate_name: str = Field(min_length=1, max_length=200)
+    resume_text: NonEmptyStr = Field(max_length=50_000)
+    candidate_name: NonEmptyStr = Field(max_length=200)
     # Optional caller-supplied id. Generated (cand_<uuid8>) if omitted - see
     # CandidateService.register_candidate.
     candidate_id: Optional[str] = Field(default=None, min_length=1)
@@ -83,9 +84,9 @@ class UpdateCandidateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    resume_text: Optional[str] = Field(default=None, min_length=1, max_length=50_000)
+    resume_text: Optional[NonEmptyStr] = Field(default=None, max_length=50_000)
 
-    candidate_name: Optional[str] = None
+    candidate_name: Optional[NonEmptyStr] = Field(default=None, max_length=200)
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None

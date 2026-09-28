@@ -9,6 +9,9 @@
 *.pem
 *.key
 *.cert
+*.dump
+*.sql
+scripts/restore_rds.sh
 
 # Python Artifacts & Bytecode
 __pycache__/
