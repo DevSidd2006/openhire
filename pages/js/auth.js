@@ -138,3 +138,27 @@ function guardAuthenticatedPage() {
     window.location.href = 'login.html';
   }
 }
+
+/**
+ * Automatically capture access and refresh tokens passed via query params from OAuth redirects.
+ */
+function captureOAuthTokensFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const accessToken = urlParams.get('access_token');
+  const refreshToken = urlParams.get('refresh_token');
+
+  if (accessToken && refreshToken) {
+    setTokens(accessToken, refreshToken);
+    const payload = decodeJWT(accessToken);
+    if (payload) {
+      const existingUser = localStorage.getItem('openhire_user');
+      let userData = existingUser ? JSON.parse(existingUser) : {};
+      userData.user_id = payload.sub || payload.user_id;
+      userData.role = payload.user_type || payload.role;
+      localStorage.setItem('openhire_user', JSON.stringify(userData));
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+captureOAuthTokensFromUrl();

@@ -15,13 +15,18 @@ Endpoints:
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+import secrets
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 
 from core.config import AppSettings, get_settings
 from core.dependencies import get_user_repository
 from core.logging import get_logger
 from core.security import Principal, require_authenticated
-from repositories.interfaces import UserRepository
+from repositories.interfaces import UserRecord, UserRepository
 from schemas.auth import (
     AuthResponse,
     ChangePasswordRequest,
@@ -34,6 +39,7 @@ from schemas.auth import (
     UserResponse,
 )
 from services.auth_service import AuthService
+from services.linkedin_auth_service import LinkedInAuthService
 
 logger = get_logger("api.routes.auth")
 
@@ -46,6 +52,13 @@ def get_auth_service(
 ) -> AuthService:
     """Build AuthService with injected dependencies."""
     return AuthService(user_repository=user_repository, settings=settings)
+
+
+def get_linkedin_service(
+    settings: AppSettings = Depends(get_settings),
+) -> LinkedInAuthService:
+    """Build LinkedInAuthService with injected dependencies."""
+    return LinkedInAuthService(settings=settings)
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -209,6 +222,103 @@ async def change_my_password(
     await service.change_password(
         principal.subject_id, request.current_password, request.new_password
     )
+
+
+@router.get("/linkedin/authorize")
+async def linkedin_authorize(
+    role: str = Query("candidate", pattern="^(candidate|recruiter)$"),
+    linkedin_service: LinkedInAuthService = Depends(get_linkedin_service),
+) -> RedirectResponse:
+    """Initiates LinkedIn OAuth login flow with state preserving user role."""
+    state = f"{secrets.token_urlsafe(16)}:{role}"
+    auth_url = linkedin_service.get_authorization_url(state=state)
+    return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/linkedin/callback")
+async def linkedin_callback(
+    request: Request,
+    response: Response,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    linkedin_service: LinkedInAuthService = Depends(get_linkedin_service),
+    user_repository: UserRepository = Depends(get_user_repository),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> RedirectResponse:
+    """Handles LinkedIn OAuth callback:
+    - Fetches profile info (name, email, picture) from LinkedIn OIDC.
+    - If user doesn't exist, creates an account with a random bcrypt-hashed password (zero DB changes).
+    - If user exists, issues JWT tokens directly.
+    - Sets 'openhire_access_token' cookie for dual auth and redirects to dashboard.
+    """
+    if error or not code:
+        return RedirectResponse(url="/app/login.html?error=linkedin_cancelled")
+
+    # 1. Extract role from state
+    user_type = "candidate"
+    if state and ":" in state:
+        _, role_param = state.split(":", 1)
+        if role_param in ("candidate", "recruiter"):
+            user_type = role_param
+
+    # 2. Fetch LinkedIn UserInfo
+    userinfo = await linkedin_service.exchange_code_for_userinfo(code)
+    email = userinfo.get("email")
+    if not email:
+        return RedirectResponse(url="/app/login.html?error=missing_email")
+
+    full_name = userinfo.get("name")
+    avatar_url = userinfo.get("picture")
+
+    # 3. Check if user already exists
+    user = await user_repository.get_by_email(email)
+    if not user:
+        # Generate random password and hash with bcrypt so NOT NULL DB constraint is met
+        random_password = secrets.token_urlsafe(32)
+        password_hash = auth_service._hash_password(random_password)
+
+        user_id = f"user_{uuid.uuid4().hex[:8]}"
+        user = UserRecord(
+            user_id=user_id,
+            email=email,
+            password_hash=password_hash,
+            user_type=user_type,
+            full_name=full_name,
+            avatar_url=avatar_url,
+            is_active=True,
+        )
+        user = await user_repository.save(user)
+    else:
+        # Update full_name and avatar if not already set
+        updates = {}
+        if not user.full_name and full_name:
+            updates["full_name"] = full_name
+        if not user.avatar_url and avatar_url:
+            updates["avatar_url"] = avatar_url
+        if updates:
+            user = await auth_service.update_profile(user.user_id, updates)
+
+    # 4. Mint OpenHire access & refresh tokens
+    access_token, refresh_token = auth_service.issue_tokens_for_user(user)
+
+    # 5. Redirect target based on role
+    target_dashboard = "recruiter.html" if user.user_type == "recruiter" else "candidate.html"
+    redirect_target = (
+        f"/app/{target_dashboard}?access_token={access_token}&refresh_token={refresh_token}"
+    )
+
+    redirect_response = RedirectResponse(url=redirect_target, status_code=status.HTTP_302_FOUND)
+
+    # 6. Set Dual-Auth cookie (openhire_access_token)
+    redirect_response.set_cookie(
+        key="openhire_access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        max_age=15 * 60,
+    )
+    return redirect_response
 
 
 __all__ = ["router"]
