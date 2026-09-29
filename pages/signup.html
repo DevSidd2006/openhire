@@ -146,19 +146,20 @@
 
     <div id="errorMessage" class="alert alert-danger auth-error" style="display:none; margin-bottom:1rem;"></div>
 
-    <div class="auth-social">
-      <button type="button" class="auth-social-btn" disabled title="LinkedIn sign-up coming soon"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn<span class="auth-soon-badge">Coming soon</span></button>
+    <div class="form-group" style="margin-bottom: 1.25rem;">
+      <label class="form-label">I am a</label>
+      <div class="auth-role-group">
+        <div class="auth-role-option" id="roleCandidate" onclick="selectRole('candidate')"><i class="ph-bold ph-user"></i>Candidate</div>
+        <div class="auth-role-option" id="roleRecruiter" onclick="selectRole('recruiter')"><i class="ph-bold ph-briefcase"></i>Recruiter</div>
+      </div>
     </div>
-    <div class="auth-divider">or</div>
+
+    <div class="auth-social">
+      <button type="button" class="auth-social-btn" onclick="handleLinkedInSignup()"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn</button>
+    </div>
+    <div class="auth-divider">or with email</div>
 
     <form class="auth-form" onsubmit="event.preventDefault(); handleSignupSubmit();">
-      <div class="form-group">
-        <label class="form-label">I am a</label>
-        <div class="auth-role-group">
-          <div class="auth-role-option" id="roleCandidate" onclick="selectRole('candidate')"><i class="ph-bold ph-user"></i>Candidate</div>
-          <div class="auth-role-option" id="roleRecruiter" onclick="selectRole('recruiter')"><i class="ph-bold ph-briefcase"></i>Recruiter</div>
-        </div>
-      </div>
 
       <div class="form-group">
         <label class="form-label">Email</label>
@@ -193,6 +194,25 @@
     selectedRole = role;
     document.getElementById('roleCandidate').classList.toggle('selected', role === 'candidate');
     document.getElementById('roleRecruiter').classList.toggle('selected', role === 'recruiter');
+    const errorDiv = document.getElementById('errorMessage');
+    if (errorDiv && errorDiv.textContent.includes('Candidate or Recruiter')) {
+      errorDiv.style.display = 'none';
+    }
+  }
+
+  function handleLinkedInSignup() {
+    const errorDiv = document.getElementById('errorMessage');
+    if (!selectedRole) {
+      errorDiv.textContent = 'Please select whether you are a Candidate or Recruiter before continuing with LinkedIn.';
+      errorDiv.style.display = 'block';
+      const roleGroup = document.querySelector('.auth-role-group');
+      if (roleGroup) {
+        roleGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+    errorDiv.style.display = 'none';
+    window.location.href = `/auth/linkedin/authorize?role=${encodeURIComponent(selectedRole)}`;
   }
 
   async function handleSignupSubmit() {
