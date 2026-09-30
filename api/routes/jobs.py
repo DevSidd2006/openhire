@@ -64,6 +64,7 @@ async def create_job(
         description=payload.description,
         job_id=payload.job_id,
         openings=payload.openings,
+        title=payload.title,
         is_practice=payload.is_practice,
         created_by_user_id=principal.subject_id or "user_anonymous",
     )

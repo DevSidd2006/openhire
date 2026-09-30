@@ -40,7 +40,10 @@ class CreateJobRequest(BaseModel):
     # recruiter posting a real opening. GET /jobs excludes these; only the
     # creating candidate (GET /jobs/practice/mine) and admin see them.
     is_practice: bool = False
-    openings: Optional[int] = Field(default=1, ge=1, description="Number of openings/vacancies")
+    openings: Optional[int] = Field(default=1, ge=1, le=100, description="Number of openings/vacancies")
+    # Recruiters enter this separately from the free-form description. Keep
+    # that exact value instead of asking the JD model to reconstruct it.
+    title: Optional[str] = Field(default=None, min_length=1, max_length=300)
 
 
 class JobResponse(BaseModel):
@@ -92,7 +95,7 @@ class UpdateJobRequest(BaseModel):
     description: Optional[str] = None
     department: Optional[str] = None
     level: Optional[str] = None
-    openings: Optional[int] = Field(default=None, ge=1)
+    openings: Optional[int] = Field(default=None, ge=1, le=100)
     required_skills: Optional[List[str]] = None
     preferred_skills: Optional[List[str]] = None
     required_qualifications: Optional[List[str]] = None

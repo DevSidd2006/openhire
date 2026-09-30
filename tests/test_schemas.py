@@ -6,6 +6,7 @@ from schemas.job import JobDescription, Competency
 from schemas.resume import ParsedResume, WorkExperience, Education
 from schemas.interview import InterviewTranscript, InterviewQuestion, InterviewAnswer
 from schemas.scoring import CandidateScores
+from api.models_jobs import CreateJobRequest
 from schemas.evaluation import (
     TechnicalEvaluation,
     BehavioralEvaluation,
@@ -56,6 +57,11 @@ class TestJobDescription:
         )
         total = sum(c.weight for c in job.competencies)
         assert abs(total - 1.0) <= 0.01
+
+    @pytest.mark.parametrize("openings", [0, 101])
+    def test_openings_must_be_between_one_and_one_hundred(self, openings):
+        with pytest.raises(ValidationError):
+            CreateJobRequest(description="A valid job description", openings=openings)
 
 
 class TestParsedResume:

@@ -1455,17 +1455,6 @@
 
         document.getElementById('pipelineBox').addEventListener('click', runPipeline);
 
-        // Auto-start pipeline when visible
-        const pipelineObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    setTimeout(runPipeline, 800);
-                    pipelineObserver.disconnect();
-                }
-            });
-        }, { threshold: 0.35 });
-
-        pipelineObserver.observe(document.getElementById('pipelineBox'));
     </script>
 </body>
 </html>

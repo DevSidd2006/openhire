@@ -153,7 +153,21 @@ async function fetchJob(jobId) {
 
 async function fetchApplicationsForCandidate(candidateId) {
   const data = await apiRequest(`/applications?candidate_id=${encodeURIComponent(candidateId)}`);
-  return data.applications || [];
+  const applications = data.applications || [];
+  // Application records intentionally contain ids only. Resolve titles in a
+  // single batch so the candidate dashboard can show the public role name.
+  const jobs = await Promise.all(applications.map(async (application) => {
+    try {
+      const job = await fetchJob(application.job_id);
+      return [application.job_id, job.title];
+    } catch (err) {
+      return [application.job_id, null];
+    }
+  }));
+  const titles = Object.fromEntries(jobs);
+  return applications.map(application => Object.assign({}, application, {
+    job_title: titles[application.job_id] || null,
+  }));
 }
 
 /** GET /auth/me - the signed-in user's full profile. */
@@ -514,4 +528,3 @@ if (document.readyState === 'loading') {
 } else {
   initReveal();
 }
-

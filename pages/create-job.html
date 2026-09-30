@@ -63,9 +63,14 @@
   async function handleJobCreate() {
     const title = document.getElementById('jobTitle').value.trim();
     const desc = document.getElementById('jobDescription').value.trim();
-    const openingsVal = parseInt(document.getElementById('jobOpenings').value, 10) || 1;
+    const openingsInput = document.getElementById('jobOpenings').value.trim();
+    const openingsVal = Number.parseInt(openingsInput, 10);
     if (!desc) {
       alert('Please provide a job description.');
+      return;
+    }
+    if (!Number.isInteger(openingsVal) || openingsVal < 1 || openingsVal > 100) {
+      alert('Target openings must be a whole number between 1 and 100.');
       return;
     }
 
@@ -78,7 +83,7 @@
     try {
       const job = await apiRequest('/jobs', {
         method: 'POST',
-        body: { description: fullDescription, openings: openingsVal },
+        body: { description: fullDescription, title: title || undefined, openings: openingsVal },
       });
       alert(`Job successfully parsed and published! (${job.job.title} - ${job.job.openings || openingsVal} Openings)`);
       window.location.href = `job-detail.html?job_id=${encodeURIComponent(job.job_id)}`;
