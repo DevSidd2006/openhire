@@ -824,6 +824,77 @@
             .score-fill { transition: none; }
             .p-conn-particle.go, .p-conn-fill, .p-icon, .p-step-num { animation: none; transition: none; }
         }
+
+        /* ─── SCROLL TO TOP ─── */
+        .scroll-to-top {
+            position: fixed;
+            right: clamp(1rem, 3vw, 2rem);
+            bottom: clamp(1rem, 3vw, 2rem);
+            z-index: 90;
+
+            width: 44px;
+            height: 44px;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            appearance: none;
+            border: 1px solid var(--surface-border);
+            border-radius: 50%;
+            background: var(--surface);
+            color: var(--ink);
+
+            font: inherit;
+            box-shadow: var(--shadow-md);
+            cursor: pointer;
+            touch-action: manipulation;
+
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(12px);
+            pointer-events: none;
+
+            transition:
+                opacity 0.2s ease,
+                transform 0.2s ease,
+                visibility 0.2s ease,
+                background 0.2s ease;
+        }
+
+        .scroll-to-top:hover {
+            background: var(--canvas-deep);
+        }
+
+        .scroll-to-top:focus-visible {
+            outline: 2px solid var(--ink);
+            outline-offset: 3px;
+        }
+
+        .scroll-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .scroll-to-top i {
+            font-size: 1rem;
+        }
+
+        @media (max-width: 480px) {
+            .scroll-to-top {
+                width: 40px;
+                height: 40px;
+                right: 1rem;
+                bottom: 1rem;
+            }
+
+            .scroll-to-top i {
+                font-size: 0.9rem;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -1266,6 +1337,18 @@
         </div>
     </section>
 
+
+    <!-- Scroll to top -->
+    <button
+        type="button"
+        class="scroll-to-top"
+        id="scrollToTop"
+        aria-label="Scroll to top"
+        title="Scroll to top"
+    >
+        <i class="ph-bold ph-arrow-up" aria-hidden="true"></i>
+    </button>
+
     <footer>
         <p>OpenHire © 2026 — AI-Powered Interviews for Hiring</p>
     </footer>
@@ -1466,6 +1549,40 @@
         }, { threshold: 0.35 });
 
         pipelineObserver.observe(document.getElementById('pipelineBox'));
+
+        // ─── Scroll to top ───
+        (() => {
+            const scrollToTopButton = document.getElementById('scrollToTop');
+
+            if (!scrollToTopButton) return;
+
+            const toggleScrollButton = () => {
+                scrollToTopButton.classList.toggle(
+                    'visible',
+                    window.scrollY > 400
+                );
+            };
+
+            const scrollToTop = () => {
+                const prefersReducedMotion = window.matchMedia(
+                    '(prefers-reduced-motion: reduce)'
+                ).matches;
+
+                window.scrollTo({
+                    top: 0,
+                    behavior: prefersReducedMotion ? 'auto' : 'smooth'
+                });
+            };
+
+            window.addEventListener('scroll', toggleScrollButton, {
+                passive: true
+            });
+
+            scrollToTopButton.addEventListener('click', scrollToTop);
+
+            toggleScrollButton();
+        })();
+
     </script>
 </body>
 </html>
