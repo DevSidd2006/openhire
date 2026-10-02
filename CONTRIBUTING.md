@@ -13,7 +13,14 @@ git clone https://github.com/DevSidd2006/OpenHire.git
 cd OpenHire
 python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                             # Defaults to offline mock mode
+cp .env.example .env
+
+# For offline development, the example configuration uses:
+# LLM_PROVIDER=mock
+# EMBEDDING_PROVIDER=mock
+# DATABASE_URL=
+# AUTH_ENABLED=false
+
 python -m uvicorn api.app:app --reload
 ```
 
