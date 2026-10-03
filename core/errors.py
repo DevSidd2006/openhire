@@ -123,6 +123,14 @@ class ConflictError(AppError):
     detail = "This operation is not valid for the resource's current state."
 
 
+class RateLimitExceededError(AppError):
+    """429 - the client has sent too many requests in the current window."""
+
+    status_code = 429
+    code = "rate_limit_exceeded"
+    detail = "Too many requests. Please try again later."
+
+
 class PayloadTooLargeError(AppError):
     """413 - the request body exceeded `MAX_REQUEST_BODY_BYTES`."""
 
@@ -186,6 +194,7 @@ __all__ = [
     "ForbiddenError",
     "NotFoundError",
     "ConflictError",
+    "RateLimitExceededError",
     "PayloadTooLargeError",
     "InternalError",
     "ConfigurationError",
