@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections import defaultdict
 from typing import Callable
 
 from fastapi import FastAPI
@@ -175,28 +174,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Per-IP sliding-window rate limiter.
 
     Tracks request timestamps per client IP in memory. Stale entries are
-    pruned on each request so the dict does not grow unbounded. Static
-    assets (served under /app) and health checks are exempt — only the API
-    prefix is rate-limited.
+    pruned on each request and empty client keys are removed so the dict
+    does not grow unbounded. Static assets and health/liveness endpoints
+    are exempt.
     """
+
+    _EXEMPT_PATHS = frozenset({"/health", "/docs", "/openapi.json"})
 
     def __init__(self, app, *, max_requests: int, window_seconds: int, api_prefix: str) -> None:
         super().__init__(app)
         self._max_requests = max_requests
         self._window_seconds = window_seconds
         self._api_prefix = api_prefix or "/"
-        self._hits: dict[str, list[float]] = defaultdict(list)
+        self._hits: dict[str, list[float]] = {}
 
     def _client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
         return request.client.host if request.client else "unknown"
 
     def _is_rate_limited_path(self, path: str) -> bool:
+        if path.startswith("/app"):
+            return False
         if self._api_prefix == "/":
-            return not path.startswith("/app")
-        return path.startswith(self._api_prefix)
+            suffix = path
+        elif path == self._api_prefix or path.startswith(f"{self._api_prefix}/"):
+            suffix = path[len(self._api_prefix):]
+        else:
+            return False
+        bare = suffix.rstrip("/") or "/"
+        if bare in self._EXEMPT_PATHS:
+            return False
+        return True
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
@@ -207,12 +214,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client = self._client_ip(request)
         window_start = now - self._window_seconds
 
-        timestamps = self._hits[client]
-        self._hits[client] = [t for t in timestamps if t > window_start]
+        timestamps = [t for t in self._hits.get(client, []) if t > window_start]
+        if timestamps:
+            self._hits[client] = timestamps
+        else:
+            self._hits.pop(client, None)
 
-        if len(self._hits[client]) >= self._max_requests:
+        if len(timestamps) >= self._max_requests:
             error = RateLimitExceededError()
-            retry_after = int(self._hits[client][0] - window_start) + 1
+            retry_after = int(timestamps[0] - window_start) + 1
             logger.warning(
                 "rate limit exceeded",
                 extra=log_context(
@@ -226,12 +236,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=error.status_code,
                 content=error.to_body(request_id=getattr(request.state, "request_id", None)),
-                headers={"Retry-After": str(retry_after)},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(self._max_requests),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(retry_after),
+                },
             )
 
-        self._hits[client].append(now)
+        timestamps.append(now)
+        self._hits[client] = timestamps
         response = await call_next(request)
-        remaining = self._max_requests - len(self._hits[client])
+        remaining = self._max_requests - len(timestamps)
         response.headers["X-RateLimit-Limit"] = str(self._max_requests)
         response.headers["X-RateLimit-Remaining"] = str(max(remaining, 0))
         response.headers["X-RateLimit-Reset"] = str(self._window_seconds)
