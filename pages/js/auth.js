@@ -140,13 +140,43 @@ function guardAuthenticatedPage() {
 }
 
 /**
- * Automatically capture access and refresh tokens passed via query params from OAuth redirects.
+ * Automatically capture one-time ticket or tokens from OAuth redirects, exchange if needed,
+ * store tokens, and clean the address bar. Prevents credentials from leaking in URLs.
  */
-function captureOAuthTokensFromUrl() {
+async function captureOAuthTokensFromUrl() {
   const urlParams = new URLSearchParams(window.location.search);
+  const ticket = urlParams.get('ticket');
   const accessToken = urlParams.get('access_token');
   const refreshToken = urlParams.get('refresh_token');
 
+  // Immediately remove query params from browser history/address bar
+  if (ticket || accessToken) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // 1. One-time ticket exchange (secure standard flow)
+  if (ticket && typeof apiRequest === 'function') {
+    try {
+      const response = await apiRequest('/auth/linkedin/exchange', {
+        method: 'POST',
+        body: { ticket },
+      });
+      setTokens(response.access_token, response.refresh_token);
+      setCurrentUser({
+        name: response.user.email,
+        role: response.user.user_type,
+        user_id: response.user.user_id,
+      });
+      if (response.user.user_type === 'candidate' && typeof resolveCandidateId === 'function') {
+        await resolveCandidateId();
+      }
+    } catch (err) {
+      console.error('OAuth ticket exchange failed:', err);
+    }
+    return;
+  }
+
+  // 2. Direct tokens fallback
   if (accessToken && refreshToken) {
     setTokens(accessToken, refreshToken);
     const payload = decodeJWT(accessToken);
@@ -157,7 +187,6 @@ function captureOAuthTokensFromUrl() {
       userData.role = payload.user_type || payload.role;
       localStorage.setItem('openhire_user', JSON.stringify(userData));
     }
-    window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
 
