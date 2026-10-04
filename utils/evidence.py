@@ -240,7 +240,12 @@ def is_valid_evidence(
     Reuses existing repository primitives:
     - evidence_type cannot be 'insufficient' (supporting/contradicting are valid)
     - text must be non-empty and non-whitespace
-    - candidate_id (if stamped) must match candidate_id (validate_evidence_belongs_to_candidate)
+    - when candidate_id is provided: evidence.candidate_id must be stamped AND must
+      match candidate_id exactly.  Unstamped evidence (candidate_id=None) does NOT
+      count as candidate-specific evidence inside this path.  Note: the lower-level
+      helper validate_evidence_belongs_to_candidate() deliberately treats None as
+      "not yet a violation" for global/pipeline use-cases; we apply the stricter rule
+      here without modifying that helper.
     - for transcript evidence: question_id must be present and non-empty, and if
       transcript is provided, must reference a real question in the transcript
       (validate_evidence_references_real_question)
@@ -252,8 +257,13 @@ def is_valid_evidence(
     text = getattr(evidence, "text", None)
     if not text or not str(text).strip():
         return False
-    if candidate_id is not None and not validate_evidence_belongs_to_candidate(evidence, candidate_id):
-        return False
+    if candidate_id is not None:
+        # Strict ownership: unstamped evidence must NOT count as candidate-specific.
+        if getattr(evidence, "candidate_id", None) is None:
+            return False
+        # Mismatch: stamped to a different candidate.
+        if not validate_evidence_belongs_to_candidate(evidence, candidate_id):
+            return False
     if getattr(evidence, "source_type", None) == "transcript":
         question_id = getattr(evidence, "question_id", None)
         if not question_id or not str(question_id).strip():

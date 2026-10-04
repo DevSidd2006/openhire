@@ -517,6 +517,97 @@ class TestEvidenceCoverageUnitScenarios:
         assert coverage == 1.0
 
 
+class TestUnstampedEvidenceRegression:
+    """Regression tests for the Sourcery finding:
+
+    When candidate_id is supplied, an EvidenceItem with candidate_id=None
+    (unstamped) must NOT pass is_valid_evidence(), and must NOT contribute to
+    evidence_backed_coverage.  validate_evidence_belongs_to_candidate() retains
+    its original "None = not yet a violation" behaviour for all other callers.
+    """
+
+    # ------------------------------------------------------------------
+    # Helper: build an unstamped EvidenceItem (candidate_id explicitly None)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _make_unstamped(source_type: str = "resume") -> EvidenceItem:
+        return EvidenceItem(
+            evidence_id="ev_unstamped",
+            source_type=source_type,
+            text="Some valid evidence text without a candidate stamp.",
+            relevance=0.8,
+            agent="test_agent",
+            explanation="Unstamped – no candidate_id",
+            candidate_id=None,
+        )
+
+    # 1. candidate_id supplied + evidence.candidate_id=None => invalid
+    def test_unstamped_evidence_invalid_when_candidate_id_provided(self):
+        """Regression: unstamped evidence must be INVALID when caller supplies a candidate_id."""
+        ev = self._make_unstamped()
+        assert is_valid_evidence(ev, candidate_id="cand_001") is False
+
+    # 2. candidate_id supplied + matching candidate_id => valid
+    def test_stamped_matching_candidate_id_is_valid(self):
+        """Regression: evidence stamped with the CORRECT candidate_id must remain valid."""
+        ev = create_evidence(
+            source_type="resume",
+            text="Stamped, matching candidate evidence.",
+            agent="test_agent",
+            explanation="Correctly stamped",
+            candidate_id="cand_001",
+        )
+        assert is_valid_evidence(ev, candidate_id="cand_001") is True
+
+    # 3. candidate_id supplied + different candidate_id => invalid
+    def test_stamped_wrong_candidate_id_is_invalid(self):
+        """Regression: evidence stamped with a DIFFERENT candidate_id must be invalid."""
+        ev = create_evidence(
+            source_type="resume",
+            text="Evidence belonging to another candidate.",
+            agent="test_agent",
+            explanation="Wrong stamp",
+            candidate_id="cand_999",
+        )
+        assert is_valid_evidence(ev, candidate_id="cand_001") is False
+
+    # 4. coverage does not count unstamped evidence
+    def test_coverage_excludes_unstamped_evidence(self):
+        """Regression: compute_evidence_backed_coverage must NOT count unstamped evidence
+        as valid when candidate_id is provided, even though the evidence text is valid."""
+        ev_unstamped = self._make_unstamped()
+        cs = CompetencyScore(
+            competency_name="Python",
+            score=9.0,
+            confidence=0.9,
+            explanation="Grounded by unstamped evidence – should not count",
+            evidence=[ev_unstamped],
+        )
+        coverage = compute_evidence_backed_coverage(
+            competency_scores=[cs],
+            rubric={"Python": 1.0},
+            candidate_id="cand_001",
+        )
+        assert coverage == 0.0
+
+    # 5. validate_evidence_belongs_to_candidate global semantic is UNCHANGED
+    def test_validate_evidence_belongs_to_candidate_still_allows_none(self):
+        """Regression: the lower-level helper must keep treating None as 'not yet a
+        violation' so existing pipeline callers are unaffected."""
+        from utils.evidence import validate_evidence_belongs_to_candidate
+
+        ev_unstamped = self._make_unstamped()
+        # Global helper: None is NOT a violation (original behaviour preserved)
+        assert validate_evidence_belongs_to_candidate(ev_unstamped, "cand_001") is True
+
+    # 6. Without candidate_id, unstamped evidence still passes is_valid_evidence
+    def test_unstamped_evidence_valid_when_no_candidate_id_required(self):
+        """Regression: if no candidate_id is supplied at all, unstamped evidence must
+        still pass is_valid_evidence (no regression on the no-candidate_id path)."""
+        ev = self._make_unstamped()
+        assert is_valid_evidence(ev) is True
+
+
 class TestScoringAgentEvidenceCoverageIntegration:
     """Integration and regression tests for ScoringAgent and CandidateScores."""
 
