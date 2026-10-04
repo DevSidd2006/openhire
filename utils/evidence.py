@@ -2,7 +2,7 @@
 Utility functions for evidence tracking (P2: canonical evidence model).
 """
 import re
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING
 from schemas.evaluation import EvidenceItem, EvidenceType
 
 if TYPE_CHECKING:
@@ -228,3 +228,155 @@ def summarize_evidence(evidence_list: List[EvidenceItem]) -> str:
         else:
             summary += f"{i}. {item.text[:100]}...\n"
     return summary
+
+
+def is_valid_evidence(
+    evidence: Optional[EvidenceItem],
+    candidate_id: Optional[str] = None,
+    transcript: Optional["InterviewTranscript"] = None,
+) -> bool:
+    """Validate that an individual evidence item is grounded and traceable.
+
+    Reuses existing repository primitives:
+    - evidence_type cannot be 'insufficient' (supporting/contradicting are valid)
+    - text must be non-empty and non-whitespace
+    - candidate_id (if stamped) must match candidate_id (validate_evidence_belongs_to_candidate)
+    - for transcript evidence: question_id must be present and non-empty, and if
+      transcript is provided, must reference a real question in the transcript
+      (validate_evidence_references_real_question)
+    """
+    if evidence is None:
+        return False
+    if getattr(evidence, "evidence_type", None) == "insufficient":
+        return False
+    text = getattr(evidence, "text", None)
+    if not text or not str(text).strip():
+        return False
+    if candidate_id is not None and not validate_evidence_belongs_to_candidate(evidence, candidate_id):
+        return False
+    if getattr(evidence, "source_type", None) == "transcript":
+        question_id = getattr(evidence, "question_id", None)
+        if not question_id or not str(question_id).strip():
+            return False
+        if transcript is not None and not validate_evidence_references_real_question(evidence, transcript):
+            return False
+    return True
+
+
+def is_competency_evidence_backed(
+    competency_score: Any,
+    candidate_id: Optional[str] = None,
+    transcript: Optional["InterviewTranscript"] = None,
+) -> bool:
+    """Check if an evaluated competency score is backed by valid, traceable evidence.
+
+    Returns False if:
+    - competency_score is None
+    - evidence_status is 'insufficient'
+    - evidence list is empty
+    - none of the evidence items satisfy is_valid_evidence
+    """
+    if competency_score is None:
+        return False
+    if getattr(competency_score, "evidence_status", "supported") == "insufficient":
+        return False
+    evidence_list = getattr(competency_score, "evidence", None)
+    if not evidence_list:
+        return False
+    return any(
+        is_valid_evidence(e, candidate_id=candidate_id, transcript=transcript)
+        for e in evidence_list
+    )
+
+
+def compute_evidence_backed_coverage(
+    competency_scores: Optional[Sequence[Any]],
+    rubric: Optional[Any],
+    candidate_id: Optional[str] = None,
+    transcript: Optional["InterviewTranscript"] = None,
+) -> float:
+    """Deterministic post-evaluation metric measuring evidence-backed coverage
+    of evaluated competencies.
+
+    Semantic:
+        "How much of the candidate's evaluated competency profile is backed
+        by valid, traceable evidence?"
+
+    Formula:
+        evidence_backed_coverage = (
+            sum(weight_i for applicable evaluated i with valid evidence)
+            / sum(weight_i for all applicable evaluated i)
+        )
+
+    The denominator is the total rubric weight of the candidate's applicable
+    evaluated competencies (NOT the job's total competency weight). This preserves
+    the strict distinction from rubric_coverage:
+        - rubric_coverage: evaluates completeness against the entire job rubric
+          (denominator = sum of all job competency weights)
+        - evidence_backed_coverage: evaluates evidence grounding across the candidate's
+          actual evaluated competency profile (denominator = sum of evaluated competency weights)
+
+    Handles:
+    - no competency scores -> 0.0
+    - empty evidence -> 0.0 (or partial if other competencies have valid evidence)
+    - insufficient evidence -> excluded from numerator
+    - multiple evidence items -> competency counted once, not multiplied
+    - duplicate evidence -> handled cleanly, counted once
+    - invalid evidence -> excluded from numerator
+    - missing competency matches / unmatched competencies -> unmatched excluded from rubric weights
+    - zero total applicable weight -> 0.0
+    - non-normalized weights -> normalized cleanly by total evaluated weight to [0.0, 1.0]
+
+    Returns:
+        float in [0.0, 1.0]
+    """
+    if not competency_scores or rubric is None:
+        return 0.0
+
+    rubric_weights: Dict[str, float] = {}
+    if hasattr(rubric, "competencies"):
+        competencies = getattr(rubric, "competencies", None)
+        if competencies:
+            for c in competencies:
+                name = getattr(c, "name", None)
+                weight = getattr(c, "weight", 0.0)
+                if name:
+                    rubric_weights[str(name).strip().lower()] = float(weight)
+    elif isinstance(rubric, dict):
+        for k, v in rubric.items():
+            rubric_weights[str(k).strip().lower()] = float(v)
+    elif isinstance(rubric, (list, tuple)):
+        for item in rubric:
+            if hasattr(item, "name") and hasattr(item, "weight"):
+                rubric_weights[str(item.name).strip().lower()] = float(item.weight)
+
+    if not rubric_weights:
+        return 0.0
+
+    # Index evaluated competency scores by normalized name (first occurrence wins)
+    by_name: Dict[str, Any] = {}
+    for cs in competency_scores:
+        name = getattr(cs, "competency_name", None)
+        if name:
+            by_name.setdefault(str(name).strip().lower(), cs)
+
+    total_evaluated_weight = 0.0
+    valid_weight = 0.0
+
+    # Iterate over rubric competencies for deterministic evaluation
+    for comp_name, weight in rubric_weights.items():
+        if weight <= 0:
+            continue
+        cs = by_name.get(comp_name)
+        if cs is None:
+            # Competency was not evaluated - not part of the candidate's evaluated profile
+            continue
+        total_evaluated_weight += weight
+        if is_competency_evidence_backed(cs, candidate_id=candidate_id, transcript=transcript):
+            valid_weight += weight
+
+    if total_evaluated_weight <= 0:
+        return 0.0
+
+    coverage = valid_weight / total_evaluated_weight
+    return max(0.0, min(1.0, float(coverage)))
