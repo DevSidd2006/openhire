@@ -34,6 +34,8 @@
   --danger-bg:  #fdebec;  --danger-text:  #9f2f2d;
   --warning-bg: #fbf3db;  --warning-text: #956400;
   --info-bg:    #e1f3fe;  --info-text:    #1f6c9f;
+  --success-border: rgba(52, 101, 56, 0.18);
+  --info-border: rgba(31, 108, 159, 0.18);
 
   /* Compatibility aliases used by page scripts */
   --success: #346538;        --success-subtle: #edf3ec;
@@ -96,6 +98,8 @@ html[data-theme="dark"] {
   --danger-bg: #3a2022; --danger-text: #f0a8a7;
   --warning-bg: #3b301b; --warning-text: #e8c777;
   --info-bg: #1d3341; --info-text: #9ed1ee;
+  --success-border: rgba(167, 214, 173, 0.24);
+  --info-border: rgba(158, 209, 238, 0.24);
   --success: #a7d6ad; --success-subtle: #1e3325;
   --danger: #f0a8a7; --danger-subtle: #3a2022;
   --warning: #e8c777; --warning-subtle: #3b301b;
