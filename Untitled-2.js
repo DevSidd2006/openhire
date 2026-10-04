@@ -1,10 +1,6 @@
-<script>
-colors = ["red", "green", "blue", "yellow"]
-
-counter = 0
+const colors = ["red", "green", "blue", "yellow"];
+let counter = 0;
 
 setInterval(() => {
-    document.body.style.backgroundColor = colors[counter++]
-}, 1000)
-
-</script>
+    document.body.style.backgroundColor = colors[counter++ % colors.length];
+}, 1000);
