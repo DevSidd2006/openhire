@@ -608,6 +608,88 @@ class TestUnstampedEvidenceRegression:
         assert is_valid_evidence(ev) is True
 
 
+class TestEmptyWhitespaceCandidateIdRegression:
+    """Regression tests for PR #42 maintainer comment:
+    evidence.candidate_id must be a non-empty, non-whitespace string that exactly
+    equals candidate_id.  None, "", and whitespace-only values must all be rejected.
+    """
+
+    _TEXT = "Valid evidence text that is non-empty."
+
+    def _make_ev(self, candidate_id_value) -> EvidenceItem:
+        """Build a resume EvidenceItem with an arbitrary candidate_id value."""
+        return EvidenceItem(
+            evidence_id="ev_cid_test",
+            source_type="resume",
+            text=self._TEXT,
+            relevance=0.8,
+            agent="test_agent",
+            explanation="candidate_id boundary test",
+            candidate_id=candidate_id_value,
+        )
+
+    # --- is_valid_evidence boundary tests ---
+
+    def test_evidence_candidate_id_none_is_invalid(self):
+        """candidate_id=None on evidence -> invalid when caller supplies candidate_id."""
+        assert is_valid_evidence(self._make_ev(None), candidate_id="cand_001") is False
+
+    def test_evidence_candidate_id_empty_string_is_invalid(self):
+        """candidate_id=\"\" on evidence -> invalid when caller supplies candidate_id."""
+        assert is_valid_evidence(self._make_ev(""), candidate_id="cand_001") is False
+
+    def test_evidence_candidate_id_whitespace_only_is_invalid(self):
+        """candidate_id=\"   \" on evidence -> invalid when caller supplies candidate_id."""
+        assert is_valid_evidence(self._make_ev("   "), candidate_id="cand_001") is False
+
+    def test_evidence_candidate_id_matching_nonempty_is_valid(self):
+        """Matching non-empty candidate_id -> valid."""
+        assert is_valid_evidence(self._make_ev("cand_001"), candidate_id="cand_001") is True
+
+    def test_evidence_candidate_id_wrong_candidate_is_invalid(self):
+        """Wrong (non-empty) candidate_id -> invalid."""
+        assert is_valid_evidence(self._make_ev("cand_999"), candidate_id="cand_001") is False
+
+    def test_validate_evidence_belongs_to_candidate_none_unchanged(self):
+        """validate_evidence_belongs_to_candidate() still returns True for None (global semantic preserved)."""
+        from utils.evidence import validate_evidence_belongs_to_candidate
+        ev = self._make_ev(None)
+        assert validate_evidence_belongs_to_candidate(ev, "cand_001") is True
+
+    def test_coverage_excludes_empty_string_candidate_id(self):
+        """evidence.candidate_id=\"\" must NOT contribute to evidence_backed_coverage."""
+        ev = self._make_ev("")
+        cs = CompetencyScore(
+            competency_name="Python",
+            score=9.0,
+            confidence=0.9,
+            explanation="Empty-string candidate_id – must not count",
+            evidence=[ev],
+        )
+        coverage = compute_evidence_backed_coverage(
+            competency_scores=[cs],
+            rubric={"Python": 1.0},
+            candidate_id="cand_001",
+        )
+        assert coverage == 0.0
+
+    def test_coverage_excludes_whitespace_candidate_id(self):
+        """evidence.candidate_id=\"   \" must NOT contribute to evidence_backed_coverage."""
+        ev = self._make_ev("   ")
+        cs = CompetencyScore(
+            competency_name="Python",
+            score=9.0,
+            confidence=0.9,
+            explanation="Whitespace-only candidate_id – must not count",
+            evidence=[ev],
+        )
+        coverage = compute_evidence_backed_coverage(
+            competency_scores=[cs],
+            rubric={"Python": 1.0},
+            candidate_id="cand_001",
+        )
+        assert coverage == 0.0
+
 class TestScoringAgentEvidenceCoverageIntegration:
     """Integration and regression tests for ScoringAgent and CandidateScores."""
 

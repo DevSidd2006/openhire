@@ -240,12 +240,12 @@ def is_valid_evidence(
     Reuses existing repository primitives:
     - evidence_type cannot be 'insufficient' (supporting/contradicting are valid)
     - text must be non-empty and non-whitespace
-    - when candidate_id is provided: evidence.candidate_id must be stamped AND must
-      match candidate_id exactly.  Unstamped evidence (candidate_id=None) does NOT
-      count as candidate-specific evidence inside this path.  Note: the lower-level
-      helper validate_evidence_belongs_to_candidate() deliberately treats None as
-      "not yet a violation" for global/pipeline use-cases; we apply the stricter rule
-      here without modifying that helper.
+    - when candidate_id is provided: evidence.candidate_id must be a non-empty,
+      non-whitespace string that exactly equals candidate_id.  None, "", and
+      whitespace-only values are all rejected.  Note: the lower-level helper
+      validate_evidence_belongs_to_candidate() deliberately treats None as "not yet
+      a violation" for global/pipeline use-cases; we apply the stricter rule here
+      without modifying that helper.
     - for transcript evidence: question_id must be present and non-empty, and if
       transcript is provided, must reference a real question in the transcript
       (validate_evidence_references_real_question)
@@ -258,8 +258,10 @@ def is_valid_evidence(
     if not text or not str(text).strip():
         return False
     if candidate_id is not None:
-        # Strict ownership: unstamped evidence must NOT count as candidate-specific.
-        if getattr(evidence, "candidate_id", None) is None:
+        # Strict ownership: evidence.candidate_id must be a non-empty, non-whitespace
+        # string that exactly equals candidate_id.  None, "", and "   " are all invalid.
+        ev_cid = getattr(evidence, "candidate_id", None)
+        if not ev_cid or not str(ev_cid).strip():
             return False
         # Mismatch: stamped to a different candidate.
         if not validate_evidence_belongs_to_candidate(evidence, candidate_id):
