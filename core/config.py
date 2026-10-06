@@ -158,11 +158,6 @@ class AppSettings(BaseModel):
     # -- limits ----------------------------------------------------------
     max_request_body_bytes: int = Field(default=12 * 1024 * 1024, ge=1024)
 
-    # -- rate limiting ---------------------------------------------------
-    rate_limit_enabled: bool = False
-    rate_limit_requests: int = Field(default=100, ge=1)
-    rate_limit_window_seconds: int = Field(default=60, ge=1)
-
     # -- JWT / Authentication -----------------------------------------------
     jwt_secret_key: str = Field(default=DEV_JWT_SECRET_KEY)
     access_token_expire_minutes: int = Field(default=15, ge=1)
@@ -323,9 +318,6 @@ class AppSettings(BaseModel):
             auth_enabled=_env_bool("AUTH_ENABLED", False),
             auth_required_by_default=_env_bool("AUTH_REQUIRED_BY_DEFAULT", False),
             max_request_body_bytes=_env_int("MAX_REQUEST_BODY_BYTES", 12 * 1024 * 1024),
-            rate_limit_enabled=_env_bool("RATE_LIMIT_ENABLED", False),
-            rate_limit_requests=_env_int("RATE_LIMIT_REQUESTS", 100),
-            rate_limit_window_seconds=_env_int("RATE_LIMIT_WINDOW_SECONDS", 60),
             jwt_secret_key=_env("JWT_SECRET_KEY", DEV_JWT_SECRET_KEY),
             access_token_expire_minutes=_env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 15),
             refresh_token_expire_days=_env_int("REFRESH_TOKEN_EXPIRE_DAYS", 7),

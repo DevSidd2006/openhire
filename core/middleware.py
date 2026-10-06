@@ -20,11 +20,6 @@ exists because something concrete was missing, not to fill out a template.
                             The domain-level limit stays exactly as it is;
                             this is a cheaper outer bound, not a replacement.
 
-  RateLimitMiddleware       Per-IP sliding-window rate limiter. Protects
-                            public-facing API endpoints from abuse without
-                            an external dependency. Disabled by default;
-                            enabled via RATE_LIMIT_ENABLED=true.
-
   CORSMiddleware            Starlette's own, configured from AppSettings
                             (see `install_middleware`).
 
@@ -49,7 +44,7 @@ from starlette.responses import JSONResponse, Response
 
 from core.config import AppSettings
 from core.context import REQUEST_ID_HEADER, reset_request_id, set_request_id
-from core.errors import PayloadTooLargeError, RateLimitExceededError
+from core.errors import PayloadTooLargeError
 from core.logging import get_logger, log_context
 
 logger = get_logger("api.access")
@@ -170,90 +165,6 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Per-IP sliding-window rate limiter.
-
-    Tracks request timestamps per client IP in memory. Stale entries are
-    pruned on each request and empty client keys are removed so the dict
-    does not grow unbounded. Static assets and health/liveness endpoints
-    are exempt.
-    """
-
-    _EXEMPT_PATHS = frozenset({"/health", "/docs", "/openapi.json"})
-
-    def __init__(self, app, *, max_requests: int, window_seconds: int, api_prefix: str) -> None:
-        super().__init__(app)
-        self._max_requests = max_requests
-        self._window_seconds = window_seconds
-        self._api_prefix = api_prefix or "/"
-        self._hits: dict[str, list[float]] = {}
-
-    def _client_ip(self, request: Request) -> str:
-        return request.client.host if request.client else "unknown"
-
-    def _is_rate_limited_path(self, path: str) -> bool:
-        if path.startswith("/app"):
-            return False
-        if self._api_prefix == "/":
-            suffix = path
-        elif path == self._api_prefix or path.startswith(f"{self._api_prefix}/"):
-            suffix = path[len(self._api_prefix):]
-        else:
-            return False
-        bare = suffix.rstrip("/") or "/"
-        if bare in self._EXEMPT_PATHS:
-            return False
-        return True
-
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        path = request.url.path
-        if not self._is_rate_limited_path(path):
-            return await call_next(request)
-
-        now = time.monotonic()
-        client = self._client_ip(request)
-        window_start = now - self._window_seconds
-
-        timestamps = [t for t in self._hits.get(client, []) if t > window_start]
-        if timestamps:
-            self._hits[client] = timestamps
-        else:
-            self._hits.pop(client, None)
-
-        if len(timestamps) >= self._max_requests:
-            error = RateLimitExceededError()
-            retry_after = int(timestamps[0] - window_start) + 1
-            logger.warning(
-                "rate limit exceeded",
-                extra=log_context(
-                    event="rate_limit_exceeded",
-                    client_ip=client,
-                    path=path,
-                    limit=self._max_requests,
-                    window=self._window_seconds,
-                ),
-            )
-            return JSONResponse(
-                status_code=error.status_code,
-                content=error.to_body(request_id=getattr(request.state, "request_id", None)),
-                headers={
-                    "Retry-After": str(retry_after),
-                    "X-RateLimit-Limit": str(self._max_requests),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(retry_after),
-                },
-            )
-
-        timestamps.append(now)
-        self._hits[client] = timestamps
-        response = await call_next(request)
-        remaining = self._max_requests - len(timestamps)
-        response.headers["X-RateLimit-Limit"] = str(self._max_requests)
-        response.headers["X-RateLimit-Remaining"] = str(max(remaining, 0))
-        response.headers["X-RateLimit-Reset"] = str(self._window_seconds)
-        return response
-
-
 def install_middleware(app: FastAPI, settings: AppSettings) -> None:
     """Install the middleware stack, innermost first.
 
@@ -285,21 +196,12 @@ def install_middleware(app: FastAPI, settings: AppSettings) -> None:
             "same-origin requests are unaffected."
         )
 
-    if settings.rate_limit_enabled:
-        app.add_middleware(
-            RateLimitMiddleware,
-            max_requests=settings.rate_limit_requests,
-            window_seconds=settings.rate_limit_window_seconds,
-            api_prefix=settings.api_prefix,
-        )
-
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_body_bytes)
     app.add_middleware(RequestContextMiddleware, settings=settings)
 
 
 __all__ = [
     "BodySizeLimitMiddleware",
-    "RateLimitMiddleware",
     "RequestContextMiddleware",
     "install_middleware",
 ]
