@@ -35,9 +35,14 @@ function setTokens(accessToken, refreshToken) {
 }
 
 /**
- * Clear all authentication tokens and redirect to login.
+ * Clear all authentication tokens, expire server cookies, and redirect to login.
  */
-function logout() {
+async function logout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (err) {
+    // Proceed with client logout even if network request fails
+  }
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');
   localStorage.removeItem('openhire_user');
@@ -132,21 +137,104 @@ async function ensureValidAccessToken() {
  * Guard a page: redirect to login if not authenticated.
  * Call this at the top of pages that require authentication.
  */
-function guardAuthenticatedPage() {
+/**
+ * Guard a page: redirect to login if not authenticated.
+ * Awaits OAuth ticket exchange completion if one is pending.
+ */
+async function guardAuthenticatedPage() {
+  await initAuth();
   const token = getAccessToken();
   if (!token) {
     window.location.href = 'login.html';
+    return false;
   }
+  return true;
 }
 
 /** Recruiter-only pages still need a client-side guard because static pages
  * can be opened directly even when their API calls are role-protected. */
-function guardRecruiterPage() {
-  guardAuthenticatedPage();
-  const user = getCurrentUser();
+async function guardRecruiterPage() {
+  const authed = await guardAuthenticatedPage();
+  if (!authed) return false;
+  const user = typeof getCurrentUser === 'function' ? getCurrentUser() : JSON.parse(localStorage.getItem('openhire_user') || 'null');
   if (user && user.role !== 'recruiter' && user.role !== 'admin') {
     window.location.href = 'candidate.html';
     return false;
   }
   return true;
 }
+
+/**
+ * Automatically capture one-time ticket or tokens from OAuth redirects, exchange if needed,
+ * store tokens, and clean the address bar. Prevents credentials from leaking in URLs.
+ * Uses native fetch so it can run immediately before app.js is even parsed.
+ */
+async function captureOAuthTokensFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const ticket = urlParams.get('ticket');
+  const accessToken = urlParams.get('access_token');
+  const refreshToken = urlParams.get('refresh_token');
+
+  // Immediately remove query params from browser history/address bar
+  if (ticket || accessToken) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // 1. One-time ticket exchange (native fetch, completely independent of app.js)
+  if (ticket) {
+    try {
+      const res = await fetch('/auth/linkedin/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const response = await res.json();
+        setTokens(response.access_token, response.refresh_token);
+        const userData = {
+          name: response.user.email,
+          role: response.user.user_type,
+          user_id: response.user.user_id,
+        };
+        localStorage.setItem('openhire_user', JSON.stringify(userData));
+        if (typeof setCurrentUser === 'function') {
+          setCurrentUser(userData);
+        }
+        if (response.user.user_type === 'candidate' && typeof resolveCandidateId === 'function') {
+          await resolveCandidateId();
+        }
+      } else {
+        console.error('OAuth ticket exchange failed with HTTP status:', res.status);
+      }
+    } catch (err) {
+      console.error('OAuth ticket exchange failed:', err);
+    }
+    return;
+  }
+
+  // 2. Direct tokens fallback
+  if (accessToken && refreshToken) {
+    setTokens(accessToken, refreshToken);
+    const payload = decodeJWT(accessToken);
+    if (payload) {
+      const existingUser = localStorage.getItem('openhire_user');
+      let userData = existingUser ? JSON.parse(existingUser) : {};
+      userData.user_id = payload.sub || payload.user_id;
+      userData.role = payload.user_type || payload.role;
+      localStorage.setItem('openhire_user', JSON.stringify(userData));
+    }
+  }
+}
+
+let _authInitPromise = null;
+
+function initAuth() {
+  if (!_authInitPromise) {
+    _authInitPromise = captureOAuthTokensFromUrl();
+  }
+  return _authInitPromise;
+}
+
+// Start OAuth exchange immediately when script executes
+initAuth();

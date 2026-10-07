@@ -184,6 +184,13 @@ class AppSettings(BaseModel):
     # "Feature flag and failure-closed behaviour").
     byok_encryption_key: Optional[str] = None
 
+    # -- LinkedIn OIDC ---------------------------------------------------
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    linkedin_redirect_uri: str = "http://localhost:8000/auth/linkedin/callback"
+    linkedin_mock_enabled: bool = False
+
+    
     # ------------------------------------------------------------------
     # Read-through views of config/settings.py (never copies - see docstring)
     # ------------------------------------------------------------------
@@ -323,6 +330,12 @@ class AppSettings(BaseModel):
             refresh_token_expire_days=_env_int("REFRESH_TOKEN_EXPIRE_DAYS", 7),
             database_url=_env("DATABASE_URL", ""),
             byok_encryption_key=_env("BYOK_ENCRYPTION_KEY") or None,
+            linkedin_client_id=_env("LINKEDIN_CLIENT_ID", ""),
+            linkedin_client_secret=_env("LINKEDIN_CLIENT_SECRET", ""),
+            linkedin_redirect_uri=_env(
+                "LINKEDIN_REDIRECT_URI", "http://localhost:8000/auth/linkedin/callback"
+            ),
+            linkedin_mock_enabled=_env_bool("LINKEDIN_MOCK_ENABLED", False),
         )
 
 
