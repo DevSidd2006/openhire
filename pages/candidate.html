@@ -69,6 +69,11 @@
 
   const listEl = document.getElementById('candidateJobList');
   const appListEl = document.getElementById('candidateApplicationsList');
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
   appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
 
@@ -136,7 +141,7 @@
         <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
           <div style="flex:1; min-width:240px;">
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem; flex-wrap:wrap;">
-              <h4 style="font-weight:600; font-size:1.05rem; margin:0; letter-spacing:-0.01em;">Role: ${app.job_id}</h4>
+            <h4 style="font-weight:600; font-size:1.05rem; margin:0; letter-spacing:-0.01em;">Role: ${escapeHtml(app.job_title || app.job_id)}</h4>
               ${statusBadge}
             </div>
             <p class="card-sub" style="margin:0;">

@@ -154,8 +154,10 @@
     document.getElementById('behavioralSummary').textContent = report.behavioral_summary;
     document.getElementById('jobFitScore').textContent = `${report.scores.job_fit_score.toFixed(1)} / 10`;
     document.getElementById('jobFitSummary').textContent = report.job_fit_summary;
-    document.getElementById('integrityFlags').textContent = `${report.integrity_flags.length} Flags`;
-    document.getElementById('biasFlags').textContent = report.bias_flags.length ? `${report.bias_flags.length} Flags` : 'Clean';
+    const integrityCount = report.integrity_flags.length;
+    const biasCount = report.bias_flags.length;
+    document.getElementById('integrityFlags').textContent = `${integrityCount} ${integrityCount === 1 ? 'Flag' : 'Flags'}`;
+    document.getElementById('biasFlags').textContent = biasCount ? `${biasCount} ${biasCount === 1 ? 'Flag' : 'Flags'}` : 'Clean';
     document.getElementById('humanReview').textContent = report.requires_human_review ? 'Yes' : 'No';
 
     const quotesEl = document.getElementById('evidenceQuotes');

@@ -133,8 +133,23 @@
       return;
     }
 
-    const approved = versions.find(v => v.status === 'approved');
     const drafts = versions.filter(v => v.status === 'draft');
+    const approved = versions.find(v => v.status === 'approved');
+
+    // A newly drafted version coexists with the approved version. Show the
+    // draft first so drafting is visible and the recruiter can approve it.
+    if (drafts.length) {
+      const latest = drafts[drafts.length - 1];
+      el.innerHTML = `
+        <p class="card-sub" style="margin-bottom:0.5rem;">
+          <strong style="color:var(--warning);">Rubric v${latest.version} is a draft.</strong>
+          ${approved ? `Rubric v${approved.version} remains active until this version is approved.` : 'Nothing can be scored until you approve it.'}
+        </p>
+        ${competencyTags(latest)}
+        <button class="btn-primary" style="width:100%; margin-top:0.5rem;" onclick="approveRubric('${latest.rubric_id}')">Approve v${latest.version}</button>
+        <button class="btn-outline" style="width:100%; margin-top:0.4rem;" onclick="draftRubric()">Draft another version</button>`;
+      return;
+    }
 
     if (approved) {
       el.innerHTML = `
@@ -144,20 +159,6 @@
         </p>
         ${competencyTags(approved)}
         <button class="btn-outline" style="width:100%; margin-top:0.5rem;" onclick="draftRubric()">Draft a new version</button>`;
-      return;
-    }
-
-    if (drafts.length) {
-      const latest = drafts[drafts.length - 1];
-      el.innerHTML = `
-        <p class="card-sub" style="margin-bottom:0.5rem;">
-          <strong style="color:var(--warning);">Rubric v${latest.version} is a draft.</strong>
-          Nothing can be scored until you approve it. Read the competencies before approving —
-          an unreviewed rubric affects every ranking on this job.
-        </p>
-        ${competencyTags(latest)}
-        <button class="btn-primary" style="width:100%; margin-top:0.5rem;" onclick="approveRubric('${latest.rubric_id}')">Approve v${latest.version}</button>
-        <button class="btn-outline" style="width:100%; margin-top:0.4rem;" onclick="draftRubric()">Re-draft</button>`;
       return;
     }
 
