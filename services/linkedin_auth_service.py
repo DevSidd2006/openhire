@@ -24,19 +24,33 @@ LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
 
 class LinkedInAuthService:
     def __init__(self, settings: AppSettings) -> None:
+        self.settings = settings
         self.client_id = settings.linkedin_client_id
         self.client_secret = settings.linkedin_client_secret
         self.redirect_uri = settings.linkedin_redirect_uri
 
     @property
     def is_mock_mode(self) -> bool:
-        """Returns True if LinkedIn credentials are not configured."""
-        return not bool(self.client_id and self.client_secret)
+        """Gated mock authentication mode.
+
+        Mock authentication is ONLY allowed when:
+        1. Environment is not production.
+        2. AND either:
+           a) Mock mode is explicitly enabled via LINKEDIN_MOCK_ENABLED=true development setting.
+           b) Credentials (client_id / client_secret) are unset in development.
+        When live credentials are configured, live authentication MUST be used unless
+        LINKEDIN_MOCK_ENABLED is explicitly set to True in development.
+        """
+        if self.settings.environment == "production":
+            return False
+        if self.client_id and self.client_secret:
+            return self.settings.linkedin_mock_enabled
+        return self.settings.environment == "development" or self.settings.linkedin_mock_enabled
 
     def get_authorization_url(self, state: str) -> str:
         """Build LinkedIn OIDC authorization URL or redirect to mock callback."""
         if self.is_mock_mode:
-            logger.info("LinkedIn credentials unset: operating in offline MOCK mode")
+            logger.info("Operating in offline MOCK LinkedIn mode")
             return f"{self.redirect_uri}?code=mock_linkedin_code_123&state={urllib.parse.quote(state)}"
 
         params = {
@@ -56,7 +70,14 @@ class LinkedInAuthService:
         In mock mode, provides distinct deterministic identities for candidate
         and recruiter signups so each flow can be tested independently.
         """
-        if self.is_mock_mode or code.startswith("mock_"):
+        if not self.is_mock_mode:
+            if code.startswith("mock_"):
+                logger.warning("Rejected mock OAuth code when live LinkedIn credentials are active")
+                raise BadRequestError(
+                    "Mock codes are not permitted when live LinkedIn authentication is active."
+                )
+
+        if self.is_mock_mode:
             logger.info("Using mock LinkedIn userinfo profile", extra={"role": role})
             if role == "recruiter":
                 return {

@@ -322,7 +322,12 @@ async function resolveCandidateId() {
   }
 }
 
-function logoutUser() {
+async function logoutUser() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (err) {
+    // Proceed with client logout even if network request fails
+  }
   localStorage.removeItem('openhire_user');
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');

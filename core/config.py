@@ -184,10 +184,11 @@ class AppSettings(BaseModel):
     # "Feature flag and failure-closed behaviour").
     byok_encryption_key: Optional[str] = None
 
-        # -- LinkedIn OIDC ---------------------------------------------------
+    # -- LinkedIn OIDC ---------------------------------------------------
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_redirect_uri: str = "http://localhost:8000/auth/linkedin/callback"
+    linkedin_mock_enabled: bool = False
 
     
     # ------------------------------------------------------------------
@@ -334,6 +335,7 @@ class AppSettings(BaseModel):
             linkedin_redirect_uri=_env(
                 "LINKEDIN_REDIRECT_URI", "http://localhost:8000/auth/linkedin/callback"
             ),
+            linkedin_mock_enabled=_env_bool("LINKEDIN_MOCK_ENABLED", False),
         )
 
 

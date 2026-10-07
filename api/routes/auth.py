@@ -227,6 +227,15 @@ async def change_my_password(
     )
 
 
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(response: Response) -> dict[str, str]:
+    """Expire the openhire_access_token and openhire_refresh_token authentication cookies."""
+    response.delete_cookie(key="openhire_access_token", path="/", samesite="lax")
+    response.delete_cookie(key="openhire_refresh_token", path="/", samesite="lax")
+    response.delete_cookie(key="oauth_state", path="/", samesite="lax")
+    return {"status": "logged_out"}
+
+
 # ----------------------------------------------------------------------
 # LinkedIn OAuth Endpoints
 # ----------------------------------------------------------------------
@@ -377,12 +386,10 @@ async def linkedin_callback(
                 "LinkedIn login attempt with inactive account",
                 extra={"user_id": user.user_id, "email": email},
             )
-            err_res = RedirectResponse(
-                url="/app/login.html?error=account_inactive",
-                status_code=status.HTTP_302_FOUND,
+            raise UnauthorizedError(
+                "This account is not active.",
+                internal_detail=f"account {user.user_id!r} is inactive",
             )
-            err_res.delete_cookie("oauth_state")
-            return err_res
 
         # Update full_name and avatar if not already set
         updates = {}

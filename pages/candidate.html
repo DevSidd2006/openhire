@@ -64,9 +64,6 @@
 <script src="js/auth.js"></script>
 <script src="js/app.js"></script>
 <script>
-  guardAuthenticatedPage();
-  renderNavbar('dashboard');
-
   const listEl = document.getElementById('candidateJobList');
   const appListEl = document.getElementById('candidateApplicationsList');
   function escapeHtml(text) {
@@ -74,10 +71,14 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
-  appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
 
   (async () => {
+    if (!await guardAuthenticatedPage()) return;
+    renderNavbar('dashboard');
+
+    listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
+    appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
+
     try {
       const jobs = await fetchJobs();
       listEl.innerHTML = jobs.length ? jobs.map(job => `
