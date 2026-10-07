@@ -72,10 +72,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # Embedding Configuration
-# Production: use API-based (nvidia-nim) to avoid large local models
-# Uses nvidia/nemotron-3-embed-1b via free hosted API at integrate.api.nvidia.com
+# Default: mock provider for offline development (no API key required).
+# Production: set EMBEDDING_PROVIDER=nvidia-nim in environment to use the
+# nvidia/nemotron-3-embed-1b model via free hosted API at integrate.api.nvidia.com.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nvidia/nemotron-3-embed-1b")
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "nvidia-nim").lower()
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "mock").lower()
 
 # Vector Store Configuration
 # Production: use mock (in-memory) for simplicity on Render

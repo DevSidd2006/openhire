@@ -139,6 +139,18 @@ function guardAuthenticatedPage() {
   }
 }
 
+/** Recruiter-only pages still need a client-side guard because static pages
+ * can be opened directly even when their API calls are role-protected. */
+function guardRecruiterPage() {
+  guardAuthenticatedPage();
+  const user = getCurrentUser();
+  if (user && user.role !== 'recruiter' && user.role !== 'admin') {
+    window.location.href = 'candidate.html';
+    return false;
+  }
+  return true;
+}
+
 /**
  * Automatically capture one-time ticket or tokens from OAuth redirects, exchange if needed,
  * store tokens, and clean the address bar. Prevents credentials from leaking in URLs.

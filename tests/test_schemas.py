@@ -6,6 +6,7 @@ from schemas.job import JobDescription, Competency
 from schemas.resume import ParsedResume, WorkExperience, Education
 from schemas.interview import InterviewTranscript, InterviewQuestion, InterviewAnswer
 from schemas.scoring import CandidateScores
+from api.models_jobs import CreateJobRequest, UpdateJobRequest
 from schemas.evaluation import (
     TechnicalEvaluation,
     BehavioralEvaluation,
@@ -56,6 +57,22 @@ class TestJobDescription:
         )
         total = sum(c.weight for c in job.competencies)
         assert abs(total - 1.0) <= 0.01
+
+    @pytest.mark.parametrize("openings", [0, -1])
+    def test_openings_must_be_positive(self, openings):
+        with pytest.raises(ValidationError):
+            CreateJobRequest(description="A valid job description", openings=openings)
+        with pytest.raises(ValidationError):
+            UpdateJobRequest(openings=openings)
+        with pytest.raises(ValidationError):
+            JobDescription(job_id="job_large", title="Hiring drive", description="Existing job", openings=openings)
+
+    @pytest.mark.parametrize("openings", [101, 1000])
+    def test_large_hiring_drives_can_be_loaded_created_and_updated(self, openings):
+        stored_job = {"job_id": "job_large", "title": "Hiring drive", "description": "Existing job", "openings": openings}
+        assert JobDescription.model_validate(stored_job).openings == openings
+        assert CreateJobRequest(description="A valid job description", openings=openings).openings == openings
+        assert UpdateJobRequest(openings=openings).openings == openings
 
 
 class TestParsedResume:
