@@ -98,6 +98,7 @@
   }
 
   .avatar {
+    --audio-level: 0;
     width: 140px;
     height: 140px;
     border-radius: 50%;
@@ -107,19 +108,28 @@
     background: var(--surface);
     border: 1px solid var(--surface-border);
     position: relative;
+    transform: scale(calc(1 + (var(--audio-level) * 0.055)));
+    transition: transform 70ms linear, box-shadow 120ms ease;
+    will-change: transform;
   }
 
   .avatar svg { width: 56px; height: 56px; }
 
   .avatar.ai {
     border-color: var(--ink);
-    box-shadow: 0 12px 40px rgba(17, 17, 17, 0.08);
+    box-shadow:
+      0 12px 40px rgba(17, 17, 17, 0.08),
+      0 0 calc(10px + (var(--audio-level) * 28px))
+        rgba(17, 17, 17, 0.14);
   }
   .avatar.ai svg { color: var(--ink); }
 
   .avatar.user {
     border-color: var(--success);
-    box-shadow: 0 12px 40px rgba(52, 101, 56, 0.12);
+    box-shadow:
+      0 12px 40px rgba(52, 101, 56, 0.12),
+      0 0 calc(10px + (var(--audio-level) * 28px))
+        rgba(52, 101, 56, 0.16);
   }
   .avatar.user svg { color: var(--success); }
 
@@ -146,6 +156,16 @@
   @keyframes wave-ring {
     0% { transform: scale(1); opacity: 0.55; }
     100% { transform: scale(1.35); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-dot,
+    .avatar.speaking::before,
+    .avatar.speaking::after {
+      animation: none;
+    }
+    .avatar { transition: none; }
+    .avatar.speaking { outline: 3px solid var(--wave-color, var(--ink)); }
   }
 
   .participant-info {
@@ -211,6 +231,29 @@
     border-color: #872725;
   }
 
+  .btn-record[aria-pressed="true"] {
+    background: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .control-timer {
+    min-width: 5.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-md);
+    font: 500 13px/1 var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #transcriptPanel[hidden],
+  [hidden] {
+    display: none !important;
+  }
+
   .question-bar {
     position: fixed;
     bottom: 1.5rem;
@@ -259,7 +302,7 @@
   <div class="interview-header">
     <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"><path d="M4 19 L20 5"/><path d="M10 19 L20 9"/><path d="M4 13 L14 3"/></svg></span>
     <span class="status-dot"></span>
-    <span>Live</span>
+    <span id="interviewState" role="status" aria-live="polite">Connecting</span>
   </div>
 
   <div class="avatar-container">
@@ -287,17 +330,19 @@
   </div>
 
   <div class="controls">
-    <button id="micBtn" class="btn-record call-btn">Tap to speak</button>
+    <button id="micBtn" class="btn-record call-btn" type="button" aria-pressed="false"><i class="ph-bold ph-microphone" aria-hidden="true"></i><span>Tap to speak</span></button>
+    <button id="captionsBtn" class="call-btn btn-secondary" type="button" aria-pressed="true" hidden><i class="ph-bold ph-closed-captioning" aria-hidden="true"></i><span>Captions on</span></button>
+    <span id="elapsedTimer" class="control-timer" aria-label="Elapsed interview time" hidden>00:00</span>
     <button class="call-btn btn-danger" id="endBtn"><i class="ph-bold ph-phone-disconnect" aria-hidden="true"></i>End interview</button>
     <button id="replayBtn" class="call-btn btn-secondary" style="display:none;"><i class="ph-bold ph-speaker-high" aria-hidden="true"></i>Tap to hear question</button>
   </div>
 
-  <div class="question-bar" id="questionBar" style="display:none;">
+  <div class="question-bar" id="questionBar" role="status" aria-live="polite" style="display:none;">
     Loading interview question...
   </div>
 </main>
 
-<div id="transcriptPanel" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:var(--surface); border-left:1px solid var(--surface-border); padding:1.25rem 1rem; overflow-y:auto; scroll-behavior:smooth; box-sizing:border-box; z-index:20; font-family:var(--font-sans);">
+<div id="transcriptPanel" role="log" aria-live="polite" aria-label="Interview transcript" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:var(--surface); border-left:1px solid var(--surface-border); padding:1.25rem 1rem; overflow-y:auto; scroll-behavior:smooth; box-sizing:border-box; z-index:20; font-family:var(--font-sans);">
   <h3 style="color:var(--ink); font-family:var(--font-mono); font-size:12px; text-transform:uppercase; letter-spacing:0.05em; font-weight:500; margin:0 0 1rem 0;"><i class="ph-bold ph-chats-circle" style="margin-right:0.35rem;"></i>Transcript</h3>
   <div id="transcriptLog"></div>
 </div>
@@ -305,7 +350,7 @@
 <div id="startOverlay" style="position:fixed; inset:0; background:var(--canvas); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; z-index:100;">
   <div class="result-icon" style="width:64px; height:64px; font-size:1.7rem;"><i class="ph-bold ph-microphone" aria-hidden="true"></i></div>
   <div style="color:var(--ink-2); font-family:var(--font-sans); font-size:15px; text-align:center; max-width:400px; padding:0 1rem;">
-    Click below to start — your browser blocks audio from playing automatically, so this gets things going.
+    Start your 10–15 minute interview. Keep speaking naturally; the interviewer will listen continuously and you can interrupt at any time.
   </div>
   <button id="startBtn" class="btn-primary call-btn"><i class="ph-bold ph-play" aria-hidden="true"></i>Start Interview</button>
 </div>
@@ -324,424 +369,8 @@
     console.log('[config] Environment:', hostname, 'API:', window.OPENHIRE_API_URL || 'same-origin');
   })();
 </script>
-<script src="js/app.js"></script>
-<script>
-const urlParams = new URLSearchParams(window.location.search);
-const sessionId = urlParams.get('session_id');
-let ws = null, stream = null, audioCtx = null, node = null, source = null;
-let pcmChunks = [], capturing = false, sourceRate = 48000;
-const TARGET_RATE = 16000;
-
-function downsampleTo16k(input, inputRate) {
-  if (inputRate === TARGET_RATE) return input;
-  const ratio = inputRate / TARGET_RATE;
-  const outLength = Math.floor(input.length / ratio);
-  const out = new Float32Array(outLength);
-  for (let i = 0; i < outLength; i++) {
-    const start = Math.floor(i * ratio);
-    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
-    let sum = 0, n = 0;
-    for (let j = start; j < end; j++) { sum += input[j]; n++; }
-    out[i] = n ? sum / n : 0;
-  }
-  return out;
-}
-
-function encodeWav(float32, sampleRate) {
-  const bytesPerSample = 2;
-  const dataSize = float32.length * bytesPerSample;
-  const buf = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buf);
-  const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-  w(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  w(8, "WAVE");
-  w(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true);
-  view.setUint16(32, bytesPerSample, true);
-  view.setUint16(34, 16, true);
-  w(36, "data");
-  view.setUint32(40, dataSize, true);
-  let off = 44;
-  for (let i = 0; i < float32.length; i++, off += 2) {
-    const s = Math.max(-1, Math.min(1, float32[i]));
-    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return buf;
-}
-
-function b64(buf) {
-  let s = "", bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
-
-let lastAudioBlobUrl = null;
-
-// Toggles the expanding-wave animation (see .avatar.speaking in <style>)
-// around whichever avatar is currently producing sound/speech.
-function setSpeaking(who, on) {
-  document.querySelector('.avatar.' + who).classList.toggle('speaking', on);
-}
-
-function playAudioEl(url) {
-  const audio = new Audio(url);
-  audio.addEventListener('ended', () => setSpeaking('ai', false));
-  audio.addEventListener('pause', () => setSpeaking('ai', false));
-  return audio;
-}
-
-function play(b64audio, format) {
-  if (!b64audio) return;
-  const bin = atob(b64audio);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  const blob = new Blob([arr], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" });
-  lastAudioBlobUrl = URL.createObjectURL(blob);
-  setSpeaking('ai', true);
-  playAudioEl(lastAudioBlobUrl).play().catch(() => {
-    // The browser blocked this specific playback (e.g. it decided the page
-    // hasn't "really" been interacted with recently enough) - show a
-    // visible, clickable way to hear it instead of failing silently.
-    console.log('[voice] Autoplay blocked by browser - showing replay button');
-    setSpeaking('ai', false);
-    document.getElementById('replayBtn').style.display = 'inline-flex';
-  });
-}
-
-document.getElementById('replayBtn').onclick = () => {
-  if (!lastAudioBlobUrl) return;
-  setSpeaking('ai', true);
-  playAudioEl(lastAudioBlobUrl).play().catch((e) => {
-    console.error('[voice] Replay failed:', e);
-    setSpeaking('ai', false);
-  });
-  document.getElementById('replayBtn').style.display = 'none';
-};
-
-function updateQuestion(text) {
-  document.getElementById('questionBar').textContent = text || 'Loading question...';
-}
-
-function addTranscriptEntry(speaker, text) {
-  if (!text) return;
-  const log = document.getElementById('transcriptLog');
-  const entry = document.createElement('div');
-  entry.style.marginBottom = '1rem';
-  const label = document.createElement('div');
-  label.textContent = speaker;
-  label.style.cssText = 'font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; font-family:var(--font-sans); color:' + (speaker === 'Interviewer' ? 'var(--ink)' : 'var(--success-text)');
-  const body = document.createElement('div');
-  body.textContent = text;
-  body.style.cssText = 'font-size:13px; font-family:var(--font-sans); color:var(--ink-3); line-height:1.4;';
-  entry.appendChild(label);
-  entry.appendChild(body);
-  log.appendChild(entry);
-  // #transcriptLog itself doesn't scroll - #transcriptPanel (its parent)
-  // is the actual overflow:auto container. requestAnimationFrame ensures
-  // the new entry has been laid out before we measure scrollHeight.
-  const panel = document.getElementById('transcriptPanel');
-  requestAnimationFrame(() => { panel.scrollTop = panel.scrollHeight; });
-}
-
-function updateAIStatus(text) {
-  document.getElementById('aiStatus').textContent = text;
-}
-
-function updateUserStatus(text) {
-  document.getElementById('userStatus').textContent = text;
-}
-
-function connectToSession(id) {
-  if (!id) return;
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const backendHost = window.OPENHIRE_API_HOST || location.host;
-  const wsUrl = `${proto}://${backendHost}/ws/sessions/${encodeURIComponent(id)}`;
-
-  console.log('[voice] Connecting to:', wsUrl);
-  ws = new WebSocket(wsUrl);
-
-  ws.onopen = async () => {
-    console.log('[voice] Connected');
-    updateAIStatus('Listening');
-    ws.send(JSON.stringify({ type: "speak_question" }));
-  };
-
-  ws.onclose = () => {
-    console.log('[voice] Disconnected');
-    updateAIStatus('Disconnected');
-  };
-
-  ws.onerror = (err) => {
-    console.error('[voice] Error:', err);
-    updateAIStatus('Connection error');
-  };
-
-  ws.onmessage = async (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-
-      if (msg.type === "error") {
-        console.error('[voice] Server error:', msg.error);
-        // Voice (TTS) can fail independently of the question itself being
-        // ready - fall back to the question's text over REST so the page
-        // never gets stuck on "Loading interview question..." just because
-        // audio failed.
-        try {
-          const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
-          if (state.current_question) {
-            updateQuestion(state.current_question.question_text);
-            updateAIStatus('Listening (audio unavailable)');
-            updateUserStatus('Mic on');
-            addTranscriptEntry('Interviewer', state.current_question.question_text);
-          }
-        } catch (fetchErr) {
-          console.error('[voice] Fallback question fetch failed:', fetchErr);
-        }
-        return;
-      }
-
-      if (msg.transcript) {
-        updateUserStatus('Responded');
-        addTranscriptEntry('You', msg.transcript);
-      }
-
-      if (msg.next_question) {
-        updateQuestion(msg.next_question.question_text);
-        updateAIStatus('Listening');
-        updateUserStatus('Mic on');
-        addTranscriptEntry('Interviewer', msg.next_question.question_text);
-      } else if (msg.next_question_text) {
-        // The initial speak_question reply (and any reconnect replay) never
-        // advances the interview, so next_question above is always null -
-        // the question text only ever arrives via this field.
-        updateQuestion(msg.next_question_text);
-        updateAIStatus('Listening');
-        updateUserStatus('Mic on');
-        addTranscriptEntry('Interviewer', msg.next_question_text);
-      }
-
-      if (msg.status === "sealed") {
-        updateQuestion('Interview completed. Finalizing evaluation...');
-        updateAIStatus('Completed');
-        setTimeout(() => {
-          const appId = new URLSearchParams(window.location.search).get('app_id') || '';
-          window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
-        }, 1500);
-        return;
-      }
-
-      play(msg.question_audio_base64, msg.audio_format);
-    } catch (e) {
-      console.error('[voice] Parse error:', e);
-    }
-  };
-}
-
-// Browser-native speech recognition (Web Speech API) is the primary
-// capture path: it transcribes in the browser and sends plain text over
-// the "answer_text" message, which the server already supports
-// (api/routes/voice.py) exactly like a server-transcribed audio answer -
-// same submit_text_answer()/InterviewSessionRunner.submit_answer() path,
-// same evaluation. Falls back to raw audio capture (server-side STT) only
-// when the browser has no SpeechRecognition (e.g. Firefox).
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-let recognizedText = '';
-
-async function startRecording() {
-  if (!ws || ws.readyState !== WebSocket.OPEN || capturing) return;
-  if (SpeechRec) return startRecordingBrowserStt();
-  return startRecordingServerAudio();
-}
-
-function stopRecording() {
-  if (!capturing) return;
-  if (recognition) return stopRecordingBrowserStt();
-  return stopRecordingServerAudio();
-}
-
-function startRecordingBrowserStt() {
-  capturing = true;
-  updateMicButton();
-  recognizedText = '';
-  recognition = new SpeechRec();
-  recognition.lang = 'en-US';
-  recognition.continuous = true;
-  recognition.interimResults = false;
-  recognition.onresult = (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) {
-        recognizedText += (recognizedText ? ' ' : '') + event.results[i][0].transcript;
-      }
-    }
-  };
-  recognition.onerror = (e) => {
-    console.error('[voice] SpeechRecognition error:', e.error);
-  };
-  recognition.onend = () => {
-    recognition = null;
-    const text = recognizedText.trim();
-    if (!text) {
-      updateUserStatus('Mic on');
-      return;
-    }
-    updateAIStatus('Evaluating');
-    updateUserStatus('Sending...');
-    ws.send(JSON.stringify({
-      type: "answer_text",
-      transcript: text,
-      utterance_id: crypto.randomUUID(),
-    }));
-  };
-  try {
-    recognition.start();
-  } catch (e) {
-    console.error('[voice] SpeechRecognition failed to start:', e);
-    capturing = false;
-    updateMicButton();
-    recognition = null;
-    updateUserStatus('Mic denied');
-    return;
-  }
-  updateUserStatus('Speaking');
-  updateAIStatus('Listening');
-}
-
-function stopRecordingBrowserStt() {
-  capturing = false;
-  updateMicButton();
-  // recognition.onend fires asynchronously and sends the transcript.
-  recognition.stop();
-}
-
-async function startRecordingServerAudio() {
-  try {
-    stream = stream || await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
-  } catch (e) {
-    console.error('[voice] Microphone denied:', e);
-    updateUserStatus('Mic denied');
-    return;
-  }
-
-  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-  sourceRate = audioCtx.sampleRate;
-
-  pcmChunks = [];
-  capturing = true;
-  updateMicButton();
-  source = audioCtx.createMediaStreamSource(stream);
-  node = audioCtx.createScriptProcessor(4096, 1, 1);
-  node.onaudioprocess = (e) => {
-    if (!capturing) return;
-    pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-  };
-  source.connect(node);
-  const mute = audioCtx.createGain();
-  mute.gain.value = 0;
-  node.connect(mute);
-  mute.connect(audioCtx.destination);
-
-  updateUserStatus('Speaking');
-  updateAIStatus('Listening');
-}
-
-function stopRecordingServerAudio() {
-  capturing = false;
-  updateMicButton();
-  try { source && source.disconnect(); node && node.disconnect(); } catch (e) {}
-
-  const total = pcmChunks.reduce((n, c) => n + c.length, 0);
-  if (!total) {
-    updateUserStatus('Mic on');
-    return;
-  }
-
-  const merged = new Float32Array(total);
-  let off = 0;
-  for (const c of pcmChunks) { merged.set(c, off); off += c.length; }
-
-  const wav = encodeWav(downsampleTo16k(merged, sourceRate), TARGET_RATE);
-  updateAIStatus('Evaluating');
-  updateUserStatus('Sending...');
-
-  ws.send(JSON.stringify({
-    type: "answer",
-    audio_base64: b64(wav),
-    audio_format: "wav",
-    utterance_id: crypto.randomUUID(),
-  }));
-}
-
-// Mic on/off toggle (replaces press-and-hold, which was too easy to
-// interrupt accidentally - a stray mouseleave/touch-cancel would abort
-// SpeechRecognition mid-sentence).
-function updateMicButton() {
-  const btn = document.getElementById('micBtn');
-  btn.classList.toggle('recording', capturing);
-  btn.textContent = capturing ? 'Tap to stop' : 'Tap to speak';
-  setSpeaking('user', capturing);
-}
-
-document.getElementById('micBtn').onclick = () => {
-  if (capturing) {
-    stopRecording();
-  } else {
-    startRecording();
-  }
-};
-
-// Load session on page load
-document.getElementById('startBtn').onclick = async () => {
-  document.getElementById('startOverlay').style.display = 'none';
-  // Ask for the mic up front, inside this click, rather than waiting for
-  // the candidate's first press-and-hold - getUserMedia is what actually
-  // triggers the browser's permission prompt (SpeechRecognition draws on
-  // the same microphone permission but won't prompt proactively on its
-  // own). The stream itself isn't needed yet, so it's stopped immediately;
-  // startRecordingServerAudio() (the no-SpeechRecognition fallback path)
-  // re-acquires its own stream when actually recording.
-  try {
-    const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
-    probe.getTracks().forEach(t => t.stop());
-  } catch (e) {
-    console.error('[voice] Microphone permission denied:', e);
-    updateUserStatus('Mic denied');
-  }
-  if (sessionId) {
-    connectToSession(sessionId);
-  } else {
-    updateQuestion('No session ID specified.');
-  }
-};
-
-window.addEventListener('load', () => {
-  if (!sessionId) {
-    document.getElementById('startOverlay').style.display = 'none';
-    updateQuestion('No session ID specified.');
-  }
-});
-
-// Override end interview button
-document.getElementById('endBtn').onclick = async () => {
-  const appId = new URLSearchParams(window.location.search).get('app_id') || '';
-  try {
-    await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/finish`, { method: 'POST' });
-  } catch (e) {
-    console.error('Error finishing session:', e);
-  }
-  setTimeout(() => {
-    window.location.href = `report.html?session_id=${encodeURIComponent(sessionId)}&app_id=${encodeURIComponent(appId)}`;
-  }, 500);
-};
-</script>
+<script src="js/app.js?v=local-live-demo"></script>
+<script type="module" src="js/live-interview.js?v=gemini-live-v6"></script>
 
 </body>
 </html>

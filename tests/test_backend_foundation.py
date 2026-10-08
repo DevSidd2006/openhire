@@ -1056,7 +1056,7 @@ class TestLayering:
         offenders = []
         for path in root.rglob("*.py"):
             parts = set(path.parts)
-            if parts & {"venv", "__pycache__", ".git", "tests"}:
+            if parts & {"venv", ".venv", "__pycache__", ".git", ".worktrees", "tests"}:
                 continue
             if path.name == "memory.py" or path.parent.name == "repositories":
                 continue

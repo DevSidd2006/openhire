@@ -8,12 +8,12 @@ single-prompt smoke test (not part of the automated suite) - see the P8B
 final report for its result.
 """
 import json
-import time
+from types import SimpleNamespace
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from google.genai import errors, types
+from google.genai import errors
 
 from agents.base import BaseAgent
 from providers.base import LLMPermanentError, LLMTransientError
@@ -26,42 +26,33 @@ class _ConcreteAgent(BaseAgent):
         return {}
 
 
-def _response(text: str, finish_reason=types.FinishReason.STOP) -> types.GenerateContentResponse:
-    """Build a REAL google.genai response object (not a MagicMock) - the
-    SDK's own response.text property does real pydantic field access
-    (part.model_dump(...)) that a MagicMock can't stand in for correctly."""
-    return types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(parts=[types.Part(text=text)], role="model"),
-                finish_reason=finish_reason,
-            )
-        ]
-    )
+def _response(text: str | None, status: str = "completed") -> SimpleNamespace:
+    """Return the Interactions response surface consumed by the provider."""
+    return SimpleNamespace(status=status, output_text=text, errors=[])
 
 
-def _empty_response() -> types.GenerateContentResponse:
-    return types.GenerateContentResponse(candidates=[])
+def _empty_response() -> SimpleNamespace:
+    return _response(None)
 
 
-def _fake_gemini_provider(generate_content_mock) -> GeminiProvider:
+def _fake_gemini_provider(interaction_create_mock) -> GeminiProvider:
     """A real GeminiProvider (construction makes no network call - just
     builds a local google.genai.Client object) with its SDK call replaced
     by a mock. No API key ever reaches this test key value; it is a
     hardcoded, obviously-fake placeholder."""
-    provider = GeminiProvider(api_key="test-key-not-real", model="gemini-2.5-flash")
-    provider.client.aio.models.generate_content = generate_content_mock
+    provider = GeminiProvider(api_key="test-key-not-real", model="gemini-3.5-flash-lite")
+    provider.client.aio.interactions.create = interaction_create_mock
     return provider
 
 
 class TestGeminiProviderConstruction:
     def test_a_constructs_when_credentials_available(self):
-        provider = GeminiProvider(api_key="test-key-not-real", model="gemini-2.5-flash")
-        assert provider.model == "gemini-2.5-flash"
+        provider = GeminiProvider(api_key="test-key-not-real", model="gemini-3.5-flash-lite")
+        assert provider.model == "gemini-3.5-flash-lite"
 
     def test_b_missing_api_key_is_explicit_configuration_error(self):
         with pytest.raises(LLMPermanentError, match="GEMINI_API_KEY"):
-            GeminiProvider(api_key="", model="gemini-2.5-flash")
+            GeminiProvider(api_key="", model="gemini-3.5-flash-lite")
 
     def test_b_factory_rejects_gemini_without_api_key(self, monkeypatch):
         import providers.llm as llm_module
@@ -78,8 +69,8 @@ class TestGeminiGenerate:
         provider = _fake_gemini_provider(mock_call)
         result = await provider.generate("say hello")
         assert result == "hello world"
-        assert mock_call.call_args.kwargs["model"] == "gemini-2.5-flash"
-        assert mock_call.call_args.kwargs["contents"] == "say hello"
+        assert mock_call.call_args.kwargs["model"] == "gemini-3.5-flash-lite"
+        assert mock_call.call_args.kwargs["input"] == "say hello"
 
     @pytest.mark.asyncio
     async def test_empty_content_is_transient(self):
@@ -88,19 +79,15 @@ class TestGeminiGenerate:
             await provider.generate("prompt")
 
     @pytest.mark.asyncio
-    async def test_safety_block_is_permanent_not_retried(self):
-        provider = _fake_gemini_provider(
-            AsyncMock(return_value=_response("", finish_reason=types.FinishReason.SAFETY))
-        )
-        with pytest.raises(LLMPermanentError, match="SAFETY"):
+    async def test_failed_interaction_is_permanent_not_retried(self):
+        provider = _fake_gemini_provider(AsyncMock(return_value=_response(None, status="failed")))
+        with pytest.raises(LLMPermanentError, match="failed"):
             await provider.generate("prompt")
 
     @pytest.mark.asyncio
-    async def test_truncated_response_is_transient(self):
-        provider = _fake_gemini_provider(
-            AsyncMock(return_value=_response("partial...", finish_reason=types.FinishReason.MAX_TOKENS))
-        )
-        with pytest.raises(LLMTransientError, match="truncated"):
+    async def test_incomplete_response_is_transient(self):
+        provider = _fake_gemini_provider(AsyncMock(return_value=_response("partial...", status="incomplete")))
+        with pytest.raises(LLMTransientError, match="did not complete"):
             await provider.generate("prompt")
 
 
@@ -124,9 +111,10 @@ class TestGeminiGenerateStructured:
 
         await provider.generate_structured("evaluate this", schema=schema)
 
-        config = mock_call.call_args.kwargs["config"]
-        assert config.response_mime_type == "application/json"
-        assert config.response_json_schema == schema
+        response_format = mock_call.call_args.kwargs["response_format"]
+        assert response_format["type"] == "text"
+        assert response_format["mime_type"] == "application/json"
+        assert response_format["schema"] == schema
 
     @pytest.mark.asyncio
     async def test_e_malformed_structured_json_is_transient_and_retried(self):
@@ -219,7 +207,7 @@ class TestGeminiErrorClassification:
 class TestGeminiApiKeyNeverLeaked:
     def test_h_key_not_in_provider_repr_or_dict(self):
         secret = "SUPER_SECRET_TEST_VALUE_NOT_REAL"
-        provider = GeminiProvider(api_key=secret, model="gemini-2.5-flash")
+        provider = GeminiProvider(api_key=secret, model="gemini-3.5-flash-lite")
         haystack = repr(provider) + str(provider.__dict__) + repr(provider.client)
         assert secret not in haystack
 
@@ -229,8 +217,8 @@ class TestGeminiApiKeyNeverLeaked:
         auth_err = errors.ClientError(
             code=401, response_json={"error": {"message": "API key not valid", "status": "UNAUTHENTICATED", "code": 401}},
         )
-        provider = GeminiProvider(api_key=secret, model="gemini-2.5-flash")
-        provider.client.aio.models.generate_content = AsyncMock(side_effect=auth_err)
+        provider = GeminiProvider(api_key=secret, model="gemini-3.5-flash-lite")
+        provider.client.aio.interactions.create = AsyncMock(side_effect=auth_err)
 
         with pytest.raises(LLMPermanentError) as exc_info:
             await provider.generate("prompt")
@@ -238,7 +226,7 @@ class TestGeminiApiKeyNeverLeaked:
 
     def test_h_missing_key_error_message_has_no_key_value(self):
         with pytest.raises(LLMPermanentError) as exc_info:
-            GeminiProvider(api_key="", model="gemini-2.5-flash")
+            GeminiProvider(api_key="", model="gemini-3.5-flash-lite")
         # The error names the missing ENV VAR, never a key value (there is none to leak here).
         assert "GEMINI_API_KEY" in str(exc_info.value)
 

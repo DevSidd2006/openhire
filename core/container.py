@@ -149,6 +149,17 @@ class ServiceContainer:
         """The `app.state.voice_service_factory` seam, unchanged."""
         return getattr(getattr(app, "state", None), "voice_service_factory", None)
 
+    def gemini_live_token_factory_for(self, app) -> Optional[Callable]:
+        """Optional token-service factory used by tests and deployments.
+
+        Like the existing voice/interviewer seams, this is read through on
+        every request so replacing ``app.state.gemini_live_token_factory``
+        takes effect without rebuilding the container.
+        """
+        return getattr(
+            getattr(app, "state", None), "gemini_live_token_factory", None
+        )
+
     def jd_analyzer_factory_for(self, app) -> Optional[Callable]:
         """Chunk 2: the same kind of pure wiring seam as
         `interviewer_factory_for` above - a zero-arg callable returning a

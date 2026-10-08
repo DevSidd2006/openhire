@@ -39,6 +39,8 @@ from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
 from services.job_service import JobService
+from services.live_interview_service import LiveInterviewService
+from services.gemini_live_token import GeminiLiveTokenService
 from services.llm_credential_service import LLMCredentialService
 from services.matching_service import MatchingService
 from services.recruiter_service import RecruiterService
@@ -150,6 +152,62 @@ def get_interview_service(request: Request) -> InterviewService:
 def get_interview_service_ws(websocket: WebSocket) -> InterviewService:
     """The WebSocket-side equivalent of `get_interview_service`."""
     return build_interview_service(websocket.app)
+
+
+def build_live_interview_service(app) -> LiveInterviewService:
+    """Assemble the durable live-session service for REST or WebSocket use."""
+    container = _container_from_app(app)
+    return LiveInterviewService(
+        session_repository=container.session_repository,
+        transcript_repository=container.transcript_repository,
+        wrap_up_seconds=container.settings.gemini_live_wrap_up_seconds,
+        hard_stop_seconds=container.settings.gemini_live_hard_stop_seconds,
+    )
+
+
+def get_live_interview_service(request: Request) -> LiveInterviewService:
+    return build_live_interview_service(request.app)
+
+
+def get_live_interview_service_ws(websocket: WebSocket) -> LiveInterviewService:
+    return build_live_interview_service(websocket.app)
+
+
+def build_gemini_live_token_service(app) -> GeminiLiveTokenService:
+    """Build the short-lived Gemini/control token issuer.
+
+    Tests and deployments may install a zero-argument factory on app.state;
+    otherwise the default service resolves a recruiter BYOK Gemini key first
+    and then the system key.
+    """
+    container = _container_from_app(app)
+    factory = container.gemini_live_token_factory_for(app)
+    if factory is not None:
+        return factory()
+
+    credential_service = None
+    if container.settings.byok_encryption_key:
+        credential_service = LLMCredentialService(
+            credential_repository=container.llm_credential_repository,
+            encryption_key=container.settings.byok_encryption_key,
+        )
+    return GeminiLiveTokenService(
+        system_api_key=container.settings.gemini_api_key,
+        model=container.settings.gemini_live_model,
+        voice=container.settings.gemini_live_voice,
+        control_secret=container.settings.jwt_secret_key,
+        control_token_minutes=container.settings.gemini_live_control_token_minutes,
+        hard_stop_seconds=container.settings.gemini_live_hard_stop_seconds,
+        credential_service=credential_service,
+    )
+
+
+def get_gemini_live_token_service(request: Request) -> GeminiLiveTokenService:
+    return build_gemini_live_token_service(request.app)
+
+
+def get_gemini_live_token_service_ws(websocket: WebSocket) -> GeminiLiveTokenService:
+    return build_gemini_live_token_service(websocket.app)
 
 
 def get_job_service(request: Request) -> JobService:
@@ -287,7 +345,9 @@ def get_admin_service(request: Request) -> AdminService:
 
 __all__ = [
     "build_evaluation_service",
+    "build_gemini_live_token_service",
     "build_interview_service",
+    "build_live_interview_service",
     "get_admin_service",
     "get_app_settings",
     "get_application_repository",
@@ -303,6 +363,10 @@ __all__ = [
     "get_evaluation_service_ws",
     "get_interview_service",
     "get_interview_service_ws",
+    "get_gemini_live_token_service",
+    "get_gemini_live_token_service_ws",
+    "get_live_interview_service",
+    "get_live_interview_service_ws",
     "get_job_repository",
     "get_job_service",
     "get_llm_credential_service",

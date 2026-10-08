@@ -199,3 +199,20 @@ class LLMCredentialService:
             )
 
         return FallbackLLMProvider(primary, _LazySystemProvider(), _on_primary_failure)
+
+    async def resolve_api_key_for_provider(self, user_id: str, provider: str) -> str | None:
+        """Return an active saved key only when it belongs to ``provider``.
+
+        This narrow internal method supports APIs, such as Gemini Live token
+        minting, that need the provider credential rather than an
+        :class:`LLMProvider` wrapper. The plaintext is never retained on this
+        service or exposed by an API response.
+        """
+        record = await self._credentials.get(user_id)
+        if (
+            record is None
+            or record.provider != provider
+            or record.status != CredentialStatus.ACTIVE
+        ):
+            return None
+        return self._fernet.decrypt(record.encrypted_key).decode("utf-8")
