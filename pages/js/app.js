@@ -1,15 +1,14 @@
 /**
  * Minimal & fast navigation and state handler
  */
-// The backend URL. When hosted on Vercel or locally, connects to the deployed EC2 backend
-// unless running on the same origin (e.g. backend serving /app).
+// Prefer an explicit per-page override. Local pages use the same FastAPI origin
+// so development-only routes such as /live-sessions/demo stay local.
 const DEFAULT_RENDER_BACKEND = 'https://openhire.devsidd.tech';
-const API_BASE = DEFAULT_RENDER_BACKEND || ((
-  location.hostname === 'localhost' ||
-  location.hostname === '127.0.0.1')
-    ? ''
-    : DEFAULT_RENDER_BACKEND
-);
+const API_BASE = typeof window.OPENHIRE_API_URL === 'string'
+  ? window.OPENHIRE_API_URL.replace(/\/+$/, '')
+  : ((location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? ''
+      : DEFAULT_RENDER_BACKEND);
 
 /** Helper to construct WebSocket URL for the session, resolving against API_BASE or location.host */
 function getWebSocketUrl(path) {
@@ -249,11 +248,15 @@ async function fetchAdminSystemStatus() {
   return apiRequest('/admin/system/status');
 }
 
+async function createInterviewWithMode(path, body) {
+  return apiRequest(path, { method: 'POST', body });
+}
+
 /** Creates the interview session for an application that is already
- * SHORTLISTED and has none yet - fetches the full job/resume records
- * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
- * just their ids - see api/models.py:CreateSessionRequest), and links it
- * to the application in the same call. Returns the session_id. */
+ * SHORTLISTED and has none yet. Realtime Gemini Live is preferred; the
+ * turn-based interview is used only when the backend reports that realtime
+ * interviewing was disabled or was not configured before creating a live
+ * session. Returns the session_id. */
 async function ensureInterviewSession(application) {
   if (application.session_id) {
     return application.session_id;
@@ -262,22 +265,30 @@ async function ensureInterviewSession(application) {
     apiRequest(`/jobs/${encodeURIComponent(application.job_id)}`),
     apiRequest(`/candidates/${encodeURIComponent(application.candidate_id)}`),
   ]);
-  const session = await apiRequest('/sessions', {
-    method: 'POST',
-    body: {
-      candidate_id: application.candidate_id,
-      job_id: application.job_id,
-      job_description: job.job,
-      parsed_resume: candidate.resume,
-      application_id: application.application_id,
-      // The backend default (MAX_QUESTIONS_PER_INTERVIEW=12,
-      // config/settings.py) is realistic for a real interview but too long
-      // for a live demo click-through - keep this a short, deliberate demo
-      // constant, not a behavior change to the adaptive engine itself.
+  const body = {
+    candidate_id: application.candidate_id,
+    job_id: application.job_id,
+    job_description: job.job,
+    parsed_resume: candidate.resume,
+    application_id: application.application_id,
+  };
+  try {
+    const session = await createInterviewWithMode('/live-sessions', body);
+    return session.session_id;
+  } catch (error) {
+    const code = error.data && error.data.error;
+    const canUseLegacy = [
+      'gemini_live_disabled',
+      'gemini_live_unconfigured',
+    ].includes(code);
+    if (!canUseLegacy) throw error;
+    const session = await createInterviewWithMode('/sessions', {
+      ...body,
+      // Preserve the existing short legacy demo when realtime is unavailable.
       max_questions: 5,
-    },
-  });
-  return session.session_id;
+    });
+    return session.session_id;
+  }
 }
 
 function getCurrentUser() {

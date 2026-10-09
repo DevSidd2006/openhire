@@ -684,17 +684,17 @@ class TestVoiceProviderConfiguration:
         # Documented alternatives stay available.
         assert "audio/ogg" in _CONTENT_TYPE_FOR_FORMAT["ogg"]
 
-    def test_browser_client_sends_wav_not_webm(self):
-        """Guards the Phase 4 decision at the client level: if someone
-        reverts the capture path to MediaRecorder, the browser would start
-        emitting WebM/Opus that we never verified Azure can decode."""
+    def test_live_browser_client_sends_pcm16_not_webm(self):
+        """Gemini Live receives continuous 16 kHz PCM16 audio frames."""
         from pathlib import Path
 
-        client = Path("pages/interview.html").read_text(encoding="utf-8")
-        assert 'audio_format: "wav"' in client
-        assert "encodeWav" in client
-        # MediaRecorder (the WebM/Opus path) must not be reintroduced.
+        client = Path("pages/js/gemini-live-client.js").read_text(encoding="utf-8")
+        audio = Path("pages/js/live-audio-core.js").read_text(encoding="utf-8")
+        assert "audio/pcm;rate=16000" in client
+        assert "floatToPcm16" in audio
+        assert "resampleLinear" in audio
         assert "new MediaRecorder" not in client
+        assert "new MediaRecorder" not in audio
 
     def test_azure_ssml_escaping_protects_markup(self):
         from providers.audio.azure import AzureTextToSpeech

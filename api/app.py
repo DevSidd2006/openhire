@@ -47,6 +47,7 @@ from api.routes.evaluations import router as evaluations_router
 from api.routes.interview import router as interview_router
 from api.routes.interview_mediator import router as interview_mediator_router
 from api.routes.jobs import router as jobs_router
+from api.routes.live_interview import router as live_interview_router
 from api.routes.llm_credentials import router as llm_credentials_router
 from api.routes.reports import router as reports_router
 from api.routes.rubrics import router as rubrics_router
@@ -115,6 +116,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     # Existing interview/voice seams.
     app.state.interviewer_factory = None
     app.state.voice_service_factory = None
+    app.state.gemini_live_token_factory = None
 
     # Chunk 2: job/candidate/matching agent seams.
     app.state.jd_analyzer_factory = None
@@ -145,6 +147,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(admin_router, prefix=settings.api_prefix)
     app.include_router(interview_router, prefix=settings.api_prefix)
     app.include_router(voice_router, prefix=settings.api_prefix)
+    app.include_router(live_interview_router, prefix=settings.api_prefix)
     app.include_router(
         interview_mediator_router,
         prefix=settings.api_prefix,
@@ -240,4 +243,3 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 #
 # The public ``api.app:app`` contract remains unchanged.
 app = create_app()
-

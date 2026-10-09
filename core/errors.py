@@ -164,6 +164,20 @@ class DependencyError(AppError):
     detail = "A required upstream service is currently unavailable."
 
 
+class GeminiLiveDisabledError(DependencyError):
+    """Stable pre-creation signal that permits the legacy interview path."""
+
+    code = "gemini_live_disabled"
+    detail = "Realtime interviewing is not enabled."
+
+
+class GeminiLiveUnconfiguredError(DependencyError):
+    """Stable pre-creation signal that permits the legacy interview path."""
+
+    code = "gemini_live_unconfigured"
+    detail = "Realtime interviewing is not configured."
+
+
 class NotImplementedYetError(AppError):
     """A capability whose interface exists but whose implementation is owned
     by a later chunk (notably: every persistence method that needs the real
@@ -190,5 +204,7 @@ __all__ = [
     "InternalError",
     "ConfigurationError",
     "DependencyError",
+    "GeminiLiveDisabledError",
+    "GeminiLiveUnconfiguredError",
     "NotImplementedYetError",
 ]

@@ -50,6 +50,7 @@ for _var, _value in (
     ("DATABASE_URL", ""),
     ("ENVIRONMENT", "test"),
     ("AUTH_ENABLED", "false"),
+    ("GEMINI_LIVE_ENABLED", "true"),
 ):
     os.environ.setdefault(_var, _value)
 

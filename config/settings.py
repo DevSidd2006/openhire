@@ -25,13 +25,19 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mock").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-# gemini-2.5-flash was retired ("no longer available to new users" per the
-# API's own 404 body) and its successor gemini-3.6-flash took 64-126s on the
-# real resume_parser prompt/schema - well past RESUME_PARSER_TIMEOUT_SECONDS
-# (45s), causing repeated timeout->retry->fallback cycles in production.
-# gemini-flash-lite-latest was verified locally across 3 runs at 2.6-4.8s
-# with identical, fully correct extraction on the same prompt.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+# Stable, current low-latency default for pipeline work. Operators can select
+# Gemini 3.8 Flash when a task benefits more from quality than throughput.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
+# Gemini Live realtime interview configuration. Disabled by default so existing
+# turn-based interviews remain the only active path until an operator opts in.
+GEMINI_LIVE_ENABLED = os.getenv("GEMINI_LIVE_ENABLED", "false").lower() in ("1", "true", "yes")
+GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.8-live")
+GEMINI_LIVE_VOICE = os.getenv("GEMINI_LIVE_VOICE", "Aoede")
+GEMINI_LIVE_WRAP_UP_SECONDS = int(os.getenv("GEMINI_LIVE_WRAP_UP_SECONDS", "720"))
+GEMINI_LIVE_HARD_STOP_SECONDS = int(os.getenv("GEMINI_LIVE_HARD_STOP_SECONDS", "900"))
+GEMINI_LIVE_RECONNECT_SECONDS = int(os.getenv("GEMINI_LIVE_RECONNECT_SECONDS", "540"))
+GEMINI_LIVE_CONTROL_TOKEN_MINUTES = int(os.getenv("GEMINI_LIVE_CONTROL_TOKEN_MINUTES", "20"))
 # NVIDIA NIM (Inference Microservices): PRIMARY LLM provider with OpenAI-compatible API.
 # Serves the Nemotron family (super-120b handles 360k-token prompts). Cloud-hosted at
 # integrate.api.nvidia.com. The key is only ever read from the environment - never

@@ -207,6 +207,38 @@ class AppSettings(BaseModel):
     def embedding_provider(self) -> str:
         return legacy_settings.EMBEDDING_PROVIDER
 
+    @property
+    def gemini_live_enabled(self) -> bool:
+        return legacy_settings.GEMINI_LIVE_ENABLED
+
+    @property
+    def gemini_api_key(self) -> str:
+        return legacy_settings.GEMINI_API_KEY
+
+    @property
+    def gemini_live_model(self) -> str:
+        return legacy_settings.GEMINI_LIVE_MODEL
+
+    @property
+    def gemini_live_voice(self) -> str:
+        return legacy_settings.GEMINI_LIVE_VOICE
+
+    @property
+    def gemini_live_wrap_up_seconds(self) -> int:
+        return legacy_settings.GEMINI_LIVE_WRAP_UP_SECONDS
+
+    @property
+    def gemini_live_hard_stop_seconds(self) -> int:
+        return legacy_settings.GEMINI_LIVE_HARD_STOP_SECONDS
+
+    @property
+    def gemini_live_reconnect_seconds(self) -> int:
+        return legacy_settings.GEMINI_LIVE_RECONNECT_SECONDS
+
+    @property
+    def gemini_live_control_token_minutes(self) -> int:
+        return legacy_settings.GEMINI_LIVE_CONTROL_TOKEN_MINUTES
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
