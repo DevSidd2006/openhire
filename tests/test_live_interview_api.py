@@ -106,6 +106,11 @@ def _build_test_app(settings: AppSettings | None = None):
     return app
 
 
+@pytest.fixture(autouse=True)
+def enable_gemini_live(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config.settings, "GEMINI_LIVE_ENABLED", True)
+
+
 @pytest.fixture
 def test_app():
     app = _build_test_app()
