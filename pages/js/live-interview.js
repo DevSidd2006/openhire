@@ -104,6 +104,7 @@ export class LiveInterviewController {
     this.hardStopTimer = null;
     this.reconnectTimer = null;
     this.scheduledReconnectDone = false;
+    this.reconnectAfterSeconds = Number(initialState.reconnect_after_seconds) || 9 * 60;
 
     this.started = false;
     this.finishing = false;
@@ -232,9 +233,14 @@ export class LiveInterviewController {
         this.completionResolver = null;
       }
       if (!completed) {
+        const pendingEvents = [...this.unacknowledgedEvents.values()]
+          .sort((a, b) => a.sequence - b.sequence);
         completed = await globalThis.apiRequest(
           `/live-sessions/${encodeURIComponent(this.sessionId)}/finish`,
-          { method: 'POST' },
+          {
+            method: 'POST',
+            body: pendingEvents.length ? { pending_events: pendingEvents } : {},
+          },
         );
       }
       this.setState('Completed');
@@ -597,6 +603,9 @@ export class LiveInterviewController {
   #applyControlSnapshot(snapshot) {
     if (snapshot.wrap_up_at) this.wrapUpAt = snapshot.wrap_up_at;
     if (snapshot.hard_stop_at) this.hardStopAt = snapshot.hard_stop_at;
+    if (snapshot.reconnect_after_seconds) {
+      this.reconnectAfterSeconds = Number(snapshot.reconnect_after_seconds) || this.reconnectAfterSeconds;
+    }
     if (Array.isArray(snapshot.remaining_competencies)) {
       this.remainingCompetencies = snapshot.remaining_competencies;
     }
@@ -777,6 +786,9 @@ export class LiveInterviewController {
       this.sequence = Math.max(this.sequence, state.last_sequence || 0);
       this.wrapUpAt = state.wrap_up_at || this.wrapUpAt;
       this.hardStopAt = state.hard_stop_at || this.hardStopAt;
+      if (state.reconnect_after_seconds) {
+        this.reconnectAfterSeconds = Number(state.reconnect_after_seconds) || this.reconnectAfterSeconds;
+      }
       this.#configureTimers();
     } catch (_error) {}
   }
@@ -805,7 +817,8 @@ export class LiveInterviewController {
       Math.max(0, effectiveHard - Date.now()),
     );
     if (!this.scheduledReconnectDone) {
-      const reconnectAt = this.startedEpochMs + (9 * 60 * 1000);
+      const reconnectAfterMs = (this.reconnectAfterSeconds || 9 * 60) * 1000;
+      const reconnectAt = this.startedEpochMs + reconnectAfterMs;
       this.reconnectTimer = setTimeout(() => {
         this.scheduledReconnectDone = true;
         void this.reconnectGemini('scheduled_refresh');

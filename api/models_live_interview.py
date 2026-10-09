@@ -29,6 +29,7 @@ class LiveSessionResponse(BaseModel):
     last_sequence: int = 0
     wrap_up_at: datetime | None = None
     hard_stop_at: datetime | None = None
+    reconnect_after_seconds: int = 540
 
 
 class LiveTokenRequest(BaseModel):
@@ -48,6 +49,10 @@ class LiveAudioTestTokenResponse(BaseModel):
     model: str
     websocket_url: str
     expires_at: datetime
+
+
+class LiveFinishRequest(BaseModel):
+    pending_events: list[LiveTranscriptEvent] = Field(default_factory=list)
 
 
 class LiveFinishResponse(BaseModel):
@@ -118,6 +123,7 @@ __all__ = [
     "ControlProgress",
     "ControlResumptionHandle",
     "ControlTranscriptFinal",
+    "LiveFinishRequest",
     "LiveFinishResponse",
     "LiveAudioTestTokenResponse",
     "LiveSessionResponse",

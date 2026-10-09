@@ -54,8 +54,11 @@ class GeminiProvider(LLMProvider):
         return LLMPermanentError(str(e))
 
     @staticmethod
-    def _generation_config(**kwargs) -> dict[str, int]:
-        return {"max_output_tokens": kwargs.get("max_tokens", 2048)}
+    def _generation_config(**kwargs) -> dict[str, Any]:
+        config: dict[str, Any] = {"max_output_tokens": kwargs.get("max_tokens", 2048)}
+        if "temperature" in kwargs:
+            config["temperature"] = kwargs["temperature"]
+        return config
 
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate text from a prompt using Gemini."""

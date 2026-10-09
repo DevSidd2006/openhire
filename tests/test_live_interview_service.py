@@ -217,7 +217,14 @@ async def test_completion_decision_requires_all_rubric_competencies(service, clo
                 evidence_state="supported",
             ),
         )
-    assert (await service.completion_decision(record.session_id)).approved is True
+    early = await service.completion_decision(record.session_id)
+    assert early.approved is False
+    assert early.reason == "minimum_duration_not_reached"
+
+    clock.value += timedelta(minutes=12)
+    approved = await service.completion_decision(record.session_id)
+    assert approved.approved is True
+    assert approved.reason == "required_competencies_supported"
 
     other = await create_started_session(service)
     clock.value += timedelta(minutes=15)

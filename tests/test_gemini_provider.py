@@ -73,6 +73,15 @@ class TestGeminiGenerate:
         assert mock_call.call_args.kwargs["input"] == "say hello"
 
     @pytest.mark.asyncio
+    async def test_generation_config_forwards_temperature(self):
+        mock_call = AsyncMock(return_value=_response("hello"))
+        provider = _fake_gemini_provider(mock_call)
+        await provider.generate("test prompt", temperature=0.2, max_tokens=100)
+        config = mock_call.call_args.kwargs["generation_config"]
+        assert config["temperature"] == 0.2
+        assert config["max_output_tokens"] == 100
+
+    @pytest.mark.asyncio
     async def test_empty_content_is_transient(self):
         provider = _fake_gemini_provider(AsyncMock(return_value=_empty_response()))
         with pytest.raises(LLMTransientError, match="empty content"):

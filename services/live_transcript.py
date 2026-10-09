@@ -65,7 +65,8 @@ def project_live_transcript(
     for item in ordered:
         if item.speaker == "interviewer":
             flush_pair()
-            pending_interviewer.append(item)
+            if not item.interrupted:
+                pending_interviewer.append(item)
         elif pending_interviewer:
             pending_candidate.append(item)
     flush_pair()

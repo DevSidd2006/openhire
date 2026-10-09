@@ -38,6 +38,7 @@ from repositories/interfaces.py.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional
 from api.registry import SessionRegistry
@@ -129,6 +130,8 @@ class ServiceContainer:
     # module docstring); this is the fallback used when the container is
     # built without an app, e.g. in a unit test.
     _fallback_registry: SessionRegistry = field(default_factory=SessionRegistry)
+    live_interview_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    live_interview_locks_guard: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def registry_for(self, app) -> SessionRegistry:
         """The session runtime registry this request should use.

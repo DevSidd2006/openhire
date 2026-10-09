@@ -66,10 +66,18 @@ def get_container(request: Request) -> ServiceContainer:
     return _container_from_app(request.app)
 
 
+def build_app_settings(app) -> AppSettings:
+    return _container_from_app(app).settings
+
+
 def get_app_settings(request: Request) -> AppSettings:
     """Settings as a dependency, taken from the container so a test that
     injects a differently-configured container is honoured."""
-    return _container_from_app(request.app).settings
+    return build_app_settings(request.app)
+
+
+def get_app_settings_ws(websocket: WebSocket) -> AppSettings:
+    return build_app_settings(websocket.app)
 
 
 def get_registry(request: Request) -> SessionRegistry:
@@ -162,6 +170,8 @@ def build_live_interview_service(app) -> LiveInterviewService:
         transcript_repository=container.transcript_repository,
         wrap_up_seconds=container.settings.gemini_live_wrap_up_seconds,
         hard_stop_seconds=container.settings.gemini_live_hard_stop_seconds,
+        locks=container.live_interview_locks,
+        locks_guard=container.live_interview_locks_guard,
     )
 
 
@@ -344,12 +354,14 @@ def get_admin_service(request: Request) -> AdminService:
 
 
 __all__ = [
+    "build_app_settings",
     "build_evaluation_service",
     "build_gemini_live_token_service",
     "build_interview_service",
     "build_live_interview_service",
     "get_admin_service",
     "get_app_settings",
+    "get_app_settings_ws",
     "get_application_repository",
     "get_application_service",
     "get_audit_log_repository",

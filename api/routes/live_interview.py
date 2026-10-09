@@ -17,6 +17,7 @@ from api.models_live_interview import (
     ControlProgress,
     ControlResumptionHandle,
     ControlTranscriptFinal,
+    LiveFinishRequest,
     LiveFinishResponse,
     LiveAudioTestTokenResponse,
     LiveSessionResponse,
@@ -26,6 +27,7 @@ from api.models_live_interview import (
 from core.config import AppSettings
 from core.container import ServiceContainer
 from core.dependencies import (
+    build_app_settings,
     build_evaluation_service,
     build_gemini_live_token_service,
     build_live_interview_service,
@@ -140,7 +142,9 @@ def _demo_context() -> tuple[JobDescription, ParsedResume, JobRubric]:
     return job, resume, rubric
 
 
-def _response(record: SessionRecord) -> LiveSessionResponse:
+def _response(
+    record: SessionRecord, reconnect_after_seconds: int = 540
+) -> LiveSessionResponse:
     state = record.live_state
     assert state is not None
     assert record.interview_id is not None
@@ -152,6 +156,7 @@ def _response(record: SessionRecord) -> LiveSessionResponse:
         last_sequence=state.last_sequence,
         wrap_up_at=state.wrap_up_at,
         hard_stop_at=state.hard_stop_at,
+        reconnect_after_seconds=reconnect_after_seconds,
     )
 
 
@@ -163,8 +168,6 @@ async def _enforce_ownership(
     allow_recruiter: bool,
 ) -> None:
     if allow_recruiter and principal.has_scopes(["recruiter:read"]):
-        return
-    if record.application_id is None:
         return
     user_id = principal.subject_id or "user_anonymous"
     try:
@@ -256,7 +259,13 @@ async def create_live_session(
                     raise ConflictError(
                         "This application is already linked to a turn-based interview."
                     )
-                return _response(existing)
+                return _response(existing, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
+    else:
+        user_id = principal.subject_id or "user_anonymous"
+        try:
+            await candidates.validate_candidate_ownership(payload.candidate_id, user_id)
+        except NotFoundError:
+            pass
 
     rubric = await container.rubric_repository.get_approved_for_job(payload.job_id)
     if rubric is None:
@@ -264,9 +273,21 @@ async def create_live_session(
             "An approved rubric is required before starting a realtime interview."
         )
 
+    candidate_record = await container.candidate_repository.get(payload.candidate_id)
+    job_desc = (
+        job_record.job_description
+        if job_record is not None and getattr(job_record, "job_description", None) is not None
+        else payload.job_description
+    )
+    parsed_res = (
+        candidate_record.parsed_resume
+        if candidate_record is not None and getattr(candidate_record, "parsed_resume", None) is not None
+        else payload.parsed_resume
+    )
+
     record = await live.create_session(
-        job_description=payload.job_description,
-        parsed_resume=payload.parsed_resume,
+        job_description=job_desc,
+        parsed_resume=parsed_res,
         rubric_snapshot=rubric,
         candidate_id=payload.candidate_id,
         application_id=payload.application_id,
@@ -275,7 +296,7 @@ async def create_live_session(
         await applications.link_interview_session(
             payload.application_id, record.session_id
         )
-    return _response(record)
+    return _response(record, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
 
 
 @router.post(
@@ -309,7 +330,7 @@ async def create_demo_live_session(
         rubric_snapshot=rubric,
         candidate_id=resume.candidate_id,
     )
-    return _response(record)
+    return _response(record, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
 
 
 @router.get("/live-sessions/{session_id}", response_model=LiveSessionResponse)
@@ -317,6 +338,7 @@ async def get_live_session(
     session_id: str,
     live: LiveInterviewService = Depends(get_live_interview_service),
     candidates: CandidateService = Depends(get_candidate_service),
+    settings: AppSettings = Depends(get_app_settings),
     principal: Principal = Depends(require_authenticated),
 ) -> LiveSessionResponse:
     try:
@@ -324,7 +346,7 @@ async def get_live_session(
     except ConflictError as exc:
         raise NotFoundError("The live interview session was not found.") from exc
     await _enforce_ownership(record, principal, candidates, allow_recruiter=True)
-    return _response(record)
+    return _response(record, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
 
 
 @router.post(
@@ -332,7 +354,7 @@ async def get_live_session(
 )
 async def issue_live_token(
     session_id: str,
-    payload: LiveTokenRequest,
+    payload: LiveTokenRequest = LiveTokenRequest(),
     live: LiveInterviewService = Depends(get_live_interview_service),
     tokens: GeminiLiveTokenService = Depends(get_gemini_live_token_service),
     candidates: CandidateService = Depends(get_candidate_service),
@@ -357,6 +379,7 @@ async def issue_live_token(
 )
 async def finish_live_session(
     session_id: str,
+    payload: LiveFinishRequest | None = None,
     live: LiveInterviewService = Depends(get_live_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidates: CandidateService = Depends(get_candidate_service),
@@ -364,6 +387,14 @@ async def finish_live_session(
 ) -> LiveFinishResponse:
     existing = await live.get(session_id)
     await _enforce_ownership(existing, principal, candidates, allow_recruiter=False)
+    if (
+        payload
+        and payload.pending_events
+        and existing.live_state
+        and existing.live_state.status in {LiveInterviewStatus.ACTIVE, LiveInterviewStatus.RECONNECTING}
+    ):
+        for event in sorted(payload.pending_events, key=lambda item: item.sequence):
+            await live.append_event(session_id, event)
     record = await live.finish(
         session_id, reason="candidate_or_time_complete"
     )
@@ -438,6 +469,7 @@ async def live_control_socket(websocket: WebSocket, session_id: str) -> None:
         record = await live.get(session_id)
         state = record.live_state
         assert state is not None
+        settings = build_app_settings(websocket.app)
         await websocket.send_json(
             {
                 "type": "authenticated",
@@ -446,6 +478,7 @@ async def live_control_socket(websocket: WebSocket, session_id: str) -> None:
                 "wrap_up_at": state.wrap_up_at.isoformat() if state.wrap_up_at else None,
                 "hard_stop_at": state.hard_stop_at.isoformat() if state.hard_stop_at else None,
                 "has_resumption_handle": bool(state.resumption_handle),
+                "reconnect_after_seconds": settings.gemini_live_reconnect_seconds,
             }
         )
 
@@ -464,7 +497,7 @@ async def live_control_socket(websocket: WebSocket, session_id: str) -> None:
                     record = await live.append_event(session_id, message.event)
                     assert record.live_state is not None
                     await websocket.send_json(
-                        {"type": "event_ack", "sequence": record.live_state.last_sequence}
+                        {"type": "event_ack", "sequence": message.event.sequence}
                     )
                 elif isinstance(message, ControlProgress):
                     await live.record_progress(session_id, message.progress)

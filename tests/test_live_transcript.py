@@ -80,6 +80,22 @@ def test_projector_keeps_unpaired_and_interrupted_output_in_raw_transcript():
     assert "Of course. The role focuses on APIs." in transcript.raw_transcript
 
 
+def test_projector_does_not_pair_interrupted_interviewer_fragment_with_candidate_answer():
+    transcript = project(
+        [
+            event(1, "interviewer", "Could you tell me about", interrupted=True),
+            event(2, "candidate", "Actually I wanted to say something first."),
+            event(3, "interviewer", "Go ahead."),
+            event(4, "candidate", "I have worked with distributed systems."),
+        ]
+    )
+
+    assert len(transcript.exchanges) == 1
+    assert transcript.exchanges[0][0].question_text == "Go ahead."
+    assert transcript.exchanges[0][1].answer_text == "I have worked with distributed systems."
+    assert "[interviewer interrupted] Could you tell me about" in transcript.raw_transcript
+
+
 def test_event_text_is_normalized_and_blank_text_is_rejected():
     assert event(1, "candidate", "  clear\n answer  ").text == "clear answer"
     with pytest.raises(ValidationError):

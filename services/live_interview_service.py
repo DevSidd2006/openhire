@@ -54,6 +54,8 @@ class LiveInterviewService:
         hard_stop_seconds: int = 15 * 60,
         clock_skew_seconds: int = 5,
         now: Callable[[], datetime] | None = None,
+        locks: dict[str, asyncio.Lock] | None = None,
+        locks_guard: asyncio.Lock | None = None,
     ) -> None:
         self._sessions = session_repository
         self._transcripts = transcript_repository
@@ -61,8 +63,8 @@ class LiveInterviewService:
         self._hard_stop_seconds = hard_stop_seconds
         self._clock_skew_ms = clock_skew_seconds * 1000
         self._now = now or (lambda: datetime.now(timezone.utc))
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._locks_guard = asyncio.Lock()
+        self._locks: dict[str, asyncio.Lock] = locks if locks is not None else {}
+        self._locks_guard = locks_guard if locks_guard is not None else asyncio.Lock()
 
     async def _lock_for(self, session_id: str) -> asyncio.Lock:
         async with self._locks_guard:
@@ -272,15 +274,21 @@ class LiveInterviewService:
         }
         required = [item.name for item in state.rubric_snapshot.competencies]
         remaining = [name for name in required if name.casefold() not in supported]
-        if not remaining:
+        if remaining:
             return CompletionDecision(
-                approved=True,
-                reason="required_competencies_supported",
+                approved=False,
+                remaining_competencies=remaining,
+                reason="required_competencies_remaining",
+            )
+        if state.wrap_up_at is not None and now < state.wrap_up_at:
+            return CompletionDecision(
+                approved=False,
+                remaining_competencies=[],
+                reason="minimum_duration_not_reached",
             )
         return CompletionDecision(
-            approved=False,
-            remaining_competencies=remaining,
-            reason="required_competencies_remaining",
+            approved=True,
+            reason="required_competencies_supported",
         )
 
     async def finish(self, session_id: str, *, reason: str) -> SessionRecord:
