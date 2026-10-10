@@ -142,6 +142,93 @@ class TestExtractResumeText:
         with pytest.raises(ResumeExtractionError, match="No extractable text"):
             extract_resume_text("blank.docx", buf.getvalue())
 
+    def test_pdf_with_no_text_raises_extraction_error(self, monkeypatch):
+        """A PDF with neither extractable text nor OCR text must raise ResumeExtractionError."""
+        import utils.resume_documents as module
+
+        monkeypatch.setattr(module, "_extract_pdf_text", lambda content: "")
+        monkeypatch.setattr(module, "_ocr_pdf_pages", lambda content: "")
+
+        with pytest.raises(ResumeExtractionError, match="No extractable text"):
+            extract_resume_text("blank.pdf", b"%PDF-dummy")
+
+    def test_text_only_hindi_docx_extracts_real_text_without_ocr(self, monkeypatch):
+        """A text-only Hindi DOCX contains valid prose in Devanagari script.
+        It must be recognized as meaningful text, extract cleanly, and NOT
+        invoke OCR or discard extracted text (Issue #47)."""
+        from docx import Document
+        import io
+        import utils.resume_documents as module
+
+        def _fail_if_called(*args, **kwargs):
+            raise AssertionError("OCR must not run when normal extraction already succeeded")
+
+        monkeypatch.setattr(module, "_get_ocr_engine", _fail_if_called)
+
+        hindi_text = (
+            "सॉफ्टवेयर अभियंता\n"
+            "अनुभव: पाँच वर्षों से विभिन्न अनुप्रयोगों का विकास और रखरखाव किया है।\n"
+            "कौशल: समस्या समाधान, दल प्रबंधन तथा सॉफ्टवेयर परीक्षण।\n"
+            "शिक्षा: कंप्यूटर विज्ञान में स्नातक उपाधि प्राप्त की है।"
+        )
+        doc = Document()
+        for paragraph in hindi_text.split("\n"):
+            doc.add_paragraph(paragraph)
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        text, source_format = extract_resume_text("resume_hindi.docx", buf.getvalue())
+        assert source_format == "docx"
+        assert "सॉफ्टवेयर अभियंता" in text
+        assert "कंप्यूटर विज्ञान" in text
+
+    def test_multilingual_looks_meaningful_and_rejects_symbols(self):
+        """_looks_meaningful must recognize prose in different Unicode scripts
+        while still rejecting symbol-only or numeric-only filler."""
+        from utils.resume_documents import _looks_meaningful
+
+        # Meaningful Unicode prose
+        hindi_prose = "सॉफ्टवेयर अभियंता अनुभव: पाँच वर्षों से विभिन्न अनुप्रयोगों का विकास और रखरखाव किया है।"
+        spanish_prose = "Ingeniero de software con más de cinco años de experiencia en desarrollo de aplicaciones."
+        assert _looks_meaningful(hindi_prose) is True
+        assert _looks_meaningful(spanish_prose) is True
+
+        # Numeric or symbol noise must be rejected
+        numbers_only = "12345 67890 12345 67890 12345 67890 12345 67890 12345 67890"
+        symbols_only = "===== ----- +++++ ***** ///// \\\\\\\\ ||||| ~~~~~ ..... ,,,,,"
+        stray_watermark = "© 2024 / / / | . --"
+        assert _looks_meaningful(numbers_only) is False
+        assert _looks_meaningful(symbols_only) is False
+        assert _looks_meaningful(stray_watermark) is False
+
+    def test_docx_ocr_empty_does_not_destroy_previously_extracted_text(self, monkeypatch):
+        """If _looks_meaningful returns False on borderline text, but OCR returns empty,
+        the previously extracted DOCX text must be preserved rather than overwritten with empty string."""
+        import utils.resume_documents as module
+
+        # Mock normal docx extraction returning short text
+        monkeypatch.setattr(module, "_extract_docx_text", lambda content: "Short candidate summary note")
+        # Mock OCR returning empty string
+        monkeypatch.setattr(module, "_ocr_docx_images", lambda content: "")
+
+        text, source_format = extract_resume_text("short.docx", b"dummy_content")
+        assert source_format == "docx"
+        assert text == "Short candidate summary note"
+
+    def test_pdf_ocr_empty_does_not_destroy_previously_extracted_text(self, monkeypatch):
+        """If _looks_meaningful returns False on borderline text in a PDF, but OCR returns empty,
+        the previously extracted PDF text must be preserved rather than overwritten with empty string."""
+        import utils.resume_documents as module
+
+        # Mock normal pdf extraction returning short text
+        monkeypatch.setattr(module, "_extract_pdf_text", lambda content: "Short PDF candidate note")
+        # Mock OCR returning empty string
+        monkeypatch.setattr(module, "_ocr_pdf_pages", lambda content: "")
+
+        text, source_format = extract_resume_text("short.pdf", b"dummy_pdf_content")
+        assert source_format == "pdf"
+        assert text == "Short PDF candidate note"
+
 
 # ---------------------------------------------------------------------------
 # CandidateService.preview_resume - parses via the EXISTING ResumeParserAgent

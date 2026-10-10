@@ -70,7 +70,10 @@ def _looks_meaningful(text: Optional[str]) -> bool:
     stripped = (text or "").strip()
     if len(stripped) < _MIN_MEANINGFUL_CHARS:
         return False
-    words = re.findall(r"[A-Za-z]{2,}", stripped)
+    words = [
+        w for w in re.findall(r"\w+", stripped)
+        if len(w) >= 2 and any(c.isalpha() for c in w)
+    ]
     return len(words) >= _MIN_MEANINGFUL_WORDS
 
 
@@ -182,11 +185,13 @@ def extract_resume_text(filename: str, content: bytes) -> Tuple[str, str]:
     if source_format == "pdf":
         text = _extract_pdf_text(content)
         if not _looks_meaningful(text):
-            text = _ocr_pdf_pages(content).strip()
+            ocr_text = _ocr_pdf_pages(content).strip()
+            text = ocr_text or text
     else:
         text = _extract_docx_text(content)
         if not _looks_meaningful(text):
-            text = _ocr_docx_images(content).strip()
+            ocr_text = _ocr_docx_images(content).strip()
+            text = ocr_text or text
 
     text = (text or "").strip()
     if not text:
