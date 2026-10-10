@@ -35,15 +35,19 @@ _current_llm_provider: ContextVar[Optional["LLMProvider"]] = ContextVar(
 )
 
 
-def set_context_provider(provider: Optional["LLMProvider"]) -> Token:
+def set_context_provider(
+    provider: Optional["LLMProvider"],
+) -> Token[Optional["LLMProvider"]]:
     """Set the provider for the current context (request). Returns a Token
     that MUST be passed to reset_context_provider when the request ends -
     see api/dependencies for the yield-dependency that does this."""
     return _current_llm_provider.set(provider)
 
 
-def reset_context_provider(token: Token) -> None:
-    """Undo a prior set_context_provider call. Always call this in a
+def reset_context_provider(token: Token[Optional["LLMProvider"]]) -> None:
+    """Undo a prior set_context_provider call. The Token is typed to this
+    ContextVar's value type, so a Token from a different ContextVar is a
+    type error, not a silent cross-context reset. Always call this in a
     `finally` block paired with the `set_context_provider` that produced
     `token`, so a provider never outlives the request that set it."""
     _current_llm_provider.reset(token)
