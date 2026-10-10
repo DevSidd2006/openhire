@@ -58,6 +58,28 @@ def client():
 # ---------------------------------------------------------------------------
 
 class TestExtractResumeText:
+    def test_text_only_hindi_docx_is_extracted_without_ocr(self):
+        # Regression for #47: the meaningful-text check counted only ASCII
+        # [A-Za-z] words — Hindi text scored zero, so a correctly extracted
+        # DOCX was discarded and replaced by OCR over embedded images.
+        import io
+        import docx  # python-docx — same library the fixtures use
+
+        hindi = (
+            "मेरा नाम प्रिया है। मुझे पांच वर्ष का अनुभव है। "
+            "मैंने कई परियोजनाएं पूरी कीं। मैं एक कुशल डेवलपर हूं और "
+            "मेरी टीम अच्छी है। मैंने कई सफल परियोजनाएं पूरी की हैं।"
+        )
+        doc = docx.Document()
+        doc.add_paragraph(hindi)
+        buffer = io.BytesIO()
+        doc.save(buffer)
+
+        text, source_format = extract_resume_text("hindi_resume.docx", buffer.getvalue())
+        assert source_format == "docx"
+        assert "प्रिया" in text
+        assert len(text.strip()) >= 40
+
     def test_real_pdf_extracts_real_text(self):
         text, source_format = extract_resume_text("sample_resume.pdf", _read(_PDF_PATH))
         assert source_format == "pdf"
