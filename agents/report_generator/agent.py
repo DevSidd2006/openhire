@@ -83,7 +83,11 @@ class ReportGeneratorAgent(BaseAgent):
                 scores=candidate_scores,
                 technical_summary=technical_evaluation.explanation if technical_evaluation else "No technical evaluation",
                 behavioral_summary=behavioral_evaluation.explanation if behavioral_evaluation else "No behavioral evaluation",
-                job_fit_summary=f"Match score: {candidate_scores.job_fit_score:.1f}/10",
+                job_fit_summary=(
+                    f"Match score: {candidate_scores.job_fit_score:.1f}/10"
+                    if candidate_scores.job_fit_score is not None
+                    else "Match score: unknown (insufficient resume evidence)"
+                ),
                 recommendation=recommendation,
                 strengths=self._compile_strengths(technical_evaluation, behavioral_evaluation),
                 weaknesses=self._compile_weaknesses(technical_evaluation, behavioral_evaluation),
@@ -171,11 +175,16 @@ class ReportGeneratorAgent(BaseAgent):
 
     def _generate_summary(self, scores: CandidateScores, recommendation: str) -> str:
         """Generate executive summary."""
+        job_fit = (
+            f"{scores.job_fit_score:.1f}/10"
+            if scores.job_fit_score is not None
+            else "unknown"
+        )
         return (
             f"Recommendation: {recommendation}\n"
             f"Overall Score: {scores.weighted_final_score:.1f}/10\n"
             f"Technical: {scores.technical_score:.1f}/10 | "
             f"Behavioral: {scores.behavioral_score:.1f}/10 | "
-            f"Job Fit: {scores.job_fit_score:.1f}/10\n"
+            f"Job Fit: {job_fit}\n"
             f"See detailed sections below for evidence."
         )

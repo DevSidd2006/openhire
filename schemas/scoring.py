@@ -16,7 +16,9 @@ class CandidateScores(BaseModel):
     # Component scores (0-10 scale)
     technical_score: float = Field(ge=0.0, le=10.0)
     behavioral_score: float = Field(ge=0.0, le=10.0)
-    job_fit_score: float = Field(ge=0.0, le=10.0)
+    # None means the resume match had insufficient evidence to produce a
+    # defensible job-fit score; it must remain unknown rather than become 0.
+    job_fit_score: Optional[float] = Field(default=None, ge=0.0, le=10.0)
 
     # Weighted final score (0-10 scale)
     weighted_final_score: float = Field(ge=0.0, le=10.0)
@@ -86,7 +88,7 @@ class LeaderboardEntry(BaseModel):
     weighted_score: float
     technical_score: float
     behavioral_score: float
-    job_fit_score: float
+    job_fit_score: Optional[float] = None
     percentile_rank: float
 
     recommendation: str
