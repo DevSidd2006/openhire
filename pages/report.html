@@ -193,14 +193,17 @@
   // and never reached an interview - so no evaluation will EVER appear no
   // matter how long this page waits.
   async function resolveEvaluation() {
-    if (sessionId) {
-      const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
-      return data.evaluation;
-    }
+    // Gemini Live reports are application-centric. Prefer this lookup when
+    // app_id is present; the session-centric endpoint is legacy-only.
     if (appId) {
       const app = await apiRequest(`/applications/${encodeURIComponent(appId)}`);
       if (!app.application.session_id) return 'no_interview';
+      resolvedApplicationId = appId;
       const data = await apiRequest(`/applications/${encodeURIComponent(appId)}/evaluation`);
+      return data.evaluation;
+    }
+    if (sessionId) {
+      const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
       return data.evaluation;
     }
     if (jobId && candidateId) {
