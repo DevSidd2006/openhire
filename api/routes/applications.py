@@ -190,7 +190,8 @@ async def get_application_evaluation(
     application_id: str,
     applications: ApplicationService = Depends(get_application_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
-    principal: Principal = Depends(require_scopes("recruiter:read")),
+    candidate_service: CandidateService = Depends(get_candidate_service),
+    principal: Principal = Depends(require_authenticated),
 ) -> ApplicationEvaluationResponse:
     """GET /applications/{application_id}/evaluation - the
     application-centric equivalent of Chunk 4's
@@ -198,6 +199,10 @@ async def get_application_evaluation(
     `EvaluationService`/`EvaluationJob` - not a second evaluation state
     system, just a different, recruiter-natural lookup path onto the same
     data (Job -> Applications -> Application -> Evaluation).
+
+    Recruiters may read any application. An authenticated candidate may read
+    the evaluation only for their own candidate record. The auth-disabled
+    local mode preserves the existing session-capability behavior.
 
     `evaluation=None` means no interview has been linked yet, or one has
     but its evaluation has not been triggered yet (e.g. the transcript has
@@ -209,6 +214,14 @@ async def get_application_evaluation(
     Errors: 404 `not_found` if the application itself does not exist.
     """
     application = await applications.get_application(application_id)
+    if (
+        not principal.has_scopes(["recruiter:read"])
+        and principal.is_authenticated
+    ):
+        await candidate_service.validate_candidate_ownership(
+            application.candidate_id,
+            principal.subject_id or "user_anonymous",
+        )
     evaluation = None
     if application.session_id is not None:
         evaluation = await evaluations.get_evaluation_for_session(application.session_id)
