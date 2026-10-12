@@ -155,7 +155,7 @@
     </div>
 
     <div class="auth-social">
-      <button type="button" class="auth-social-btn" onclick="handleLinkedInSignup()"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn</button>
+      <button type="button" class="auth-social-btn" onclick="handleLinkedInSignup()"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn <span style="font-size:0.75em; opacity:0.75;">(Candidates)</span></button>
     </div>
     <div class="auth-divider">or with email</div>
 
@@ -202,8 +202,10 @@
 
   function handleLinkedInSignup() {
     const errorDiv = document.getElementById('errorMessage');
-    if (!selectedRole) {
-      errorDiv.textContent = 'Please select whether you are a Candidate or Recruiter before continuing with LinkedIn.';
+    if (selectedRole !== 'candidate') {
+      errorDiv.textContent = selectedRole === 'recruiter'
+        ? 'LinkedIn signup is available for candidates only. Use email signup for a recruiter account.'
+        : 'Select Candidate to continue with LinkedIn.';
       errorDiv.style.display = 'block';
       const roleGroup = document.querySelector('.auth-role-group');
       if (roleGroup) {

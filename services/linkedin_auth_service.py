@@ -62,13 +62,11 @@ class LinkedInAuthService:
         }
         return f"{LINKEDIN_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
-    async def exchange_code_for_userinfo(
-        self, code: str, role: str = "candidate"
-    ) -> Dict[str, Any]:
+    async def exchange_code_for_userinfo(self, code: str) -> Dict[str, Any]:
         """Exchange authorization code for userinfo via OIDC.
 
-        In mock mode, provides distinct deterministic identities for candidate
-        and recruiter signups so each flow can be tested independently.
+        In mock mode, provides a deterministic candidate identity for local
+        development and tests.
         """
         if not self.is_mock_mode:
             if code.startswith("mock_"):
@@ -78,17 +76,7 @@ class LinkedInAuthService:
                 )
 
         if self.is_mock_mode:
-            logger.info("Using mock LinkedIn userinfo profile", extra={"role": role})
-            if role == "recruiter":
-                return {
-                    "sub": "mock_linkedin_recruiter_001",
-                    "name": "Alex Recruiter",
-                    "given_name": "Alex",
-                    "family_name": "Recruiter",
-                    "email": "mock.recruiter@example.com",
-                    "email_verified": True,
-                    "picture": "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
-                }
+            logger.info("Using mock LinkedIn candidate profile")
             return {
                 "sub": "mock_linkedin_candidate_001",
                 "name": "Jane Candidate",

@@ -16,13 +16,16 @@ Endpoints:
 from __future__ import annotations
 
 import secrets
-import time
 import uuid
-from typing import Any, Optional
+import base64
+import hashlib
+import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
+from cryptography.fernet import Fernet, InvalidToken
 
 from core.config import AppSettings, get_settings
 from core.dependencies import get_user_repository
@@ -240,20 +243,25 @@ async def logout_user(response: Response) -> dict[str, str]:
 # LinkedIn OAuth Endpoints
 # ----------------------------------------------------------------------
 
-# Short-lived in-memory storage for one-time OAuth exchange tickets (60s TTL)
-_OAUTH_TICKETS: dict[str, dict[str, Any]] = {}
+# The ticket payload is encrypted into an HttpOnly cookie so callback and
+# exchange requests can be handled by different workers/instances.
+_OAUTH_TICKET_COOKIE = "openhire_oauth_ticket"
+_OAUTH_TICKET_TTL_SECONDS = 60
 
 
-def _store_oauth_ticket(access_token: str, refresh_token: str, user: UserRecord) -> str:
-    """Store tokens under a random one-time ticket expiring in 60 seconds."""
-    now = time.time()
-    # Prune expired tickets
-    expired_keys = [k for k, v in _OAUTH_TICKETS.items() if v["expires_at"] < now]
-    for k in expired_keys:
-        _OAUTH_TICKETS.pop(k, None)
+def _oauth_ticket_cipher(settings: AppSettings) -> Fernet:
+    """Derive a stable Fernet key from the application JWT secret."""
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.jwt_secret_key.encode()).digest())
+    return Fernet(key)
 
+
+def _store_oauth_ticket(
+    access_token: str, refresh_token: str, user: UserRecord, settings: AppSettings
+) -> tuple[str, str]:
+    """Create a distributed-safe encrypted ticket and its cookie value."""
     ticket = secrets.token_urlsafe(32)
-    _OAUTH_TICKETS[ticket] = {
+    payload = {
+        "ticket": ticket,
         "access_token": access_token,
         "refresh_token": refresh_token,
         "user": {
@@ -261,9 +269,9 @@ def _store_oauth_ticket(access_token: str, refresh_token: str, user: UserRecord)
             "email": user.email,
             "user_type": user.user_type,
         },
-        "expires_at": now + 60,
     }
-    return ticket
+    encrypted = _oauth_ticket_cipher(settings).encrypt(json.dumps(payload).encode()).decode()
+    return ticket, encrypted
 
 
 class ExchangeOAuthTicketRequest(BaseModel):
@@ -271,19 +279,37 @@ class ExchangeOAuthTicketRequest(BaseModel):
 
 
 @router.post("/linkedin/exchange", response_model=AuthResponse)
-async def exchange_oauth_ticket(request: ExchangeOAuthTicketRequest) -> AuthResponse:
+async def exchange_oauth_ticket(
+    request: ExchangeOAuthTicketRequest,
+    http_request: Request,
+    response: Response,
+    settings: AppSettings = Depends(get_settings),
+) -> AuthResponse:
     """Exchange a short-lived one-time ticket for access and refresh tokens.
 
     Prevents placing JWT credentials directly into browser redirect URLs or logs.
     """
-    now = time.time()
-    ticket_data = _OAUTH_TICKETS.pop(request.ticket, None)
-    if not ticket_data or ticket_data["expires_at"] < now:
+    encrypted_ticket = http_request.cookies.get(_OAUTH_TICKET_COOKIE)
+    ticket_data = None
+    if encrypted_ticket:
+        try:
+            raw_payload = _oauth_ticket_cipher(settings).decrypt(
+                encrypted_ticket.encode(), ttl=_OAUTH_TICKET_TTL_SECONDS
+            )
+            candidate = json.loads(raw_payload)
+            if secrets.compare_digest(candidate.get("ticket", ""), request.ticket):
+                ticket_data = candidate
+        except (InvalidToken, ValueError, TypeError, json.JSONDecodeError):
+            ticket_data = None
+
+    if not ticket_data:
         raise UnauthorizedError(
             "Invalid or expired OAuth ticket.",
             internal_detail="oauth_ticket_invalid_or_expired",
         )
 
+    # Delete before returning so a successful ticket cannot be replayed.
+    response.delete_cookie(_OAUTH_TICKET_COOKIE, path="/", samesite="lax")
     user_info = ticket_data["user"]
     return AuthResponse(
         user=UserResponse(
@@ -299,7 +325,7 @@ async def exchange_oauth_ticket(request: ExchangeOAuthTicketRequest) -> AuthResp
 
 @router.get("/linkedin/authorize")
 async def linkedin_authorize(
-    role: str = Query("candidate", pattern="^(candidate|recruiter)$"),
+    role: str = Query("candidate", pattern="^candidate$"),
     linkedin_service: LinkedInAuthService = Depends(get_linkedin_service),
 ) -> RedirectResponse:
     """Initiates LinkedIn OAuth login flow with CSRF state protection."""
@@ -329,6 +355,7 @@ async def linkedin_callback(
     linkedin_service: LinkedInAuthService = Depends(get_linkedin_service),
     user_repository: UserRepository = Depends(get_user_repository),
     auth_service: AuthService = Depends(get_auth_service),
+    settings: AppSettings = Depends(get_settings),
 ) -> RedirectResponse:
     """Handles LinkedIn OAuth callback:
     - Verifies CSRF state cookie against returned state.
@@ -357,15 +384,12 @@ async def linkedin_callback(
         err_res.delete_cookie("oauth_state")
         return err_res
 
-    # 2. Extract role from state
+    # LinkedIn authentication is intentionally candidate-only. Recruiters use
+    # the existing email/password signup and login flow.
     user_type = "candidate"
-    if ":" in state:
-        _, role_param = state.split(":", 1)
-        if role_param in ("candidate", "recruiter"):
-            user_type = role_param
 
-    # 3. Fetch LinkedIn UserInfo (with role-aware mock identity in mock mode)
-    userinfo = await linkedin_service.exchange_code_for_userinfo(code, role=user_type)
+    # 3. Fetch LinkedIn UserInfo for the candidate-only flow
+    userinfo = await linkedin_service.exchange_code_for_userinfo(code)
     email = userinfo.get("email")
     if not email:
         err_res = RedirectResponse(
@@ -380,6 +404,11 @@ async def linkedin_callback(
     # 4. Check if user already exists
     user = await user_repository.get_by_email(email)
     if user:
+        if user.user_type != "candidate":
+            raise UnauthorizedError(
+                "LinkedIn authentication is available for candidates only.",
+                internal_detail=f"LinkedIn login attempted for user_type={user.user_type!r}",
+            )
         # Check if existing account is disabled
         if not user.is_active:
             logger.warning(
@@ -420,11 +449,12 @@ async def linkedin_callback(
     access_token, refresh_token = auth_service.issue_tokens_for_user(user)
 
     # 6. Generate one-time exchange ticket to avoid credentials in the URL
-    ticket = _store_oauth_ticket(access_token, refresh_token, user)
+    ticket, encrypted_ticket = _store_oauth_ticket(
+        access_token, refresh_token, user, settings=settings
+    )
 
     # 7. Redirect target with one-time ticket (safe against browser history and log leaks)
-    target_dashboard = "recruiter.html" if user.user_type == "recruiter" else "candidate.html"
-    redirect_target = f"/app/{target_dashboard}?ticket={ticket}"
+    redirect_target = f"/app/candidate.html?ticket={ticket}"
 
     redirect_response = RedirectResponse(url=redirect_target, status_code=status.HTTP_302_FOUND)
 
@@ -435,6 +465,13 @@ async def linkedin_callback(
         httponly=True,
         samesite="lax",
         max_age=15 * 60,
+    )
+    redirect_response.set_cookie(
+        key=_OAUTH_TICKET_COOKIE,
+        value=encrypted_ticket,
+        httponly=True,
+        samesite="lax",
+        max_age=_OAUTH_TICKET_TTL_SECONDS,
     )
     redirect_response.delete_cookie("oauth_state")
     return redirect_response

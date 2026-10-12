@@ -48,6 +48,13 @@ function isAuthTokenIssuingPath(path) {
 }
 
 async function apiRequest(path, options = {}) {
+  // OAuth callback pages may start API work before their page-level guard
+  // finishes exchanging the one-time ticket. Serialize all normal API calls
+  // behind that initialization so they never race the token exchange.
+  if (typeof initAuth === 'function' && !isAuthTokenIssuingPath(path)) {
+    await initAuth();
+  }
+
   const opts = Object.assign({}, options);
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   opts.headers = isFormData

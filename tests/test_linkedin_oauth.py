@@ -4,7 +4,7 @@ Regression tests for LinkedIn OAuth Sign-In & Sign-Up flow.
 Covers:
 1. Mock authentication gating: mock_* codes rejected when live credentials are configured;
    mock mode disabled in production; explicit LINKEDIN_MOCK_ENABLED flag behavior.
-2. Distinct deterministic mock profiles for candidate vs recruiter flows.
+2. Deterministic mock candidate profile.
 3. One-time OAuth ticket exchange preventing credentials in URLs; single-use replay protection.
 4. Server logout endpoint (POST /auth/logout) clearing HttpOnly authentication cookies.
 5. Inactive user rejection on OAuth callback.
@@ -130,16 +130,13 @@ class TestLinkedInMockGating:
         assert service.is_mock_mode is True
 
         candidate_info = pytest.importorskip("asyncio").run(
-            service.exchange_code_for_userinfo("mock_123", role="candidate")
+            service.exchange_code_for_userinfo("mock_123")
         )
         assert candidate_info["email"] == "mock.candidate@example.com"
         assert candidate_info["given_name"] == "Jane"
 
-        recruiter_info = pytest.importorskip("asyncio").run(
-            service.exchange_code_for_userinfo("mock_123", role="recruiter")
-        )
-        assert recruiter_info["email"] == "mock.recruiter@example.com"
-        assert recruiter_info["given_name"] == "Alex"
+        # LinkedIn authentication is intentionally candidate-only.
+        assert candidate_info["email"] == "mock.candidate@example.com"
 
     def test_mock_mode_default_in_dev_when_credentials_unset(self):
         """When credentials are unset in development, service defaults to offline mock mode."""
