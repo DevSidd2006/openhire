@@ -304,6 +304,13 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         EPHEMERAL_BACKEND_NAME,
     )
 
+    user_repo = InMemoryUserRepository()
+    auth_provider: AuthProvider = AnonymousAuthProvider()
+    if settings.auth_enabled:
+        auth_provider = JWTAuthProvider(
+            AuthService(user_repository=user_repo, settings=settings)
+        )
+
     return ServiceContainer(
         settings=settings,
         session_repository=InMemorySessionRepository(),
@@ -313,12 +320,12 @@ def build_default_container(settings: AppSettings) -> ServiceContainer:
         application_repository=InMemoryApplicationRepository(),
         rubric_repository=InMemoryRubricRepository(),
         evaluation_repository=InMemoryEvaluationRepository(),
-        user_repository=InMemoryUserRepository(),
+        user_repository=user_repo,
         bug_report_repository=InMemoryBugReportRepository(),
         audit_log_repository=InMemoryAuditLogRepository(),
         llm_credential_repository=InMemoryLLMCredentialRepository(),
         evaluation_dispatcher=AsyncTaskEvaluationDispatcher(),
-        auth_provider=AnonymousAuthProvider(),
+        auth_provider=auth_provider,
         persistence_is_ephemeral=True,
     )
 
