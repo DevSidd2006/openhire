@@ -38,6 +38,7 @@ from repositories/interfaces.py.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional
 from api.registry import SessionRegistry
@@ -129,6 +130,8 @@ class ServiceContainer:
     # module docstring); this is the fallback used when the container is
     # built without an app, e.g. in a unit test.
     _fallback_registry: SessionRegistry = field(default_factory=SessionRegistry)
+    live_interview_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    live_interview_locks_guard: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def registry_for(self, app) -> SessionRegistry:
         """The session runtime registry this request should use.
@@ -148,6 +151,17 @@ class ServiceContainer:
     def voice_service_factory_for(self, app) -> Optional[Callable]:
         """The `app.state.voice_service_factory` seam, unchanged."""
         return getattr(getattr(app, "state", None), "voice_service_factory", None)
+
+    def gemini_live_token_factory_for(self, app) -> Optional[Callable]:
+        """Optional token-service factory used by tests and deployments.
+
+        Like the existing voice/interviewer seams, this is read through on
+        every request so replacing ``app.state.gemini_live_token_factory``
+        takes effect without rebuilding the container.
+        """
+        return getattr(
+            getattr(app, "state", None), "gemini_live_token_factory", None
+        )
 
     def jd_analyzer_factory_for(self, app) -> Optional[Callable]:
         """Chunk 2: the same kind of pure wiring seam as

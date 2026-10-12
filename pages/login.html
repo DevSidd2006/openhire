@@ -98,7 +98,7 @@
     <a href="index.html#features">Features</a>
   </div>
   <div class="right">
-    <a class="github-link" href="https://github.com/DevSidd2006/openhire" aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-placeholder="false" aria-disabled="true" ></i></a>
+    <a class="github-link" href="https://github.com/DevSidd2006/openhire" aria-label="OpenHire on GitHub"><i class="ph-bold ph-github-logo" aria-hidden="true"></i></a>
     <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" onclick="toggleTheme()" aria-label="Switch to dark theme" title="Switch to dark theme"><i class="ph-bold ph-moon" aria-hidden="true"></i></button>
     <a href="login.html" class="btn btn-primary" aria-current="page"><i class="ph-bold ph-arrow-right" aria-hidden="true"></i>Get Started</a>
   </div>
@@ -116,7 +116,7 @@
     <div id="errorMessage" class="alert alert-danger auth-error" style="display:none; margin-bottom:1rem;"></div>
 
     <div class="auth-social">
-      <button type="button" class="auth-social-btn" disabled title="LinkedIn sign-in coming soon"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn<span class="auth-soon-badge">Coming soon</span></button>
+      <button type="button" class="auth-social-btn" onclick="window.location.href='/auth/linkedin/authorize'"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn</button>
     </div>
     <div class="auth-divider">or</div>
 

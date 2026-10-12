@@ -30,11 +30,14 @@ from fastapi.testclient import TestClient
 from agents.interviewer.agent import InterviewerAgent
 from api.app import create_app
 from api.registry import SessionNotFoundError, SessionRegistry
+from repositories.interfaces import SessionRecord
 from repositories.memory import InMemorySessionRepository, InMemoryTranscriptRepository
 from schemas.job import Competency, JobDescription
+from schemas.live_interview import LiveInterviewState
 from schemas.resume import ParsedResume
 from services.interview_service import InterviewService
 from tests.fakes import ScriptedLLMProvider
+from tests.rubric_fixtures import approved_rubric
 from utils.interview_session import (
     InterviewSessionError,
     InterviewSessionRunner,
@@ -117,6 +120,43 @@ def _create_payload(candidate_id="cand_http", job_id="job_http", **extra):
     }
     payload.update(extra)
     return payload
+
+
+@pytest.mark.asyncio
+async def test_session_repository_round_trips_live_state():
+    sessions = InMemorySessionRepository()
+    state = LiveInterviewState(
+        interview_id="int_live_roundtrip",
+        rubric_snapshot=approved_rubric(),
+        resumption_handle="resume-1",
+    )
+    record = SessionRecord(
+        session_id="sess_live_roundtrip",
+        interview_id=state.interview_id,
+        candidate_id="cand_1",
+        job_id="job_001",
+        status=SessionStatus.CREATED,
+        interview_mode="gemini_live",
+        live_state=state,
+    )
+
+    await sessions.save(record)
+    stored = await sessions.get(record.session_id)
+    assert stored.interview_mode == "gemini_live"
+    assert stored.live_state == state
+    assert stored.state is None
+
+
+def test_from_runner_is_explicitly_adaptive():
+    runner = InterviewSessionRunner(
+        job_description=_job(),
+        parsed_resume=_resume(),
+        candidate_id="cand_persist",
+        interviewer=_scripted_interviewer()(),
+    )
+    record = SessionRecord.from_runner("sess_adaptive", runner)
+    assert record.interview_mode == "adaptive"
+    assert record.live_state is None
 
 
 @pytest.fixture

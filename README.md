@@ -32,6 +32,31 @@ python -m uvicorn api.app:app --reload
 - **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Check:** `curl http://localhost:8000/api/v1/health`
 
+### Test the realtime interview panel locally
+
+The local demo bypasses sign-in, applications, matching, recruiter setup, and
+post-interview evaluation. It creates an in-memory sample interview so the
+Gemini Live conversation, microphone, captions, interruption, and reconnect UI
+can be exercised directly.
+
+Set these values in `.env`:
+
+```env
+ENVIRONMENT=development
+AUTH_ENABLED=false
+DATABASE_URL=
+GEMINI_LIVE_ENABLED=true
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+Start the API and open:
+
+```text
+http://localhost:8000/app/interview.html?demo=1
+```
+
+The demo endpoint is unavailable in staging and production.
+
 ---
 
 ## How It Works

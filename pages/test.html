@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenHire — Gemini Live Audio Test</title>
+  <link rel="stylesheet" href="css/style.css?v=theme-toggle">
+  <script src="js/theme.js"></script>
+  <style>
+    body { margin:0; min-height:100vh; background:var(--canvas); color:var(--ink); font-family:var(--font-sans); }
+    .shell { width:min(880px, calc(100% - 32px)); margin:0 auto; padding:36px 0; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:28px; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,5vw,48px); letter-spacing:-.04em; }
+    .lede { margin:0; color:var(--ink-3); line-height:1.5; }
+    .badge { border:1px solid var(--surface-border); background:var(--surface); border-radius:999px; padding:8px 12px; font:12px var(--font-mono); white-space:nowrap; }
+    .panel { background:var(--surface); border:1px solid var(--surface-border); border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.06); }
+    .stage { min-height:270px; display:grid; place-items:center; text-align:center; padding:32px; border-bottom:1px solid var(--surface-border); }
+    .orb { --level:0; width:132px; height:132px; border-radius:50%; display:grid; place-items:center; background:var(--ink); color:var(--surface); transform:scale(calc(1 + var(--level)*.12)); box-shadow:0 0 calc(24px + var(--level)*55px) rgba(25,25,25,.2); transition:transform 60ms linear; }
+    .orb span { font-size:42px; }
+    #state { margin:24px 0 5px; font-weight:600; font-size:18px; }
+    #hint { margin:0; color:var(--ink-3); font-size:14px; }
+    .controls { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; padding:18px; border-bottom:1px solid var(--surface-border); }
+    button { min-height:44px; padding:0 18px; border-radius:999px; cursor:pointer; font-weight:600; border:1px solid var(--surface-border); background:var(--canvas); color:var(--ink); }
+    button.primary { background:var(--ink); color:var(--surface); border-color:var(--ink); }
+    button.danger { color:var(--danger); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .transcript { height:280px; overflow:auto; padding:20px; }
+    .empty { color:var(--ink-3); text-align:center; padding:80px 10px; }
+    .line { margin:0 0 16px; line-height:1.55; }
+    .line b { display:block; font:11px var(--font-mono); text-transform:uppercase; letter-spacing:.08em; margin-bottom:3px; }
+    .line.user b { color:var(--success-text); }
+    .error { color:var(--danger); }
+    @media (max-width:600px) { header{display:block}.badge{display:inline-block;margin-top:16px}.shell{padding:20px 0}.stage{min-height:230px}.transcript{height:240px} }
+    @media (prefers-reduced-motion:reduce) { .orb{transition:none} }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div><h1>Gemini Live audio test</h1><p class="lede">A context-free playground for natural voice, interruptions, captions, and latency.</p></div>
+      <span class="badge">Development only</span>
+    </header>
+    <section class="panel">
+      <div class="stage">
+        <div>
+          <div class="orb" id="orb" aria-hidden="true"><span>✦</span></div>
+          <p id="state" role="status">Ready</p>
+          <p id="hint">Connect, allow microphone access, then speak naturally.</p>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="primary" id="connectBtn">Connect audio</button>
+        <button id="muteBtn" disabled>Mute</button>
+        <button id="promptBtn" disabled>Make AI speak</button>
+        <button class="danger" id="disconnectBtn" disabled>Disconnect</button>
+        <button id="clearBtn">Clear transcript</button>
+      </div>
+      <div class="transcript" id="transcript" role="log" aria-live="polite"><div class="empty">Conversation transcript will appear here.</div></div>
+    </section>
+  </div>
+  <script type="module" src="js/live-audio-test.js?v=6"></script>
+</body>
+</html>

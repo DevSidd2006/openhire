@@ -59,6 +59,7 @@ from schemas.evaluation import (
     CompetencyScore,
 )
 from schemas.job import JobDescription
+from utils.evidence import compute_evidence_backed_coverage
 
 
 class ScoringAgent(BaseAgent):
@@ -148,6 +149,13 @@ class ScoringAgent(BaseAgent):
             f"Behavioral: {behav_score:.1f}, Job Fit: {job_fit_score:.1f}."
         )
 
+        evidence_backed_coverage = compute_evidence_backed_coverage(
+            competency_scores=matched_competencies,
+            rubric=job_description,
+            candidate_id=candidate_id,
+            transcript=kwargs.get("interview_transcript"),
+        )
+
         scores = CandidateScores(
             score_id=f"scores_{uuid.uuid4().hex[:8]}",
             candidate_id=candidate_id,
@@ -158,6 +166,7 @@ class ScoringAgent(BaseAgent):
             weighted_final_score=weighted_final,
             competency_scores=matched_competencies,
             rubric_coverage=rubric_coverage,
+            evidence_backed_coverage=evidence_backed_coverage,
             percentile_rank=0.0,  # Will be calculated in leaderboard
             explanation=explanation,
             confidence=min(technical_evaluation.confidence, behavioral_evaluation.confidence),

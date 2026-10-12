@@ -28,7 +28,7 @@
 
     <div class="form-group" style="margin-top:1.25rem;">
       <label class="form-label">Full Name</label>
-      <input type="text" id="candidateName" class="form-control" placeholder="e.g. Alex Morgan" value="Alex Morgan">
+      <input type="text" id="candidateName" class="form-control" placeholder="e.g. Alex Morgan" value="">
     </div>
 
     <div class="form-group">
@@ -69,7 +69,7 @@
   }
 
   const user = getCurrentUser();
-  if (user && user.name) {
+  if (user && user.name && !user.name.includes('@')) {
     document.getElementById('candidateName').value = user.name;
   }
 

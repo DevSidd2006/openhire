@@ -50,5 +50,4 @@ python-multipart>=0.0.9
 # Optional dependencies
 openai>=1.0.0
 groq>=1.0.0  # P8B.3: PRIMARY real provider (required if LLM_PROVIDER=groq)
-google-genai>=0.3.0  # P8B: Gemini provider (required if LLM_PROVIDER=gemini or EMBEDDING_PROVIDER=gemini)
-
+google-genai>=2.22.0  # Gemini provider and async constrained-token support for Gemini Live

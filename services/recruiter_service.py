@@ -71,6 +71,7 @@ from repositories.interfaces import (
     EvaluationJob,
     EvaluationRepository,
     EvaluationStatus,
+    JobRecord,
     JobRepository,
     SessionRecord,
     SessionRepository,

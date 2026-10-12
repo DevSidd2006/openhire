@@ -57,6 +57,7 @@ from schemas.interview import (
     InterviewTranscript,
 )
 from schemas.job import JobDescription
+from schemas.live_interview import LiveInterviewState
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
 from utils.interview_session import SessionStatus
@@ -151,6 +152,12 @@ def _session_record_from_row(row: asyncpg.Record) -> SessionRecord:
         parsed_resume=(
             ParsedResume.model_validate(row["parsed_resume_snapshot"])
             if row["parsed_resume_snapshot"] is not None
+            else None
+        ),
+        interview_mode=row["interview_mode"],
+        live_state=(
+            LiveInterviewState.model_validate(row["live_state"])
+            if row["live_state"] is not None
             else None
         ),
     )
@@ -522,8 +529,8 @@ class PostgresSessionRepository(SessionRepository):
                         session_id, interview_id, candidate_id, job_id, application_id,
                         status, termination_reason, questions_asked, questions_answered,
                         state, job_description_snapshot, parsed_resume_snapshot,
-                        created_at, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+                        interview_mode, live_state, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
                     ON CONFLICT (session_id) DO UPDATE SET
                         interview_id = EXCLUDED.interview_id,
                         candidate_id = EXCLUDED.candidate_id,
@@ -536,6 +543,8 @@ class PostgresSessionRepository(SessionRepository):
                         state = EXCLUDED.state,
                         job_description_snapshot = EXCLUDED.job_description_snapshot,
                         parsed_resume_snapshot = EXCLUDED.parsed_resume_snapshot,
+                        interview_mode = EXCLUDED.interview_mode,
+                        live_state = EXCLUDED.live_state,
                         updated_at = now()
                     RETURNING *
                     """,
@@ -557,6 +566,12 @@ class PostgresSessionRepository(SessionRepository):
                     (
                         record.parsed_resume.model_dump(mode="json")
                         if record.parsed_resume is not None
+                        else None
+                    ),
+                    record.interview_mode,
+                    (
+                        record.live_state.model_dump(mode="json")
+                        if record.live_state is not None
                         else None
                     ),
                     record.created_at,

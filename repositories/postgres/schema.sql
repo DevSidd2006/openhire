@@ -267,6 +267,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     state                       jsonb,
     job_description_snapshot    jsonb,
     parsed_resume_snapshot      jsonb,
+    interview_mode              text NOT NULL DEFAULT 'adaptive'
+                                    CHECK (interview_mode IN ('adaptive', 'gemini_live')),
+    live_state                  jsonb,
     created_at                  timestamptz NOT NULL DEFAULT now(),
     updated_at                  timestamptz,
 
@@ -276,6 +279,23 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- does not conflict with interview_id being nullable above.
     CONSTRAINT uq_sessions_interview_id UNIQUE (interview_id)
 );
+
+-- Additive Gemini Live columns for databases created before realtime
+-- interviews were introduced.  The named constraint is guarded because the
+-- inline check above already exists on newly-created databases under a
+-- Postgres-generated name.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS interview_mode text NOT NULL DEFAULT 'adaptive';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS live_state jsonb;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'sessions_interview_mode_check'
+    ) THEN
+        ALTER TABLE sessions ADD CONSTRAINT sessions_interview_mode_check
+            CHECK (interview_mode IN ('adaptive', 'gemini_live'));
+    END IF;
+END $$;
 
 -- Backs SessionRepository.list_for_candidate.
 CREATE INDEX IF NOT EXISTS idx_sessions_candidate_id_created_at

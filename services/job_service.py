@@ -61,6 +61,7 @@ class JobService:
         description: str,
         job_id: Optional[str] = None,
         openings: Optional[int] = None,
+        title: Optional[str] = None,
         is_practice: bool = False,
         created_by_user_id: Optional[str] = None,
     ) -> JobRecord:
@@ -99,8 +100,13 @@ class JobService:
                 context={"job_id": job_id},
             )
 
-        if openings is not None and openings >= 1:
-            job_description = job_description.model_copy(update={"openings": openings})
+        updates = {}
+        if title is not None:
+            updates["title"] = title.strip()
+        if openings is not None:
+            updates["openings"] = openings
+        if updates:
+            job_description = job_description.model_copy(update=updates)
 
         record = JobRecord(
             job_id=job_id,

@@ -31,6 +31,11 @@ class CandidateScores(BaseModel):
     # matched to an evaluator score and contributed to competency_scores.
     rubric_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    # Fraction (0-1) of the candidate's evaluated competency profile weight
+    # backed by valid, traceable evidence. Distinct from rubric_coverage,
+    # which measures completeness against the job's full rubric.
+    evidence_backed_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+
     # Filled in by the LeaderboardAgent once all candidates are ranked
     percentile_rank: float = Field(default=0.0, ge=0.0, le=100.0)
 

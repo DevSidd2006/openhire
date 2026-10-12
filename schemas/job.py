@@ -2,7 +2,7 @@
 Job Description related schemas.
 """
 from typing import List, Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class Competency(BaseModel):
@@ -53,7 +53,8 @@ class JobDescription(BaseModel):
     posting_date: Optional[str] = None
     closing_date: Optional[str] = None
 
-    @validator("competencies")
+    @field_validator("competencies")
+    @classmethod
     def validate_weights_sum(cls, v):
         """Validate that competency weights sum to approximately 1.0."""
         if v:

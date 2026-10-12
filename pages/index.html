@@ -1538,51 +1538,6 @@
 
         document.getElementById('pipelineBox').addEventListener('click', runPipeline);
 
-        // Auto-start pipeline when visible
-        const pipelineObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    setTimeout(runPipeline, 800);
-                    pipelineObserver.disconnect();
-                }
-            });
-        }, { threshold: 0.35 });
-
-        pipelineObserver.observe(document.getElementById('pipelineBox'));
-
-        // ─── Scroll to top ───
-        (() => {
-            const scrollToTopButton = document.getElementById('scrollToTop');
-
-            if (!scrollToTopButton) return;
-
-            const toggleScrollButton = () => {
-                scrollToTopButton.classList.toggle(
-                    'visible',
-                    window.scrollY > 400
-                );
-            };
-
-            const scrollToTop = () => {
-                const prefersReducedMotion = window.matchMedia(
-                    '(prefers-reduced-motion: reduce)'
-                ).matches;
-
-                window.scrollTo({
-                    top: 0,
-                    behavior: prefersReducedMotion ? 'auto' : 'smooth'
-                });
-            };
-
-            window.addEventListener('scroll', toggleScrollButton, {
-                passive: true
-            });
-
-            scrollToTopButton.addEventListener('click', scrollToTop);
-
-            toggleScrollButton();
-        })();
-
     </script>
 </body>
 </html>

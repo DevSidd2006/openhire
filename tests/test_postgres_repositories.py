@@ -81,7 +81,13 @@ from schemas.application import ApplicationStatus  # noqa: E402
 from schemas.evaluation import MatchingScore  # noqa: E402
 from schemas.interview import InterviewAnswer, InterviewQuestion, InterviewTranscript  # noqa: E402
 from schemas.job import Competency, JobDescription  # noqa: E402
+from schemas.live_interview import (  # noqa: E402
+    LiveInterviewState,
+    LiveInterviewStatus,
+    LiveTranscriptEvent,
+)
 from schemas.resume import ParsedResume  # noqa: E402
+from tests.rubric_fixtures import approved_rubric  # noqa: E402
 from schemas.scoring import CandidateReport, CandidateScores  # noqa: E402
 from utils.interview_session import SessionStatus  # noqa: E402
 
@@ -253,6 +259,43 @@ class TestPostgresApplicationRepository:
 
 
 class TestPostgresSessionRepository:
+    async def test_live_state_round_trips(self, pool):
+        await _seed_job_and_candidate(pool)
+        state = LiveInterviewState(
+            interview_id="int_live_pg",
+            rubric_snapshot=approved_rubric(),
+            status=LiveInterviewStatus.ACTIVE,
+            last_sequence=1,
+            events=[
+                LiveTranscriptEvent(
+                    event_id="evt_1",
+                    sequence=1,
+                    speaker="candidate",
+                    text="An answer.",
+                    started_at_ms=1000,
+                    ended_at_ms=1500,
+                )
+            ],
+            resumption_handle="resume-pg",
+        )
+        await PostgresSessionRepository(pool).save(
+            SessionRecord(
+                session_id="sess_live_pg",
+                interview_id="int_live_pg",
+                candidate_id="cand_pg_001",
+                job_id="job_pg_001",
+                status=SessionStatus.ACTIVE,
+                interview_mode="gemini_live",
+                live_state=state,
+            )
+        )
+
+        fetched = await PostgresSessionRepository(pool).get("sess_live_pg")
+        assert fetched.interview_mode == "gemini_live"
+        assert fetched.status == SessionStatus.ACTIVE
+        assert fetched.live_state.events == state.events
+        assert fetched.live_state.resumption_handle == "resume-pg"
+
     async def test_snapshot_round_trips_and_is_not_a_live_reference(self, pool):
         """The point of the snapshot design (audit section 9): the session
         keeps ITS OWN copy of the job/resume, independent of the jobs/

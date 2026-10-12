@@ -41,6 +41,9 @@ class CreateJobRequest(BaseModel):
     # creating candidate (GET /jobs/practice/mine) and admin see them.
     is_practice: bool = False
     openings: Optional[int] = Field(default=1, ge=1, description="Number of openings/vacancies")
+    # Recruiters enter this separately from the free-form description. Keep
+    # that exact value instead of asking the JD model to reconstruct it.
+    title: Optional[str] = Field(default=None, min_length=1, max_length=300)
 
 
 class JobResponse(BaseModel):
