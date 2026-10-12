@@ -263,11 +263,15 @@ async def create_live_session(
         ):
             existing = await container.session_repository.get(application.session_id)
             if existing is not None and existing.status.value != "failed":
-                if existing.interview_mode != "gemini_live" or existing.live_state is None:
-                    raise ConflictError(
-                        "This application is already linked to a turn-based interview."
+                if existing.interview_mode == "gemini_live" and existing.live_state is not None:
+                    return _response(
+                        existing,
+                        reconnect_after_seconds=settings.gemini_live_reconnect_seconds,
                     )
-                return _response(existing, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
+                # Older applications may still point at the adaptive
+                # turn-based session. Leave that immutable record intact and
+                # create a new Gemini Live record below; link_interview_session
+                # will atomically move the application bridge to the new id.
     else:
         user_id = principal.subject_id or "user_anonymous"
         try:

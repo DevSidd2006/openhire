@@ -6,7 +6,6 @@ import {
   floatToPcm16,
   resampleLinear,
 } from './live-audio-core.js';
-import { initializeLegacyInterview } from './legacy-interview.js';
 
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
@@ -902,8 +901,38 @@ async function bootstrapInterviewPage() {
     controller.bind();
   } catch (error) {
     if (error?.status === 404) {
-      initializeLegacyInterview();
-      document.getElementById('interviewState').textContent = 'Live';
+      // Direct links created before Gemini Live was enabled can still land
+      // here. Repair the application link instead of falling back to the
+      // Edge-TTS/turn-based interview.
+      if (applicationId && typeof globalThis.ensureInterviewSession === 'function') {
+        try {
+          const envelope = await globalThis.apiRequest(
+            `/applications/${encodeURIComponent(applicationId)}`,
+          );
+          const application = envelope.application || envelope;
+          sessionId = await globalThis.ensureInterviewSession(application);
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set('session_id', sessionId);
+          window.history.replaceState({}, '', nextUrl);
+          const liveState = await globalThis.apiRequest(
+            `/live-sessions/${encodeURIComponent(sessionId)}`,
+          );
+          const controller = new LiveInterviewController({
+            sessionId,
+            applicationId,
+            initialState: liveState,
+          });
+          globalThis.liveInterviewController = controller;
+          controller.bind();
+          return;
+        } catch (repairError) {
+          error = repairError;
+        }
+      }
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('questionBar').textContent =
+        'This interview could not be upgraded to Gemini Live. Please reopen it from the application.';
+      document.getElementById('questionBar').style.display = 'block';
       return;
     }
     document.getElementById('startBtn').disabled = true;

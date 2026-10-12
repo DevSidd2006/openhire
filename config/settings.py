@@ -29,9 +29,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Gemini 3.8 Flash when a task benefits more from quality than throughput.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
-# Gemini Live realtime interview configuration. Disabled by default so existing
-# turn-based interviews remain the only active path until an operator opts in.
-GEMINI_LIVE_ENABLED = os.getenv("GEMINI_LIVE_ENABLED", "false").lower() in ("1", "true", "yes")
+# Gemini Live is the production interview transport. Operators can still turn
+# it off explicitly for a diagnostic/development environment, but a missing
+# flag must not silently create an Edge-TTS/turn-based interview.
+GEMINI_LIVE_ENABLED = os.getenv("GEMINI_LIVE_ENABLED", "true").lower() in ("1", "true", "yes")
 GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.8-live")
 GEMINI_LIVE_VOICE = os.getenv("GEMINI_LIVE_VOICE", "Aoede")
 GEMINI_LIVE_WRAP_UP_SECONDS = int(os.getenv("GEMINI_LIVE_WRAP_UP_SECONDS", "720"))
