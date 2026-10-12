@@ -46,7 +46,7 @@ from core.errors import (
     NotFoundError,
     UnauthorizedError,
 )
-from core.security import Principal, require_authenticated
+from core.security import Principal, get_principal, require_authenticated
 from repositories.interfaces import SessionRecord
 from schemas.application import ApplicationStatus
 from schemas.job import Competency, JobDescription
@@ -166,7 +166,15 @@ async def _enforce_ownership(
     candidates: CandidateService,
     *,
     allow_recruiter: bool,
+    allow_public_capability: bool = False,
 ) -> None:
+    # Candidate interview links are capability URLs: the unguessable session
+    # id is the credential carried by the public interview page.  The
+    # recruiter-created session endpoints still require authentication, but
+    # the candidate must be able to load and complete the linked session
+    # without first signing in again.
+    if allow_public_capability and not principal.is_authenticated:
+        return
     if allow_recruiter and principal.has_scopes(["recruiter:read"]):
         return
     user_id = principal.subject_id or "user_anonymous"
@@ -339,13 +347,16 @@ async def get_live_session(
     live: LiveInterviewService = Depends(get_live_interview_service),
     candidates: CandidateService = Depends(get_candidate_service),
     settings: AppSettings = Depends(get_app_settings),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> LiveSessionResponse:
     try:
         record = await live.get(session_id)
     except ConflictError as exc:
         raise NotFoundError("The live interview session was not found.") from exc
-    await _enforce_ownership(record, principal, candidates, allow_recruiter=True)
+    await _enforce_ownership(
+        record, principal, candidates, allow_recruiter=True,
+        allow_public_capability=True,
+    )
     return _response(record, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
 
 
@@ -359,10 +370,13 @@ async def issue_live_token(
     tokens: GeminiLiveTokenService = Depends(get_gemini_live_token_service),
     candidates: CandidateService = Depends(get_candidate_service),
     container: ServiceContainer = Depends(get_container),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> LiveTokenResponse:
     record = await live.get(session_id)
-    await _enforce_ownership(record, principal, candidates, allow_recruiter=False)
+    await _enforce_ownership(
+        record, principal, candidates, allow_recruiter=False,
+        allow_public_capability=True,
+    )
     job_record = await container.job_repository.get(record.job_id)
     issued = await tokens.issue(
         session_record=record,
@@ -383,10 +397,13 @@ async def finish_live_session(
     live: LiveInterviewService = Depends(get_live_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidates: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> LiveFinishResponse:
     existing = await live.get(session_id)
-    await _enforce_ownership(existing, principal, candidates, allow_recruiter=False)
+    await _enforce_ownership(
+        existing, principal, candidates, allow_recruiter=False,
+        allow_public_capability=True,
+    )
     if (
         payload
         and payload.pending_events

@@ -300,9 +300,13 @@ class ApplicationService:
             if a.status in (ApplicationStatus.SUBMITTED, ApplicationStatus.SCORING_PENDING)
         ]
 
-        # The rubric-free semantic score is computed for every pending
-        # application regardless of rubric state.
-        semantic_scores = await self._compute_semantic_scores(job_record, pending)
+        # Recompute missing semantic scores for both pending and already
+        # decided applications. Older applications may have been created
+        # before semantic screening was available, and must not remain stuck
+        # at `Semantic —` forever simply because their rubric decision is
+        # already persisted.
+        semantic_candidates = [a for a in applications if a.semantic_score is None]
+        semantic_scores = await self._compute_semantic_scores(job_record, semantic_candidates)
 
         if rubric is None:
             semantic_only = MatchingRunResult(job_id=job_id, attempted=0)
@@ -345,7 +349,18 @@ class ApplicationService:
         # Already-decided applications are still part of "ranked
         # candidates" for this job - included so a caller sees the whole
         # picture, not just this run's deltas.
-        already_decided = [a for a in applications if a not in pending]
+        already_decided = []
+        for application in applications:
+            if application in pending:
+                continue
+            semantic_score = semantic_scores.get(
+                application.application_id, application.semantic_score
+            )
+            if semantic_score != application.semantic_score:
+                application = await self._applications.save(
+                    application.model_copy(update={"semantic_score": semantic_score})
+                )
+            already_decided.append(application)
 
         for application in pending:
             candidate_record = await self._candidates.get(application.candidate_id)
