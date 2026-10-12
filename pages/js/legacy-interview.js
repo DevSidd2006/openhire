@@ -102,7 +102,12 @@ export function initializeLegacyInterview() {
   };
 
   function updateQuestion(text) {
-    document.getElementById('questionBar').textContent = text || 'Loading question...';
+    const questionBar = document.getElementById('questionBar');
+    questionBar.textContent = text || 'Loading question...';
+    // The shared interview page keeps the question bar hidden until a live
+    // controller has content to show.  Legacy sessions can reach this
+    // function after a voice/TTS error, so make the text fallback visible.
+    questionBar.style.display = 'block';
   }
 
   function addTranscriptEntry(speaker, text) {
