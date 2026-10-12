@@ -365,7 +365,12 @@ class AppSettings(BaseModel):
             linkedin_client_id=_env("LINKEDIN_CLIENT_ID", ""),
             linkedin_client_secret=_env("LINKEDIN_CLIENT_SECRET", ""),
             linkedin_redirect_uri=_env(
-                "LINKEDIN_REDIRECT_URI", "http://localhost:8000/auth/linkedin/callback"
+                "LINKEDIN_REDIRECT_URI",
+                (
+                    "https://openhire.devsidd.tech/auth/linkedin/callback"
+                    if environment == "production"
+                    else "http://localhost:8000/auth/linkedin/callback"
+                ),
             ),
             linkedin_mock_enabled=_env_bool("LINKEDIN_MOCK_ENABLED", False),
         )
