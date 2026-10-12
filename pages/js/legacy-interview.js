@@ -110,6 +110,19 @@ export function initializeLegacyInterview() {
     questionBar.style.display = 'block';
   }
 
+  function speakQuestionLocally(text) {
+    if (!text || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-IN';
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.warn('[voice] Browser speech fallback failed:', error);
+    }
+  }
+
   function addTranscriptEntry(speaker, text) {
     if (!text) return;
     const log = document.getElementById('transcriptLog');
@@ -178,6 +191,7 @@ export function initializeLegacyInterview() {
             const state = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}`);
             if (state.current_question) {
               updateQuestion(state.current_question.question_text);
+              speakQuestionLocally(state.current_question.question_text);
               updateAIStatus('Listening (audio unavailable)');
               updateUserStatus('Mic on');
               addTranscriptEntry('Interviewer', state.current_question.question_text);
@@ -203,6 +217,7 @@ export function initializeLegacyInterview() {
           // advances the interview, so next_question above is always null -
           // the question text only ever arrives via this field.
           updateQuestion(msg.next_question_text);
+          if (msg.tts_error) speakQuestionLocally(msg.next_question_text);
           updateAIStatus('Listening');
           updateUserStatus('Mic on');
           addTranscriptEntry('Interviewer', msg.next_question_text);
