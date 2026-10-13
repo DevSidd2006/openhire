@@ -896,6 +896,33 @@ class TestJobsApi:
         assert response.status_code == 404
         assert response.json()["error"] == "not_found"
 
+    @pytest.mark.parametrize(
+        "patch,field",
+        [
+            ({"openings": None}, "body.openings"),
+            (
+                {"competencies": [
+                    {"name": "private-test-text", "weight": 0.9},
+                    {"name": "SQL", "weight": 0.9},
+                ]},
+                "body.competencies",
+            ),
+        ],
+    )
+    def test_invalid_job_patch_returns_422_without_saving(self, client, patch, field):
+        created = client.post("/jobs", json={"description": _JD_TEXT})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+        original_job = created.json()["job"]
+
+        response = client.patch(f"/jobs/{job_id}", json=patch)
+
+        assert response.status_code == 422
+        assert response.json()["error"] == "validation_error"
+        assert any(error["field"] == field for error in response.json()["errors"])
+        assert "private-test-text" not in response.text
+        assert client.get(f"/jobs/{job_id}").json()["job"] == original_job
+
     def test_practice_job_is_excluded_from_the_default_listing(self, client):
         practice = client.post("/jobs", json={"description": _JD_TEXT, "is_practice": True})
         assert practice.status_code == 201
