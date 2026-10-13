@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from core.dependencies import get_job_service
 from core.errors import ConflictError, DependencyError, NotFoundError
 from repositories.interfaces import (
     RubricRepository,
@@ -33,6 +34,7 @@ from repositories.memory import (
     InMemoryJobRepository,
 )
 from schemas.application import ApplicationStatus
+from schemas.job import JobDescription
 from services.application_service import ApplicationService
 from services.candidate_service import CandidateService
 from services.job_service import JobService
@@ -922,6 +924,20 @@ class TestJobsApi:
         assert any(error["field"] == field for error in response.json()["errors"])
         assert "private-test-text" not in response.text
         assert client.get(f"/jobs/{job_id}").json()["job"] == original_job
+
+    def test_stored_job_validation_failure_remains_a_server_error(self, app):
+        class _CorruptJobRepository(InMemoryJobRepository):
+            async def get(self, job_id):
+                JobDescription.model_validate({"openings": None})
+
+        app.dependency_overrides[get_job_service] = lambda: JobService(
+            job_repository=_CorruptJobRepository()
+        )
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.patch("/jobs/job_corrupt", json={"department": "Platform"})
+
+        assert response.status_code == 500
+        assert response.json()["error"] == "internal_error"
 
     def test_practice_job_is_excluded_from_the_default_listing(self, client):
         practice = client.post("/jobs", json={"description": _JD_TEXT, "is_practice": True})

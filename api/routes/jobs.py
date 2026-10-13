@@ -10,7 +10,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError
 
 from api.dependencies import apply_llm_context_for_recruiter
 from api.models_applications import ApplicationListResponse, MatchingRunResponse
@@ -34,7 +33,7 @@ from core.dependencies import (
 )
 from core.security import Principal, require_authenticated, require_scopes
 from services.application_service import ApplicationService
-from services.job_service import JobService
+from services.job_service import JobPatchValidationError, JobService
 from services.recruiter_service import RecruiterService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -125,13 +124,13 @@ async def update_job(
     """
     try:
         record = await service.update_job(job_id, payload.model_dump(exclude_unset=True))
-    except ValidationError as exc:
+    except JobPatchValidationError as exc:
         # The partial DTO can be valid on its own yet make the merged job
         # invalid. Send those domain field errors through the API's existing
         # safe 422 handler instead of letting them reach the catch-all 500.
         errors = [
             {**error, "loc": ("body", *error["loc"])}
-            for error in exc.errors(include_input=False, include_context=False)
+            for error in exc.validation_error.errors(include_input=False, include_context=False)
         ]
         raise RequestValidationError(errors) from exc
     return JobResponse.from_record(record)
