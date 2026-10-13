@@ -145,14 +145,21 @@
       `Candidate: ${(applicationMeta && applicationMeta.candidate_name) || evaluation.result.candidate_name} • Role: ${evaluation.job_id}`;
 
     const report = evaluation.result;
+    const formatScore = (value) => (
+      value === null || value === undefined || Number.isNaN(Number(value))
+        ? '—'
+        : Number(value).toFixed(1)
+    );
     setRecommendationColor(report.recommendation);
     document.getElementById('recommendationExplanation').textContent = report.explanation;
-    document.getElementById('compositeScore').textContent = report.scores.weighted_final_score.toFixed(1);
-    document.getElementById('technicalScore').textContent = `${report.scores.technical_score.toFixed(1)} / 10`;
+    document.getElementById('compositeScore').textContent = formatScore(report.scores.weighted_final_score);
+    document.getElementById('technicalScore').textContent = `${formatScore(report.scores.technical_score)} / 10`;
     document.getElementById('technicalSummary').textContent = report.technical_summary;
-    document.getElementById('behavioralScore').textContent = `${report.scores.behavioral_score.toFixed(1)} / 10`;
+    document.getElementById('behavioralScore').textContent = `${formatScore(report.scores.behavioral_score)} / 10`;
     document.getElementById('behavioralSummary').textContent = report.behavioral_summary;
-    document.getElementById('jobFitScore').textContent = `${report.scores.job_fit_score.toFixed(1)} / 10`;
+    document.getElementById('jobFitScore').textContent = report.scores.job_fit_score === null || report.scores.job_fit_score === undefined
+      ? 'Unknown'
+      : `${formatScore(report.scores.job_fit_score)} / 10`;
     document.getElementById('jobFitSummary').textContent = report.job_fit_summary;
     const integrityCount = report.integrity_flags.length;
     const biasCount = report.bias_flags.length;
