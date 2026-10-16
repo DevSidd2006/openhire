@@ -823,6 +823,7 @@
             .flow-panel { animation: none; }
             .score-fill { transition: none; }
             .p-conn-particle.go, .p-conn-fill, .p-icon, .p-step-num { animation: none; transition: none; }
+            .scroll-to-top { transition: none !important; }
         }
 
         /* ─── SCROLL TO TOP ─── */
@@ -1367,6 +1368,21 @@
         document.querySelectorAll('.reveal').forEach(el => {
             if (!reduceMotion) revealObserver.observe(el);
             else el.classList.add('visible');
+        });
+
+        // ─── Scroll to top ───
+        const scrollToTop = document.getElementById('scrollToTop');
+        const toggleScrollToTop = () => {
+            scrollToTop.classList.toggle('visible', window.scrollY > 400);
+        };
+
+        window.addEventListener('scroll', toggleScrollToTop, { passive: true });
+        toggleScrollToTop();
+        scrollToTop.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: reduceMotion ? 'auto' : 'smooth'
+            });
         });
 
         // ─── Flow walkthrough (scroll-synced, click to override) ───
