@@ -20,7 +20,7 @@
   <div class="page-head reveal" style="margin-bottom:1.5rem;">
     <div class="eyebrow">job / posting</div>
     <h1 class="page-title" id="jobTitle" style="font-size:1.9rem;">Job Title</h1>
-    <p class="card-sub" id="jobMeta" style="font-family:var(--font-mono);">Role ID: —</p>
+    <p class="card-sub" id="jobMeta" style="font-family:var(--font-mono);">Role details</p>
     <div class="page-actions" id="jobActions" style="margin-top:1.25rem;"></div>
   </div>
 
@@ -66,8 +66,8 @@
     }
 
     const openingsCount = job.openings || 1;
-    document.getElementById('jobTitle').textContent = job.title || job.job_id;
-    document.getElementById('jobMeta').textContent = `Role ID: ${job.job_id} · ${openingsCount} ${openingsCount === 1 ? 'Opening' : 'Openings'}`;
+    document.getElementById('jobTitle').textContent = job.title || 'Open role';
+    document.getElementById('jobMeta').textContent = `${openingsCount} ${openingsCount === 1 ? 'Opening' : 'Openings'}`;
     document.getElementById('jobDescription').textContent = job.description;
 
     const compEl = document.getElementById('jobCompetencies');

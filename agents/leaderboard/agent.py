@@ -120,7 +120,8 @@ class LeaderboardAgent(BaseAgent):
             if incomplete_candidates:
                 return (
                     f"No candidates could be ranked - all {len(incomplete_candidates)} shortlisted "
-                    f"candidate(s) are incomplete (missing evaluation) and require human review: "
+                    f"candidate(s) require human review because they are incomplete "
+                    f"(missing evaluation): "
                     f"{', '.join(incomplete_candidates)}."
                 )
             return "No candidates were shortlisted for this job."

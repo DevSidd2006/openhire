@@ -33,7 +33,9 @@ from repositories.memory import (
     InMemoryJobRepository,
 )
 from schemas.application import ApplicationStatus
+from schemas.evaluation import MatchingScore
 from services.application_service import ApplicationService
+from services.application_service import evaluate_shortlist_status
 from services.candidate_service import CandidateService
 from services.job_service import JobService
 from services.matching_service import MatchingService
@@ -116,6 +118,18 @@ def _application_service(
         matching_service=MatchingService(),
         rubric_repository=rubric_repository,
         semantic_screening_service=semantic_screening_service or _StubSemanticScreening(),
+    )
+
+
+def _matching_score(*, match_score: float | None, needs_human_review: bool) -> MatchingScore:
+    return MatchingScore(
+        match_id="match_test",
+        candidate_id="candidate_test",
+        job_id="job_test",
+        match_score=match_score,
+        needs_human_review=needs_human_review,
+        explanation="test score",
+        confidence=0.9,
     )
 
 
@@ -478,6 +492,22 @@ class TestApplicationServiceApply:
         assert application.status == ApplicationStatus.SUBMITTED
         assert application.application_id.startswith("app_")
         assert application.matching_score is None
+
+    def test_review_flag_does_not_block_rubric_shortlist(self):
+        score = _matching_score(match_score=0.80, needs_human_review=True)
+        assert evaluate_shortlist_status(score) == ApplicationStatus.SHORTLISTED
+
+    def test_review_flag_does_not_block_rubric_rejection(self):
+        score = _matching_score(match_score=0.20, needs_human_review=True)
+        assert evaluate_shortlist_status(score) == ApplicationStatus.REJECTED
+
+    def test_missing_rubric_score_uses_semantic_score(self):
+        score = _matching_score(match_score=None, needs_human_review=True)
+        assert evaluate_shortlist_status(score, semantic_score=0.80) == ApplicationStatus.SHORTLISTED
+
+    def test_missing_scores_remain_scoring_pending(self):
+        score = _matching_score(match_score=None, needs_human_review=True)
+        assert evaluate_shortlist_status(score) == ApplicationStatus.SCORING_PENDING
 
     @pytest.mark.asyncio
     async def test_apply_to_unknown_job_is_not_found(self):
@@ -961,7 +991,7 @@ class TestApplicationsApi:
         # Job creation already auto-drafts and approves a rubric
         # (services/job_service.py), so apply() auto-scores and decides
         # immediately - never left at "submitted" waiting on a recruiter.
-        assert created.json()["application"]["status"] in ("shortlisted", "rejected", "needs_human_review")
+        assert created.json()["application"]["status"] in ("shortlisted", "rejected")
 
         fetched = client.get(f"/applications/{application_id}")
         assert fetched.status_code == 200

@@ -40,7 +40,7 @@
     </div>
     <div class="stat-cell">
       <div class="stat-num" id="statReview" style="color:var(--warning-text);">0</div>
-      <div class="stat-label">Needs Review</div>
+      <div class="stat-label">Evidence Flags</div>
     </div>
     <div class="stat-cell">
       <div class="stat-num" id="statRejected" style="color:var(--ink-3);">0</div>
@@ -58,7 +58,7 @@
     <div class="filter-tabs" id="filterTabs">
       <button class="filter-tab active" onclick="setFilter('all')">All (<span id="countAll">0</span>)</button>
       <button class="filter-tab" onclick="setFilter('shortlisted')">Shortlisted (<span id="countShortlisted">0</span>)</button>
-      <button class="filter-tab" onclick="setFilter('needs_review')">Needs Review (<span id="countReview">0</span>)</button>
+      <button class="filter-tab" onclick="setFilter('needs_review')">Evidence Flags (<span id="countReview">0</span>)</button>
       <button class="filter-tab" onclick="setFilter('rejected')">Rejected (<span id="countRejected">0</span>)</button>
       <button class="filter-tab" onclick="setFilter('pending')">Pending (<span id="countPending">0</span>)</button>
     </div>
@@ -146,7 +146,7 @@
     } else if (status === 'rejected') {
       return '<span class="chip">Rejected</span>';
     } else if (status === 'needs_human_review') {
-      return '<span class="chip chip-warning">Needs Review</span>';
+      return '<span class="chip chip-warning">Evidence Caveat</span>';
     }
     return `<span class="chip">${escapeHtml((status || 'pending').replace(/_/g, ' '))}</span>`;
   }
@@ -209,7 +209,14 @@
       document.getElementById('applicantListContainer').innerHTML = '<p class="card-sub">Open this page from a specific job posting to view its applicants.</p>';
       return;
     }
-    document.getElementById('screeningMeta').textContent = `Applicants for role: ${jobId}`;
+    let roleTitle = 'Open role';
+    try {
+      const job = await fetchJob(jobId);
+      roleTitle = job.title || roleTitle;
+    } catch (_) {
+      // Keep the generic role label; the internal id must not leak into the UI.
+    }
+    document.getElementById('screeningMeta').textContent = `Applicants for role: ${roleTitle}`;
     document.getElementById('applicantListContainer').innerHTML = '<p class="card-sub">Loading applicants & resumes…</p>';
 
     try {
@@ -226,17 +233,17 @@
            </p>`;
 
       const rows = data.rows || [];
-      const needsReview = data.needs_review || [];
       const pending = data.scoring_pending || [];
 
       // Consolidate all rows with category tag
       allRows = [];
       rows.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'ranked' })); });
-      needsReview.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'needs_review' })); });
+      // Flagged rows are already included in `rows`; keep the separate list
+      // for counts/filter compatibility without rendering duplicates.
       pending.forEach(r => { allRows.push(Object.assign({}, r, { bucket: 'pending' })); });
 
       const shortlistedCount = allRows.filter(r => r.status === 'shortlisted' || r.status === 'interview_linked').length;
-      const reviewCount = allRows.filter(r => r.status === 'needs_human_review' || r.bucket === 'needs_review').length;
+      const reviewCount = allRows.filter(r => r.needs_human_review === true).length;
       const rejectedCount = allRows.filter(r => r.status === 'rejected').length;
       const pendingCount = allRows.filter(r => r.status === 'scoring_pending' || r.bucket === 'pending').length;
 
@@ -278,7 +285,7 @@
       if (currentFilter === 'shortlisted') {
         if (row.status !== 'shortlisted' && row.status !== 'interview_linked') return false;
       } else if (currentFilter === 'needs_review') {
-        if (row.status !== 'needs_human_review' && row.bucket !== 'needs_review') return false;
+        if (row.needs_human_review !== true) return false;
       } else if (currentFilter === 'rejected') {
         if (row.status !== 'rejected') return false;
       } else if (currentFilter === 'pending') {

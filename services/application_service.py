@@ -14,11 +14,10 @@ Flow this service implements, matching Chunk 2's brief exactly:
 
 `run_matching_for_job` and `MatchingService.compute_match` reuse
 `ResumeMatcherAgent` unchanged - no matching algorithm is invented here.
-Shortlisting is not a separately invented threshold: it is exactly
-`MatchingScore.shortlist_recommendation`, the same boolean
-`orchestration/graph.py:node_match_resumes` already uses to populate
-`shortlisted_candidates`. Ranking is a plain sort on
-`MatchingScore.match_score`, not a new scoring formula.
+Shortlisting uses the existing application threshold and the persisted
+`MatchingScore.match_score`; review flags remain informational metadata.
+Ranking is a plain sort on `MatchingScore.match_score`, not a new scoring
+formula.
 """
 from __future__ import annotations
 
@@ -48,15 +47,11 @@ def evaluate_shortlist_status(
     semantic_score: float | None = None,
     threshold: float = SHORTLIST_THRESHOLD,
 ) -> ApplicationStatus:
-    """Determine the automated shortlisting status for an application."""
-    if matching_score is not None:
-        if matching_score.needs_human_review:
-            return ApplicationStatus.NEEDS_HUMAN_REVIEW
-        if matching_score.match_score is not None:
-            if matching_score.match_score >= threshold:
-                return ApplicationStatus.SHORTLISTED
-            return ApplicationStatus.REJECTED
-        return ApplicationStatus.NEEDS_HUMAN_REVIEW
+    """Determine status from available scores; review flags do not gate it."""
+    if matching_score is not None and matching_score.match_score is not None:
+        if matching_score.match_score >= threshold:
+            return ApplicationStatus.SHORTLISTED
+        return ApplicationStatus.REJECTED
 
     if semantic_score is not None:
         if semantic_score >= threshold:
@@ -217,8 +212,8 @@ class ApplicationService:
         # applying and the shortlist decision). If an approved rubric
         # already exists for this job, score against it exactly like the
         # batch path does; otherwise (or if that scoring call fails)
-        # `evaluate_shortlist_status` still decides from the semantic score
-        # alone rather than leaving the application parked.
+        # `evaluate_shortlist_status` falls back to the semantic score when
+        # rubric scoring is unavailable; missing scores remain pending.
         stored = await self._auto_score_application(
             stored, candidate_record=candidate_record, semantic_score=semantic_score,
         )
@@ -237,17 +232,10 @@ class ApplicationService:
     ) -> Application:
         """Score against the rubric immediately if one is already approved.
 
-        Deliberately does NOT fall back to deciding shortlist/reject from
-        `semantic_score` alone when no rubric exists yet - that score is
-        documented elsewhere (`TestSemanticScoreWithoutRubric`) as "never a
-        decision", only ever a ranking signal for the resume-stage
-        leaderboard. A job with no approved rubric still parks its
-        applications at SUBMITTED/SCORING_PENDING, exactly as
-        `run_matching_for_job`'s no-rubric branch already does, to be
-        rescued once a rubric is approved (unchanged, existing behaviour).
-        This method only removes the OTHER wait: once a rubric already
-        exists, there is no reason to also wait for a recruiter to trigger
-        `POST /jobs/{job_id}/match` by hand.
+        If rubric scoring is unavailable, the semantic score is used as the
+        automated fallback; if neither score exists, the application remains
+        SCORING_PENDING. Review flags on a completed score never block this
+        decision.
         """
         rubric = (
             await self._rubrics.get_approved_for_job(application.job_id) if self._rubrics else None

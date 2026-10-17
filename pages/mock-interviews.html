@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHire — Mock Interviews</title>
+<link rel="icon" type="image/svg+xml" href="assets/openhire.svg">
+<link rel="stylesheet" href="css/style.css?v=theme-toggle"><script src="js/theme.js"></script>
+</head>
+<body>
+<div id="navbarContainer"></div><div id="impersonationBanner"></div>
+<main class="container">
+  <div class="page-head reveal"><div class="eyebrow">workspace / candidate</div><h1 class="page-title">Mock Interviews</h1><p class="page-sub">Practice privately with any job description. These interviews never appear in real job listings.</p></div>
+  <div class="card reveal">
+    <div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Start a mock interview</h3><span class="chip chip-info">Private practice</span></div>
+    <textarea id="practiceJdText" class="form-control" rows="6" placeholder="Paste a job description here..." style="width:100%; margin:1rem 0 0.75rem;"></textarea>
+    <button class="btn-primary" id="practiceCreateBtn"><i class="ph-bold ph-microphone"></i>Start mock interview</button>
+    <div class="form-status" id="practiceStatus"></div>
+  </div>
+  <div class="card reveal"><div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Your mock interviews</h3></div><div id="practiceJobList"><p class="card-sub">Loading mock interviews…</p></div></div>
+</main>
+<script src="js/auth.js"></script><script src="js/app.js"></script>
+<script>
+  const currentUser = getCurrentUser();
+  if (currentUser && currentUser.role === 'recruiter') {
+    window.location.replace('recruiter.html');
+  }
+  guardAuthenticatedPage();
+  renderNavbar('mock-interviews');
+  const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const listEl = document.getElementById('practiceJobList');
+  document.getElementById('practiceCreateBtn').addEventListener('click', async () => {
+    const status = document.getElementById('practiceStatus');
+    const description = document.getElementById('practiceJdText').value.trim();
+    if (!description) { status.textContent = 'Paste a job description first.'; status.className = 'form-status error'; return; }
+    status.textContent = 'Analyzing job description…'; status.className = 'form-status';
+    try {
+      const job = await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
+      window.location.href = `apply.html?job_id=${encodeURIComponent(job.job_id)}`;
+    } catch (err) { status.textContent = err.message || 'Could not create the mock interview.'; status.className = 'form-status error'; }
+  });
+  (async () => {
+    try {
+      const raw = await apiRequest('/jobs/practice/mine');
+      const jobs = (raw.jobs || []).map(normalizeJob);
+      listEl.innerHTML = jobs.length ? jobs.map(job => `<div class="job-card" style="margin-bottom:0.5rem;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><h4 style="font-weight:600; font-size:0.95rem; margin-bottom:0.25rem;">${escapeHtml(job.title || 'Mock interview')}</h4><span class="chip chip-info">Practice</span></div>`).join('') : '<p class="card-sub">No mock interviews yet.</p>';
+    } catch (err) { listEl.innerHTML = `<p class="card-sub" style="color:var(--danger-text);">Could not load mock interviews: ${escapeHtml(err.message)}</p>`; }
+  })();
+</script>
+</body>
+</html>
