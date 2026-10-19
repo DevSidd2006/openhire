@@ -526,7 +526,7 @@ class UserRepository(ABC):
 
     @abstractmethod
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
-        """Fetch user by email. Returns None if not found."""
+        """Fetch user by email, case-insensitively. Returns None if not found."""
 
     @abstractmethod
     async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
