@@ -438,6 +438,11 @@ class InMemoryUserRepository(UserRepository):
                 }
             )
             self._users[record.user_id] = stored
+            # Drop the old index entry on an email change, so the previous
+            # address stops resolving to this user (as it would in Postgres).
+            if existing is not None and existing.email != email:
+                if self._email_index.get(existing.email) == record.user_id:
+                    del self._email_index[existing.email]
             self._email_index[email] = record.user_id
             return stored
 

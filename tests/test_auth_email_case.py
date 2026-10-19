@@ -47,6 +47,16 @@ class TestInMemoryUserRepositoryEmailCase:
         assert found.user_id == "user_1"
 
     @pytest.mark.asyncio
+    async def test_changing_email_stops_old_email_resolving(self):
+        repo = InMemoryUserRepository()
+        await repo.save(_user())
+        await repo.save(_user(email="Alice.New@Example.com"))
+        assert await repo.get_by_email("alice@example.com") is None
+        found = await repo.get_by_email("alice.new@example.com")
+        assert found is not None
+        assert found.user_id == "user_1"
+
+    @pytest.mark.asyncio
     async def test_get_by_email_unknown_still_returns_none(self):
         repo = InMemoryUserRepository()
         await repo.save(_user())
