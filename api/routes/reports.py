@@ -9,24 +9,9 @@ from typing import Optional, Dict, Any
 
 from services.interview_report import InterviewReportGenerator
 from services.background_scoring import BackgroundScoringService
-from core.config import AppSettings
-from core.dependencies import get_settings
+from core.dependencies import get_report_generator, get_scoring_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
-
-# Global report generator instance
-_report_generator = InterviewReportGenerator()
-_scoring_service = BackgroundScoringService()
-
-
-def get_report_generator() -> InterviewReportGenerator:
-    """Get the global report generator."""
-    return _report_generator
-
-
-def get_scoring_service() -> BackgroundScoringService:
-    """Get the global scoring service."""
-    return _scoring_service
 
 
 class GenerateReportRequest(BaseModel):
@@ -42,7 +27,6 @@ async def generate_report(
     request: GenerateReportRequest,
     generator: InterviewReportGenerator = Depends(get_report_generator),
     scoring_service: BackgroundScoringService = Depends(get_scoring_service),
-    settings: AppSettings = Depends(get_settings),
 ) -> Dict[str, Any]:
     """Generate a comprehensive interview report.
 

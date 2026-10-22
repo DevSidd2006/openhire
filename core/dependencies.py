@@ -34,9 +34,11 @@ from repositories.interfaces import (
 from services.admin_service import AdminService
 from services.application_service import ApplicationService
 from services.auth_service import AuthService
+from services.background_scoring import BackgroundScoringService
 from services.bug_report_service import BugReportService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
+from services.interview_report import InterviewReportGenerator
 from services.interview_service import InterviewService
 from services.job_service import JobService
 from services.live_interview_service import LiveInterviewService
@@ -124,6 +126,16 @@ def get_user_repository(request: Request) -> UserRepository:
 
 def get_audit_log_repository(request: Request) -> AuditLogRepository:
     return _container_from_app(request.app).audit_log_repository
+
+
+def get_scoring_service(request: Request) -> BackgroundScoringService:
+    """The one accumulated-score store shared by the scoring and report APIs."""
+    return _container_from_app(request.app).scoring_service
+
+
+def get_report_generator(request: Request) -> InterviewReportGenerator:
+    """The report store shared by every report endpoint on this app."""
+    return _container_from_app(request.app).report_generator
 
 
 def get_auth_service(request: Request) -> AuthService:
