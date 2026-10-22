@@ -386,7 +386,7 @@
       <p class="card-sub" style="margin-bottom:1.6rem;">Paste any raw job description. The <code>JDAnalyzerAgent</code> will extract required competencies, skills, and evaluation weights.</p>
 
       <div class="form-group">
-        <label class="form-label">Job Title / Role Identifier</label>
+        <label class="form-label">Job Title / Role</label>
         <input type="text" id="newJobId" class="form-control" placeholder="e.g. backend-engineer-l4">
       </div>
 
@@ -406,7 +406,7 @@
       <div>
         <div class="eyebrow">Job Detail</div>
         <h2 class="page-title" id="jobDetailTitle">Job Title</h2>
-        <p class="page-sub" id="jobDetailMeta">Job Reference: —</p>
+        <p class="page-sub" id="jobDetailMeta">Role details</p>
       </div>
       <div id="jobDetailActions" class="page-actions">
       </div>
@@ -709,8 +709,8 @@ async function loadRecruiterHub() {
   listEl.innerHTML = clientCache.jobs.map(job => `
     <div class="job-card" onclick="viewJobDetail('${job.job_id}')">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">
-        <h4 style="font-weight:600; font-size:1.02rem; color:var(--ink);">${job.title || job.job_id}</h4>
-        <span class="tag">ID: ${job.job_id}</span>
+        <h4 style="font-weight:600; font-size:1.02rem; color:var(--ink);">${job.title || 'Open role'}</h4>
+        <span class="tag">Live role</span>
       </div>
       <p style="font-size:0.85rem; color:var(--ink-3); margin-bottom:0.85rem;">
         ${(job.description || '').substring(0, 110)}...
@@ -775,7 +775,7 @@ function renderCandidateApplications() {
   appListEl.innerHTML = clientCache.applications.map(app => `
     <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
       <div>
-        <h4 style="font-weight:600; color:var(--ink);">Role: ${app.job_id}</h4>
+        <h4 style="font-weight:600; color:var(--ink);">Role: ${app.job_title || 'Open role'}</h4>
         <p class="card-sub">Match Fit Score: <strong style="color:var(--success-text);">${app.match_score || 88}%</strong> | Status: <span class="tag">${app.status || 'SUBMITTED'}</span></p>
       </div>
       <div style="display:flex; gap:0.5rem;">
@@ -790,13 +790,13 @@ function viewJobDetail(jobId) {
   currentActiveJobId = jobId;
   const job = clientCache.jobs.find(j => j.job_id === jobId) || {
     job_id: jobId,
-    title: jobId,
+    title: 'Open role',
     description: "Full job description text...",
     competencies: ["System Design", "Algorithms", "Leadership"]
   };
 
-  document.getElementById('jobDetailTitle').textContent = job.title || job.job_id;
-  document.getElementById('jobDetailMeta').textContent = `Job Reference: ${job.job_id}`;
+  document.getElementById('jobDetailTitle').textContent = job.title || 'Open role';
+  document.getElementById('jobDetailMeta').textContent = 'Role details';
   document.getElementById('jobDetailText').textContent = job.description;
 
   const compEl = document.getElementById('jobDetailCompetencies');
@@ -865,7 +865,8 @@ function openLeaderboard(jobId) {
 }
 
 async function loadLeaderboardView(jobId) {
-  document.getElementById('leaderboardSub').textContent = `Ranked applicants for job: ${jobId || 'All Roles'}`;
+  const activeJob = clientCache.jobs.find(j => j.job_id === jobId);
+  document.getElementById('leaderboardSub').textContent = `Ranked applicants for role: ${(activeJob && activeJob.title) || 'All Roles'}`;
   const tbody = document.getElementById('leaderboardBody');
 
   const candidates = clientCache.leaderboard.length ? clientCache.leaderboard : [

@@ -124,26 +124,18 @@ class ReportGeneratorAgent(BaseAgent):
         integrity_eval: IntegrityEvaluation = None,
         claim_verifications: Optional[List[ClaimVerification]] = None,
     ) -> str:
-        """Determine hiring recommendation."""
+        """Determine the automated recommendation from the final score.
+
+        Integrity, bias, and claim-review flags remain informational metadata
+        on the report and do not block score-based recommendations.
+        """
         final_score = scores.weighted_final_score
-
-        # Check for disqualifying issues
-        if integrity_eval and integrity_eval.requires_human_review and integrity_eval.overall_integrity != "clear":
-            return "human_review"
-
-        if bias_audit and bias_audit.requires_human_review:
-            return "human_review"
-
-        if claim_verifications and any(v.requires_human_review for v in claim_verifications):
-            return "human_review"
 
         # Score-based recommendation
         if final_score >= 8.5:
             return "strong_candidate"
-        elif final_score >= 7.0:
-            return "candidate"
         elif final_score >= 5.5:
-            return "human_review"
+            return "candidate"
         else:
             return "insufficient_evidence"
 

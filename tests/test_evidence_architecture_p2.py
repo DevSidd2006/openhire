@@ -21,9 +21,11 @@ from agents.report_generator.agent import ReportGeneratorAgent
 from schemas.evaluation import (
     TechnicalEvaluation,
     BehavioralEvaluation,
+    BiasAudit,
     CompetencyScore,
     MatchingScore,
     ClaimVerification,
+    ResumeClaim,
 )
 from schemas.job import JobDescription, Competency
 from schemas.scoring import CandidateScores
@@ -371,6 +373,61 @@ class TestReportIncludesClaimVerifications:
         agent = ReportGeneratorAgent()
         result = await agent.execute(candidate_scores=scores, parsed_resume=sample_parsed_resume)
         assert result["candidate_report"].requires_human_review is True
+
+    @pytest.mark.asyncio
+    async def test_review_flags_do_not_block_score_based_candidate_recommendation(
+        self, sample_parsed_resume
+    ):
+        """Review signals remain visible while the score drives the recommendation."""
+        scores = CandidateScores(
+            score_id="s1", candidate_id="cand_test_001", job_id="job_test_001",
+            technical_score=6.0, behavioral_score=6.0, job_fit_score=6.0,
+            weighted_final_score=6.0, explanation="test", confidence=0.8,
+        )
+        bias_audit = BiasAudit(
+            audit_id="bias_1", candidate_id="cand_test_001", job_id="job_test_001",
+            fairness_status="requires_review", explanation="flagged", confidence=0.9,
+            requires_human_review=True,
+        )
+
+        agent = ReportGeneratorAgent()
+        result = await agent.execute(
+            candidate_scores=scores,
+            parsed_resume=sample_parsed_resume,
+            bias_audit=bias_audit,
+        )
+        report = result["candidate_report"]
+
+        assert report.recommendation == "candidate"
+        assert report.requires_human_review is True
+
+    @pytest.mark.asyncio
+    async def test_review_flags_do_not_change_insufficient_score_recommendation(
+        self, sample_parsed_resume
+    ):
+        claim = ResumeClaim(claim_id="claim_0", resume_claim="Led a team", source="Experience")
+        verification = ClaimVerification(
+            verification_id="cv_1", candidate_id="cand_test_001", job_id="job_test_001",
+            interview_id="int_test_001", claim=claim,
+            verification_status="requires_human_review", confidence=0.9,
+            explanation="flagged", requires_human_review=True,
+        )
+        scores = CandidateScores(
+            score_id="s1", candidate_id="cand_test_001", job_id="job_test_001",
+            technical_score=5.0, behavioral_score=5.0, job_fit_score=5.0,
+            weighted_final_score=5.0, explanation="test", confidence=0.8,
+        )
+
+        agent = ReportGeneratorAgent()
+        result = await agent.execute(
+            candidate_scores=scores,
+            parsed_resume=sample_parsed_resume,
+            resume_audits=[verification],
+        )
+        report = result["candidate_report"]
+
+        assert report.recommendation == "insufficient_evidence"
+        assert report.requires_human_review is True
 
 
 if __name__ == "__main__":

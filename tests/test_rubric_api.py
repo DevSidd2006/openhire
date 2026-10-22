@@ -9,7 +9,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from api.routes.rubrics import get_match_leaderboard
 from core.config import get_settings
+from repositories.memory import (
+    InMemoryApplicationRepository,
+    InMemoryCandidateRepository,
+    InMemoryJobRepository,
+    InMemoryRubricRepository,
+)
+from repositories.interfaces import JobRecord
+from schemas.application import Application, ApplicationStatus
+from schemas.evaluation import MatchingScore
+from schemas.job import JobDescription
+from tests.rubric_fixtures import approved_rubric
 
 
 @pytest.fixture
@@ -134,3 +146,47 @@ def test_leaderboard_reports_the_auto_approved_rubric_version_immediately(client
     scorable from the moment the job exists."""
     body = client.get(f"/jobs/{job_id}/match-leaderboard").json()
     assert body["rubric_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_flagged_but_scored_rows_are_ranked_and_remain_in_needs_review():
+    job_id = "job_flagged"
+    jobs = InMemoryJobRepository()
+    applications = InMemoryApplicationRepository()
+    candidates = InMemoryCandidateRepository()
+    rubrics = InMemoryRubricRepository()
+
+    await jobs.save(JobRecord(
+        job_id=job_id,
+        job=JobDescription(job_id=job_id, title="Engineer", description="Build things"),
+    ))
+    await rubrics.save(approved_rubric(job_id))
+
+    flagged = MatchingScore(
+        match_id="match_flagged", candidate_id="cand_flagged", job_id=job_id,
+        match_score=0.8, coverage=0.25, band="strong",
+        needs_human_review=True, explanation="partial evidence", confidence=0.7,
+    )
+    unscored = Application(
+        application_id="app_pending", job_id=job_id, candidate_id="cand_pending",
+        status=ApplicationStatus.SCORING_PENDING,
+    )
+    await applications.save(Application(
+        application_id="app_flagged", job_id=job_id, candidate_id="cand_flagged",
+        matching_score=flagged,
+    ))
+    await applications.save(unscored)
+
+    response = await get_match_leaderboard(
+        job_id=job_id,
+        jobs=jobs,
+        applications=applications,
+        candidates=candidates,
+        rubrics=rubrics,
+        principal=None,
+    )
+
+    assert [row.candidate_id for row in response.rows] == ["cand_flagged"]
+    assert response.rows[0].rank == 1
+    assert [row.candidate_id for row in response.needs_review] == ["cand_flagged"]
+    assert [row.candidate_id for row in response.scoring_pending] == ["cand_pending"]

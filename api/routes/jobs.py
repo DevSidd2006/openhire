@@ -31,7 +31,9 @@ from core.dependencies import (
     get_job_service,
     get_recruiter_service,
 )
-from core.security import Principal, require_authenticated, require_scopes
+from core.config import get_settings
+from core.errors import ForbiddenError
+from core.security import Principal, PrincipalType, require_authenticated, require_candidate, require_scopes
 from services.application_service import ApplicationService
 from services.job_service import JobPatchValidationError, JobService
 from services.recruiter_service import RecruiterService
@@ -61,6 +63,10 @@ async def create_job(
     needs real role persistence, which is blocked on the database/auth
     teammate; see the Chunk 2 handoff.
     """
+    settings = get_settings()
+    if settings.auth_enabled and payload.is_practice and principal.principal_type is not PrincipalType.CANDIDATE:
+        raise ForbiddenError("Only candidate accounts can create mock interviews.")
+
     record = await service.create_job(
         description=payload.description,
         job_id=payload.job_id,
@@ -75,7 +81,7 @@ async def create_job(
 @router.get("/practice/mine", response_model=JobListResponse)
 async def list_my_practice_jobs(
     service: JobService = Depends(get_job_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(require_candidate),
 ) -> JobListResponse:
     """GET /jobs/practice/mine - the calling candidate's own practice jobs
     (mock-interview JDs they created for themselves), newest first. Never

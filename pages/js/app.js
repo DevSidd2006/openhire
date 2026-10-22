@@ -140,7 +140,7 @@ function normalizeJob(record) {
   const job = record.job || {};
   return {
     job_id: record.job_id,
-    title: job.title || record.job_id,
+    title: job.title || 'Open role',
     description: job.description || '',
     competencies: (job.competencies || []).map((c) => c.name),
     is_active: record.is_active,
@@ -399,6 +399,7 @@ function renderNavbar(activePage = '') {
       <nav class="nav-links">
         <a href="index.html">Overview</a>
         ${!isAdmin ? `<a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>` : ''}
+        ${!isRecruiter && !isAdmin ? `<a href="mock-interviews.html" class="${activePage === 'mock-interviews' ? 'active' : ''}">Mock Interviews</a><a href="jobs.html" class="${activePage === 'jobs' ? 'active' : ''}">Jobs</a>` : ''}
         ${isRecruiter ? `<a href="create-job.html" class="${activePage === 'create-job' ? 'active' : ''}">+ Job</a>` : ''}
         ${isRecruiter ? `<a href="screening.html" class="${activePage === 'screening' ? 'active' : ''}">Screening</a>` : ''}
         <a href="leaderboard.html" class="${activePage === 'leaderboard' ? 'active' : ''}">Leaderboard</a>

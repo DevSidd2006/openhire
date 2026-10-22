@@ -74,7 +74,7 @@ class CandidateReport(BaseModel):
     requires_human_review: bool = False
 
     # Recommendation
-    recommendation: str  # "strong_candidate", "candidate", "human_review", "insufficient_evidence"
+    recommendation: str  # "strong_candidate", "candidate", "insufficient_evidence"
     explanation: str
 
 

@@ -5,9 +5,8 @@ interview evaluations, so resume matching and interview scoring finally
 produce commensurable numbers on one scale.
 
 Coverage is a first-class output, not a footnote. A resume too sparse to
-judge is an UNKNOWN, not a REJECT, and conflating those two is where most
-false-negative risk lives - so below COVERAGE_THRESHOLD the candidate is
-routed to human review rather than given a misleadingly confident low rank.
+judge receives an evidence-quality flag, but any valid evidence remains
+automatically scoreable so the signal does not block ranking.
 """
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ POTENTIAL_BAND_MIN = 0.45
 class AggregateResult(BaseModel):
     """The candidate's standing on one rubric version."""
 
-    final_score: Optional[float] = None  # None when coverage is too low to rank
+    final_score: Optional[float] = None  # None only when no evidence exists
     coverage: float
     band: Optional[str] = None  # strong | potential | weak
     needs_human_review: bool
@@ -69,7 +68,7 @@ def aggregate(
     total_weight = sum(c.weight for c in competencies) or 1.0
     coverage = counted_weight / total_weight
 
-    if coverage < COVERAGE_THRESHOLD or counted_weight == 0.0:
+    if counted_weight == 0.0:
         return AggregateResult(
             final_score=None,
             coverage=coverage,
@@ -84,7 +83,7 @@ def aggregate(
         final_score=normalized,
         coverage=coverage,
         band=_band(normalized),
-        needs_human_review=False,
+        needs_human_review=coverage < COVERAGE_THRESHOLD,
         scored_competencies=scored,
         uncited_competencies=uncited,
     )
