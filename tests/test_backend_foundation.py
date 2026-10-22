@@ -239,6 +239,24 @@ class TestStartupValidation:
             )
         assert "JWT_SECRET_KEY" in exc.value.internal_detail
 
+    @pytest.mark.parametrize(
+        "secret",
+        [
+            "your_secure_random_32_byte_jwt_secret_key",
+            "   ",
+            "",
+        ],
+    )
+    def test_production_rejects_public_or_blank_jwt_secrets(self, secret):
+        """The .env.example placeholder and a blank value are both public
+        knowledge; neither may be used to sign production tokens."""
+        settings = AppSettings(environment="production", jwt_secret_key=secret)
+        with pytest.raises(ConfigurationError) as exc:
+            validate_startup_configuration(
+                settings, self._container(settings, persistence_is_ephemeral=False)
+            )
+        assert "JWT_SECRET_KEY" in exc.value.internal_detail
+
     def test_production_with_a_real_jwt_secret_is_allowed(self):
         settings = AppSettings(
             environment="production", jwt_secret_key="a-real-secret-from-the-environment"
