@@ -82,8 +82,20 @@ class JobService:
         `api.registry.SessionRegistry` already uses for session_id) when the
         caller doesn't supply one, rather than being invented by the LLM -
         JDAnalyzerAgent takes it as an input, not an output.
+
+        A caller-supplied id must not already exist. `JobRepository.save` is
+        an upsert, so without this check a second POST would silently replace
+        another recruiter's job - including its owner, content and active
+        flag. Job ids are visible in URLs, so they are not a secret.
         """
-        job_id = job_id or f"job_{uuid.uuid4().hex[:8]}"
+        if not job_id:
+            job_id = f"job_{uuid.uuid4().hex[:8]}"
+        elif await self._jobs.get(job_id) is not None:
+            raise ConflictError(
+                "A job with this id already exists.",
+                internal_detail=f"job_id={job_id!r} is already stored",
+                context={"job_id": job_id},
+            )
         analyzer = self._jd_analyzer_factory() if self._jd_analyzer_factory else JDAnalyzerAgent()
 
         agent_result = await analyzer.run(
