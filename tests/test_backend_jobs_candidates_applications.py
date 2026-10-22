@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from core.dependencies import get_job_service
 from core.errors import ConflictError, DependencyError, NotFoundError
 from repositories.interfaces import (
     RubricRepository,
@@ -34,6 +35,7 @@ from repositories.memory import (
 )
 from schemas.application import ApplicationStatus
 from schemas.evaluation import MatchingScore
+from schemas.job import JobDescription
 from services.application_service import ApplicationService
 from services.application_service import evaluate_shortlist_status
 from services.candidate_service import CandidateService
@@ -925,6 +927,47 @@ class TestJobsApi:
         response = client.get("/jobs/never-existed")
         assert response.status_code == 404
         assert response.json()["error"] == "not_found"
+
+    @pytest.mark.parametrize(
+        "patch,field",
+        [
+            ({"openings": None}, "body.openings"),
+            (
+                {"competencies": [
+                    {"name": "private-test-text", "weight": 0.9},
+                    {"name": "SQL", "weight": 0.9},
+                ]},
+                "body.competencies",
+            ),
+        ],
+    )
+    def test_invalid_job_patch_returns_422_without_saving(self, client, patch, field):
+        created = client.post("/jobs", json={"description": _JD_TEXT})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+        original_job = created.json()["job"]
+
+        response = client.patch(f"/jobs/{job_id}", json=patch)
+
+        assert response.status_code == 422
+        assert response.json()["error"] == "validation_error"
+        assert any(error["field"] == field for error in response.json()["errors"])
+        assert "private-test-text" not in response.text
+        assert client.get(f"/jobs/{job_id}").json()["job"] == original_job
+
+    def test_stored_job_validation_failure_remains_a_server_error(self, app):
+        class _CorruptJobRepository(InMemoryJobRepository):
+            async def get(self, job_id):
+                JobDescription.model_validate({"openings": None})
+
+        app.dependency_overrides[get_job_service] = lambda: JobService(
+            job_repository=_CorruptJobRepository()
+        )
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.patch("/jobs/job_corrupt", json={"department": "Platform"})
+
+        assert response.status_code == 500
+        assert response.json()["error"] == "internal_error"
 
     def test_practice_job_is_excluded_from_the_default_listing(self, client):
         practice = client.post("/jobs", json={"description": _JD_TEXT, "is_practice": True})

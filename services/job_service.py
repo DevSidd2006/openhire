@@ -18,6 +18,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict, Optional
 
+from pydantic import ValidationError
+
 from agents.jd_analyzer.agent import JDAnalyzerAgent
 from agents.rubric_generator.agent import RubricGeneratorAgent
 from core.errors import ConflictError, DependencyError, NotFoundError
@@ -26,6 +28,14 @@ from repositories.interfaces import JobRecord, JobRepository, RubricRepository
 from schemas.job import JobDescription
 
 logger = get_logger("services.job")
+
+
+class JobPatchValidationError(ValueError):
+    """Only the merged request state failed JobDescription validation."""
+
+    def __init__(self, validation_error: ValidationError) -> None:
+        self.validation_error = validation_error
+        super().__init__(str(validation_error))
 
 
 class JobService:
@@ -230,7 +240,10 @@ class JobService:
 
         merged = record.job.model_dump()
         merged.update(patch)
-        updated_job = JobDescription(**merged)
+        try:
+            updated_job = JobDescription(**merged)
+        except ValidationError as exc:
+            raise JobPatchValidationError(exc) from exc
 
         updated_record = record.model_copy(update={"job": updated_job})
         stored = await self._jobs.save(updated_record)
