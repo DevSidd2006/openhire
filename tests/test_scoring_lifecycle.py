@@ -16,7 +16,11 @@ from core.config import AppSettings, get_settings
 from core.errors import ConflictError, DependencyError, NotFoundError
 from core.security import Principal, PrincipalType, require_authenticated
 from repositories.interfaces import SessionRecord
-from services.background_scoring import AnswerScore, BackgroundScoringService
+from services.background_scoring import (
+    AnswerScore,
+    BackgroundScoringService,
+    InterviewScoring,
+)
 from utils.interview_session import SessionStatus
 
 
@@ -222,18 +226,16 @@ async def test_provider_failure_raises_instead_of_returning_zero_scores():
 
 
 def test_provider_failure_through_http_is_503(client):
-    _seed_session(client, "session_provider_failure_http")
-    assert client.post(
-        "/scoring/initialize",
-        json=_initialize_payload("session_provider_failure_http"),
-    ).status_code == 200
-
     class _BrokenMediator:
         async def analyze_response(self, **_kwargs):
             raise RuntimeError("provider unavailable")
 
     service = BackgroundScoringService()
-    service.scores = get_scoring_service().scores
+    service.scores["session_provider_failure_http"] = InterviewScoring(
+        session_id="session_provider_failure_http",
+        candidate_id="candidate_provider_failure_http",
+        job_id="job_provider_failure_http",
+    )
     service.mediator_agent = _BrokenMediator()
     client.app.dependency_overrides[get_scoring_service] = lambda: service
 
