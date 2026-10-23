@@ -15,6 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from core.config import AppSettings
+from core.dependencies import get_app_settings
+from core.security import Principal, PrincipalType, require_authenticated
+from services.background_scoring import AnswerScore
 
 
 @pytest.fixture
@@ -22,6 +26,28 @@ def client():
     app = create_app()
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def auth_client():
+    """Client whose auth boundary is enabled through dependency overrides.
+
+    The real JWT provider is exercised elsewhere. These tests only need a
+    stable Principal per request, so overriding `require_authenticated` keeps
+    the ownership checks themselves under test without minting tokens.
+    """
+    app = create_app()
+    current = {
+        "principal": Principal(
+            principal_type=PrincipalType.CANDIDATE,
+            subject_id="user_owner",
+        )
+    }
+    settings = AppSettings(auth_enabled=True)
+    app.dependency_overrides[require_authenticated] = lambda: current["principal"]
+    app.dependency_overrides[get_app_settings] = lambda: settings
+    with TestClient(app) as test_client:
+        yield test_client, current
 
 
 def _initialize_session(client: TestClient, session_id: str = "session_report_1"):
@@ -91,3 +117,95 @@ def test_unknown_session_still_reports_not_found(client):
 
     assert response.status_code == 200
     assert response.json()["error"] == "Session not found or no scores available"
+
+
+def _report_payload(session_id: str) -> dict:
+    return {
+        "session_id": session_id,
+        "candidate_name": "Jane Doe",
+        "job_title": "Senior Backend Engineer",
+    }
+
+
+def _create_candidate(client: TestClient, name: str) -> str:
+    response = client.post(
+        "/candidates",
+        json={"resume_text": f"{name} Python engineer", "candidate_name": name},
+    )
+    assert response.status_code == 201
+    return response.json()["candidate_id"]
+
+
+def _initialize_for(client: TestClient, session_id: str, candidate_id: str) -> None:
+    response = client.post(
+        "/scoring/initialize",
+        json={
+            "session_id": session_id,
+            "candidate_id": candidate_id,
+            "job_id": "job_report_1",
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_report_paths_enforce_candidate_ownership(auth_client):
+    client, current = auth_client
+
+    owner_candidate = _create_candidate(client, "Owner Candidate")
+    _initialize_for(client, "session_owner", owner_candidate)
+    assert client.post("/reports/generate", json=_report_payload("session_owner")).status_code == 200
+
+    current["principal"] = Principal(
+        principal_type=PrincipalType.CANDIDATE, subject_id="user_other"
+    )
+    other_candidate = _create_candidate(client, "Other Candidate")
+    _initialize_for(client, "session_other", other_candidate)
+
+    # The other candidate cannot generate a report for the owner's session.
+    forbidden = client.post("/reports/generate", json=_report_payload("session_owner"))
+    assert forbidden.status_code == 403
+
+    assert client.post("/reports/generate", json=_report_payload("session_other")).status_code == 200
+
+    # Ownership also governs retrieval and listing.
+    assert client.get("/reports/session/session_owner").status_code == 403
+    assert client.get("/reports/session/session_other").status_code == 200
+    assert client.get("/reports/list").json()["reports"] == ["session_other"]
+
+    # A recruiter can review either candidate's report, but cannot be used
+    # as a way for a candidate to read somebody else's.
+    current["principal"] = Principal(
+        principal_type=PrincipalType.RECRUITER, subject_id="user_recruiter"
+    )
+    assert client.get("/reports/session/session_owner").status_code == 200
+    assert client.get("/reports/session/session_other").status_code == 200
+    assert set(client.get("/reports/list").json()["reports"]) == {
+        "session_owner",
+        "session_other",
+    }
+
+
+def test_retrieval_refreshes_a_report_generated_before_late_answers(client):
+    session_id = _initialize_session(client, session_id="session_late_score")
+    generated = client.post("/reports/generate", json=_report_payload(session_id))
+    assert generated.status_code == 200
+    assert generated.json()["report"]["total_answers"] == 0
+
+    # Simulate the append that a score-answer request performs after its
+    # mediator call completes while the report above was already stored.
+    scoring = client.app.state.container.scoring_service.scores[session_id]
+    scoring.add_answer(
+        AnswerScore(
+            question_id="q1",
+            question_text="Describe a system you scaled.",
+            answer_text="I partitioned the write path and cached reads.",
+            competency="System Design",
+            clarity=8,
+            completeness=8,
+            relevance=8,
+        )
+    )
+
+    fetched = client.get(f"/reports/session/{session_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["total_answers"] == 1
