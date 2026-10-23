@@ -110,9 +110,26 @@ class JobService:
                 context={"job_id": job_id},
             )
 
+        # The analyzer's title is only used when the caller did not supply
+        # one. A whitespace-only LLM title is not a usable job title and must
+        # not be persisted just because the schema accepts any string - the
+        # request-level NonEmptyStr check cannot see this value.
         updates = {}
         if title is not None:
             updates["title"] = title.strip()
+        else:
+            analyzer_title = job_description.title.strip()
+            if not analyzer_title:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a blank title for "
+                        f"job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if analyzer_title != job_description.title:
+                updates["title"] = analyzer_title
         if openings is not None:
             updates["openings"] = openings
         if updates:

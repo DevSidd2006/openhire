@@ -93,7 +93,7 @@ class UpdateJobRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: Optional[NonEmptyStr] = None
+    title: Optional[NonEmptyStr] = Field(default=None, max_length=300)
     description: Optional[str] = None
     department: Optional[str] = None
     level: Optional[str] = None
