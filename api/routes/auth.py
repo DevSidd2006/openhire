@@ -386,7 +386,9 @@ async def linkedin_callback(
         err_res = RedirectResponse(
             url="/app/login.html?error=linkedin_cancelled", status_code=status.HTTP_302_FOUND
         )
-        err_res.delete_cookie("oauth_state")
+        err_res.delete_cookie(
+            "oauth_state", secure=settings.is_production
+        )
         return err_res
 
     # 1. Verify CSRF state against initiating browser session
@@ -399,7 +401,9 @@ async def linkedin_callback(
             url="/app/login.html?error=csrf_validation_failed",
             status_code=status.HTTP_302_FOUND,
         )
-        err_res.delete_cookie("oauth_state")
+        err_res.delete_cookie(
+            "oauth_state", secure=settings.is_production
+        )
         return err_res
 
     # LinkedIn authentication is intentionally candidate-only. Recruiters use
@@ -413,7 +417,9 @@ async def linkedin_callback(
         err_res = RedirectResponse(
             url="/app/login.html?error=missing_email", status_code=status.HTTP_302_FOUND
         )
-        err_res.delete_cookie("oauth_state")
+        err_res.delete_cookie(
+            "oauth_state", secure=settings.is_production
+        )
         return err_res
 
     full_name = userinfo.get("name")
