@@ -108,6 +108,10 @@ DEV_JWT_SECRET_KEY = "dev-secret-key-change-in-production"
 INSECURE_JWT_SECRET_KEYS = frozenset({
     DEV_JWT_SECRET_KEY,
     "your_secure_random_32_byte_jwt_secret_key",
+    # Published in tests/test_live_interview_api.py. It is long enough to
+    # pass a naive entropy/length check, but it is still repository-known
+    # and therefore just as forgeable as the development default.
+    "test-jwt-secret-that-is-at-least-thirty-two-bytes-long",
 })
 
 
@@ -295,6 +299,24 @@ class AppSettings(BaseModel):
 
     # ------------------------------------------------------------------
     @property
+    def jwt_secret_is_blank(self) -> bool:
+        """Whether no JWT signing key has been configured at all."""
+        return not self.jwt_secret_key.strip()
+
+    @property
+    def jwt_secret_is_placeholder(self) -> bool:
+        """Whether the configured key is a published placeholder.
+
+        This is deliberately distinct from a blank secret: operators should
+        not be told they are using a placeholder when they simply forgot to
+        configure a key.
+        """
+        return (
+            not self.jwt_secret_is_blank
+            and self.jwt_secret_key.strip() in INSECURE_JWT_SECRET_KEYS
+        )
+
+    @property
     def jwt_secret_is_default(self) -> bool:
         """Whether JWT tokens are being signed with a public placeholder or
         no secret at all. Checked at startup - see
@@ -304,8 +326,7 @@ class AppSettings(BaseModel):
         `.env.example` ships a different placeholder from
         `DEV_JWT_SECRET_KEY`, so both are treated as insecure.
         """
-        secret = self.jwt_secret_key.strip()
-        return not secret or secret in INSECURE_JWT_SECRET_KEYS
+        return self.jwt_secret_is_blank or self.jwt_secret_is_placeholder
 
     @property
     def is_production(self) -> bool:

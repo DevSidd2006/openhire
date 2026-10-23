@@ -314,7 +314,8 @@ class AdminService:
             "environment": settings.environment,
             "persistence": "postgres" if self._database_pool is not None else "memory",
             "auth_enabled": settings.auth_enabled,
-            "jwt_secret_is_placeholder": settings.jwt_secret_is_default,
+            "jwt_secret_is_placeholder": settings.jwt_secret_is_placeholder,
+            "jwt_secret_is_blank": settings.jwt_secret_is_blank,
             "providers": {
                 "llm": settings.llm_provider,
                 "embedding": settings.embedding_provider,

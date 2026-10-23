@@ -894,13 +894,19 @@ class TestAdminServiceSystemStatus:
     @pytest.mark.asyncio
     async def test_reports_jwt_secret_placeholder_flag(self):
         placeholder_settings = AppSettings()
+        blank_settings = AppSettings(jwt_secret_key="")
         real_settings = AppSettings(jwt_secret_key="a-real-generated-secret")
 
         placeholder_status = await _system_status_service(settings=placeholder_settings).get_system_status()
+        blank_status = await _system_status_service(settings=blank_settings).get_system_status()
         real_status = await _system_status_service(settings=real_settings).get_system_status()
 
         assert placeholder_status["jwt_secret_is_placeholder"] is True
+        assert placeholder_status["jwt_secret_is_blank"] is False
+        assert blank_status["jwt_secret_is_placeholder"] is False
+        assert blank_status["jwt_secret_is_blank"] is True
         assert real_status["jwt_secret_is_placeholder"] is False
+        assert real_status["jwt_secret_is_blank"] is False
 
     @pytest.mark.asyncio
     async def test_reports_evaluation_queue_running_count(self):
