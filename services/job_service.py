@@ -136,9 +136,34 @@ class JobService:
                 context={"job_id": job_id},
             )
 
+        # The analyzer's title is only used when the caller did not supply
+        # one. The request-level title constraints cannot see the LLM's
+        # output, so enforce the same nonblank and 300-character limits here.
         updates = {}
         if title is not None:
             updates["title"] = title.strip()
+        else:
+            analyzer_title = job_description.title.strip()
+            if not analyzer_title:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a blank title for "
+                        f"job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if len(analyzer_title) > 300:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a title longer than 300 characters "
+                        f"for job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if analyzer_title != job_description.title:
+                updates["title"] = analyzer_title
         if openings is not None:
             updates["openings"] = openings
         if updates:

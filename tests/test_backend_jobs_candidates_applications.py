@@ -327,6 +327,56 @@ class TestJobService:
             await service.create_job(description=_JD_TEXT)
 
     @pytest.mark.asyncio
+    async def test_create_job_rejects_a_blank_analyzer_title(self):
+        """The request title is optional; when it is omitted the analyzer's
+        title is the persisted one, so it must satisfy the same nonblank
+        invariant as a caller-supplied title."""
+
+        class _BlankTitleAnalyzer:
+            async def run(self, **kwargs):
+                return {
+                    "result": {
+                        "job_description": JobDescription(
+                            job_id=kwargs["job_id"],
+                            title="   ",
+                            description=_JD_TEXT,
+                        )
+                    }
+                }
+
+        service = JobService(
+            job_repository=InMemoryJobRepository(),
+            jd_analyzer_factory=lambda: _BlankTitleAnalyzer(),
+        )
+
+        with pytest.raises(DependencyError):
+            await service.create_job(description=_JD_TEXT)
+
+    @pytest.mark.asyncio
+    async def test_create_job_rejects_an_oversized_analyzer_title(self):
+        class _OversizedTitleAnalyzer:
+            async def run(self, **kwargs):
+                return {
+                    "result": {
+                        "job_description": JobDescription(
+                            job_id=kwargs["job_id"],
+                            title="x" * 301,
+                            description=_JD_TEXT,
+                        )
+                    }
+                }
+
+        repo = InMemoryJobRepository()
+        service = JobService(
+            job_repository=repo,
+            jd_analyzer_factory=lambda: _OversizedTitleAnalyzer(),
+        )
+
+        with pytest.raises(DependencyError):
+            await service.create_job(description=_JD_TEXT)
+        assert await repo.list_jobs() == []
+
+    @pytest.mark.asyncio
     async def test_create_job_drafts_and_approves_a_rubric_automatically(self):
         """The product flow has no recruiter step between posting a job and
         the leaderboard - shortlisting is rubric-decided, so a job must be
@@ -1153,6 +1203,37 @@ class TestJobsApi:
     def test_create_job_requires_nonempty_description(self, client):
         response = client.post("/jobs", json={"description": ""})
         assert response.status_code == 422
+
+    def test_create_job_rejects_whitespace_only_title(self, client):
+        response = client.post("/jobs", json={"description": _JD_TEXT, "title": "   "})
+        assert response.status_code == 422
+
+    def test_create_job_trims_surrounding_whitespace_from_title(self, client):
+        response = client.post(
+            "/jobs", json={"description": _JD_TEXT, "title": "  Backend Engineer  "}
+        )
+        assert response.status_code == 201
+        assert response.json()["job"]["title"] == "Backend Engineer"
+
+    def test_patch_job_rejects_whitespace_only_title(self, client):
+        created = client.post("/jobs", json={"description": _JD_TEXT, "title": "Backend Engineer"})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+
+        patched = client.patch(f"/jobs/{job_id}", json={"title": "   "})
+
+        assert patched.status_code == 422
+        assert client.get(f"/jobs/{job_id}").json()["job"]["title"] == "Backend Engineer"
+
+    def test_patch_job_rejects_an_oversized_title(self, client):
+        created = client.post("/jobs", json={"description": _JD_TEXT, "title": "Backend Engineer"})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+
+        patched = client.patch(f"/jobs/{job_id}", json={"title": "x" * 301})
+
+        assert patched.status_code == 422
+        assert client.get(f"/jobs/{job_id}").json()["job"]["title"] == "Backend Engineer"
 
 
 class TestCandidatesApi:
