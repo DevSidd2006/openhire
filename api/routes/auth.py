@@ -413,7 +413,7 @@ async def linkedin_callback(
         if not user.is_active:
             logger.warning(
                 "LinkedIn login attempt with inactive account",
-                extra={"user_id": user.user_id, "email": email},
+                extra={"user_id": user.user_id},
             )
             raise UnauthorizedError(
                 "This account is not active.",
