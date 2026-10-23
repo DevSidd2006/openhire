@@ -111,9 +111,8 @@ class JobService:
             )
 
         # The analyzer's title is only used when the caller did not supply
-        # one. A whitespace-only LLM title is not a usable job title and must
-        # not be persisted just because the schema accepts any string - the
-        # request-level NonEmptyStr check cannot see this value.
+        # one. The request-level title constraints cannot see the LLM's
+        # output, so enforce the same nonblank and 300-character limits here.
         updates = {}
         if title is not None:
             updates["title"] = title.strip()
@@ -125,6 +124,15 @@ class JobService:
                     internal_detail=(
                         f"JDAnalyzerAgent returned a blank title for "
                         f"job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if len(analyzer_title) > 300:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a title longer than 300 characters "
+                        f"for job_id={job_id!r}"
                     ),
                     context={"job_id": job_id},
                 )

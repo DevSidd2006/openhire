@@ -321,6 +321,30 @@ class TestJobService:
             await service.create_job(description=_JD_TEXT)
 
     @pytest.mark.asyncio
+    async def test_create_job_rejects_an_oversized_analyzer_title(self):
+        class _OversizedTitleAnalyzer:
+            async def run(self, **kwargs):
+                return {
+                    "result": {
+                        "job_description": JobDescription(
+                            job_id=kwargs["job_id"],
+                            title="x" * 301,
+                            description=_JD_TEXT,
+                        )
+                    }
+                }
+
+        repo = InMemoryJobRepository()
+        service = JobService(
+            job_repository=repo,
+            jd_analyzer_factory=lambda: _OversizedTitleAnalyzer(),
+        )
+
+        with pytest.raises(DependencyError):
+            await service.create_job(description=_JD_TEXT)
+        assert await repo.list_jobs() == []
+
+    @pytest.mark.asyncio
     async def test_create_job_drafts_and_approves_a_rubric_automatically(self):
         """The product flow has no recruiter step between posting a job and
         the leaderboard - shortlisting is rubric-decided, so a job must be
