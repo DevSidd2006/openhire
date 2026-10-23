@@ -243,6 +243,9 @@ async def logout_user(
     response.delete_cookie(
         key="openhire_refresh_token", path="/", samesite="lax", secure=secure
     )
+    response.delete_cookie(
+        key=_OAUTH_TICKET_COOKIE, path="/", samesite="lax", secure=secure
+    )
     response.delete_cookie(key="oauth_state", path="/", samesite="lax", secure=secure)
     return {"status": "logged_out"}
 

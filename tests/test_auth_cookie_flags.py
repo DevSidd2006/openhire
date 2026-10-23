@@ -97,9 +97,14 @@ def test_production_logout_deletes_secure_cookies():
 
     assert response.status_code == 200
     raw = _set_cookie_headers(response)
-    for name in ("openhire_access_token", "openhire_refresh_token", "oauth_state"):
+    for name in (
+        "openhire_access_token",
+        "openhire_refresh_token",
+        "openhire_oauth_ticket",
+        "oauth_state",
+    ):
         assert name in raw
-    assert raw.count("Secure") >= 3
+    assert raw.count("Secure") >= 4
 
 
 def test_development_cookies_remain_usable_over_http():
