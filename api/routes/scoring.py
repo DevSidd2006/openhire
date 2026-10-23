@@ -11,9 +11,9 @@ from typing import Optional, Dict, Any
 from services.background_scoring import BackgroundScoringService, AnswerScore
 from core.config import AppSettings
 from core.dependencies import (
+    get_app_settings,
     get_candidate_repository,
     get_session_repository,
-    get_settings,
 )
 from core.errors import ConflictError, ForbiddenError, NotFoundError
 from core.security import Principal, PrincipalType, require_authenticated
@@ -151,7 +151,7 @@ async def initialize_scoring(
     sessions: SessionRepository = Depends(get_session_repository),
     candidates: CandidateRepository = Depends(get_candidate_repository),
     principal: Principal = Depends(require_authenticated),
-    settings: AppSettings = Depends(get_settings),
+    settings: AppSettings = Depends(get_app_settings),
 ) -> Dict[str, str]:
     """Initialize scoring for a new interview session.
 

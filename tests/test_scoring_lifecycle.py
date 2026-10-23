@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 
 from api.app import create_app
 from api.routes.scoring import get_scoring_service
-from core.config import AppSettings, get_settings
+from core.config import AppSettings
+from core.dependencies import get_app_settings
 from core.errors import ConflictError, DependencyError, NotFoundError
 from core.security import Principal, PrincipalType, require_authenticated
 from repositories.interfaces import SessionRecord
@@ -42,7 +43,7 @@ def auth_client():
     }
     settings = AppSettings(auth_enabled=True)
     app.dependency_overrides[require_authenticated] = lambda: current["principal"]
-    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_app_settings] = lambda: settings
     with TestClient(app) as test_client:
         yield test_client, current
 
