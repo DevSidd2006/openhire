@@ -397,6 +397,8 @@ __all__ = [
     "get_matching_service",
     "get_recruiter_service",
     "get_registry",
+    "get_report_generator",
+    "get_scoring_service",
     "get_session_repository",
     "get_transcript_repository",
     "get_user_repository",
