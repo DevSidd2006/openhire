@@ -231,11 +231,19 @@ async def change_my_password(
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout_user(response: Response) -> dict[str, str]:
+async def logout_user(
+    response: Response,
+    settings: AppSettings = Depends(get_settings),
+) -> dict[str, str]:
     """Expire the openhire_access_token and openhire_refresh_token authentication cookies."""
-    response.delete_cookie(key="openhire_access_token", path="/", samesite="lax")
-    response.delete_cookie(key="openhire_refresh_token", path="/", samesite="lax")
-    response.delete_cookie(key="oauth_state", path="/", samesite="lax")
+    secure = settings.is_production
+    response.delete_cookie(
+        key="openhire_access_token", path="/", samesite="lax", secure=secure
+    )
+    response.delete_cookie(
+        key="openhire_refresh_token", path="/", samesite="lax", secure=secure
+    )
+    response.delete_cookie(key="oauth_state", path="/", samesite="lax", secure=secure)
     return {"status": "logged_out"}
 
 
@@ -309,7 +317,12 @@ async def exchange_oauth_ticket(
         )
 
     # Delete before returning so a successful ticket cannot be replayed.
-    response.delete_cookie(_OAUTH_TICKET_COOKIE, path="/", samesite="lax")
+    response.delete_cookie(
+        _OAUTH_TICKET_COOKIE,
+        path="/",
+        samesite="lax",
+        secure=settings.is_production,
+    )
     user_info = ticket_data["user"]
     return AuthResponse(
         user=UserResponse(
@@ -327,6 +340,7 @@ async def exchange_oauth_ticket(
 async def linkedin_authorize(
     role: str = Query("candidate", pattern="^candidate$"),
     linkedin_service: LinkedInAuthService = Depends(get_linkedin_service),
+    settings: AppSettings = Depends(get_settings),
 ) -> RedirectResponse:
     """Initiates LinkedIn OAuth login flow with CSRF state protection."""
     state_nonce = secrets.token_urlsafe(24)
@@ -341,6 +355,7 @@ async def linkedin_authorize(
         httponly=True,
         samesite="lax",
         max_age=300,  # 5 minutes
+        secure=settings.is_production,
     )
     return redirect_response
 
@@ -465,6 +480,7 @@ async def linkedin_callback(
         httponly=True,
         samesite="lax",
         max_age=15 * 60,
+        secure=settings.is_production,
     )
     redirect_response.set_cookie(
         key=_OAUTH_TICKET_COOKIE,
@@ -472,8 +488,11 @@ async def linkedin_callback(
         httponly=True,
         samesite="lax",
         max_age=_OAUTH_TICKET_TTL_SECONDS,
+        secure=settings.is_production,
     )
-    redirect_response.delete_cookie("oauth_state")
+    redirect_response.delete_cookie(
+        "oauth_state", secure=settings.is_production
+    )
     return redirect_response
 
 
