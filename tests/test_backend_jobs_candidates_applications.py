@@ -379,6 +379,71 @@ class TestJobService:
         archived = await job_repo.get("job_broken_rubric")
         assert archived is not None, "the JobRecord must still exist (it was saved before the FK-dependent rubric step)"
         assert archived.is_active is False, "a job whose rubric failed must be archived, not left live"
+        assert archived.rubric_generation_failed is True
+
+    @pytest.mark.asyncio
+    async def test_failed_auto_rubric_job_can_be_retried_by_its_creator(self):
+        """A retry with the caller's original id must be possible after the
+        compensating archive, but only for the same creator and only for a
+        job that failed during rubric generation."""
+        class _SometimesBrokenGenerator:
+            def __init__(self):
+                self.calls = 0
+
+            async def execute(self, job_description, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("rubric LLM exploded once")
+                return {"rubric": approved_rubric(version=1).model_copy(
+                    update={"job_id": None, "status": "draft"}
+                )}
+
+        generator = _SometimesBrokenGenerator()
+        job_repo = InMemoryJobRepository()
+        rubric_repo = InMemoryRubricRepository()
+        service = JobService(
+            job_repository=job_repo,
+            rubric_repository=rubric_repo,
+            rubric_generator_factory=lambda: generator,
+        )
+
+        with pytest.raises(DependencyError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_owner",
+            )
+
+        with pytest.raises(ConflictError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_other",
+            )
+
+        retried = await service.create_job(
+            description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_owner",
+        )
+
+        assert retried.is_active is True
+        assert retried.rubric_generation_failed is False
+        assert await rubric_repo.get_approved_for_job("job_retry") is not None
+
+    @pytest.mark.asyncio
+    async def test_normally_archived_job_id_cannot_be_reclaimed(self):
+        repo = InMemoryJobRepository()
+        service = JobService(job_repository=repo)
+        original = await service.create_job(
+            description=_JD_TEXT, job_id="job_archived", title="Original",
+            created_by_user_id="user_owner",
+        )
+        await service.archive_job(original.job_id)
+
+        with pytest.raises(ConflictError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_archived", title="Replacement",
+                created_by_user_id="user_owner",
+            )
+
+        stored = await repo.get("job_archived")
+        assert stored.job.title == "Original"
+        assert stored.is_active is False
 
     @pytest.mark.asyncio
     async def test_create_job_without_a_rubric_repository_skips_auto_rubric(self):
@@ -1078,6 +1143,12 @@ class TestJobsApi:
 
         fetched = client.get("/jobs/job_http_duplicate").json()
         assert fetched["job"]["title"] == "Original"
+
+    def test_openapi_documents_duplicate_id_conflicts(self, client):
+        paths = client.get("/openapi.json").json()["paths"]
+
+        assert "409" in paths["/jobs"]["post"]["responses"]
+        assert "409" in paths["/candidates"]["post"]["responses"]
 
     def test_create_job_requires_nonempty_description(self, client):
         response = client.post("/jobs", json={"description": ""})

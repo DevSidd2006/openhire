@@ -90,12 +90,26 @@ class JobService:
         """
         if not job_id:
             job_id = f"job_{uuid.uuid4().hex[:8]}"
-        elif await self._jobs.get(job_id) is not None:
-            raise ConflictError(
-                "A job with this id already exists.",
-                internal_detail=f"job_id={job_id!r} is already stored",
-                context={"job_id": job_id},
-            )
+        else:
+            existing = await self._jobs.get(job_id)
+            if existing is not None:
+                # A retry of a failed auto-rubric job is the one safe case
+                # for reusing a caller-supplied id: the previous attempt was
+                # archived by this service and never became usable. Require
+                # the same creator and kind so an unrelated archived job
+                # cannot be reclaimed by someone who guessed its id.
+                retryable_failure = (
+                    existing.rubric_generation_failed
+                    and not existing.is_active
+                    and existing.created_by_user_id == created_by_user_id
+                    and existing.is_practice == is_practice
+                )
+                if not retryable_failure:
+                    raise ConflictError(
+                        "A job with this id already exists.",
+                        internal_detail=f"job_id={job_id!r} is already stored",
+                        context={"job_id": job_id},
+                    )
         analyzer = self._jd_analyzer_factory() if self._jd_analyzer_factory else JDAnalyzerAgent()
 
         agent_result = await analyzer.run(
@@ -189,10 +203,15 @@ class JobService:
                 exc,
                 extra=log_context(event="rubric_auto_generation_failed", job_id=job_id),
             )
+            failed = await self._jobs.get(job_id)
+            if failed is not None:
+                await self._jobs.save(
+                    failed.model_copy(update={"rubric_generation_failed": True})
+                )
             await self._jobs.archive(job_id)
             raise DependencyError(
                 "The job's scoring rubric could not be generated, so the job was not "
-                "published. Please try again.",
+                "published. Retry with the same job_id to try again.",
                 internal_detail=f"rubric auto-draft/approve failed for job_id={job_id!r}: {exc}",
                 context={"job_id": job_id},
             ) from exc
