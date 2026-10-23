@@ -11,6 +11,8 @@ These tests pin the user-visible contract rather than the wiring detail:
 initialize a session, generate a report for it, and read the stored report
 back from the same app instance.
 """
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -18,7 +20,9 @@ from api.app import create_app
 from core.config import AppSettings
 from core.dependencies import get_app_settings
 from core.security import Principal, PrincipalType, require_authenticated
+from repositories.interfaces import SessionRecord
 from services.background_scoring import AnswerScore
+from utils.interview_session import SessionStatus
 
 
 @pytest.fixture
@@ -50,7 +54,27 @@ def auth_client():
         yield test_client, current
 
 
+def _seed_session(
+    client: TestClient,
+    session_id: str,
+    *,
+    candidate_id: str = "cand_report_1",
+    job_id: str = "job_report_1",
+) -> None:
+    asyncio.run(
+        client.app.state.container.session_repository.save(
+            SessionRecord(
+                session_id=session_id,
+                candidate_id=candidate_id,
+                job_id=job_id,
+                status=SessionStatus.CREATED,
+            )
+        )
+    )
+
+
 def _initialize_session(client: TestClient, session_id: str = "session_report_1"):
+    _seed_session(client, session_id)
     response = client.post(
         "/scoring/initialize",
         json={
@@ -137,6 +161,9 @@ def _create_candidate(client: TestClient, name: str) -> str:
 
 
 def _initialize_for(client: TestClient, session_id: str, candidate_id: str) -> None:
+    _seed_session(
+        client, session_id, candidate_id=candidate_id, job_id="job_report_1"
+    )
     response = client.post(
         "/scoring/initialize",
         json={
