@@ -102,7 +102,13 @@ class LinkedInAuthService:
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
                 if token_response.status_code != 200:
-                    logger.error(f"LinkedIn token exchange failed: {token_response.text}")
+                    # Never log the upstream body: it can contain account
+                    # identifiers and request metadata. The status code is
+                    # enough to tell an operator what failed.
+                    logger.error(
+                        "LinkedIn token exchange failed with status %s",
+                        token_response.status_code,
+                    )
                     raise BadRequestError("Failed to obtain LinkedIn access token.")
 
                 try:
@@ -122,7 +128,12 @@ class LinkedInAuthService:
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 if userinfo_response.status_code != 200:
-                    logger.error(f"LinkedIn userinfo request failed: {userinfo_response.text}")
+                    # The userinfo body is candidate profile data (email,
+                    # name, picture). Log the status, never the body.
+                    logger.error(
+                        "LinkedIn userinfo request failed with status %s",
+                        userinfo_response.status_code,
+                    )
                     raise BadRequestError("Failed to fetch LinkedIn profile information.")
 
                 try:

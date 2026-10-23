@@ -71,11 +71,11 @@ class AuthService:
         if existing is not None:
             logger.warning(
                 "signup attempt with existing email",
-                extra=log_context(event="signup_email_conflict", email=email),
+                extra=log_context(event="signup_email_conflict"),
             )
             raise ConflictError(
                 "An account with this email already exists.",
-                internal_detail=f"email {email!r} already registered",
+                internal_detail="signup conflict: email is already registered",
             )
 
         # Generate user_id and hash password
@@ -101,7 +101,6 @@ class AuthService:
                 event="user_signup",
                 user_id=user_id,
                 user_type=user_type,
-                email=email,
             ),
         )
 
@@ -124,11 +123,11 @@ class AuthService:
         if user is None:
             logger.warning(
                 "login attempt with unknown email",
-                extra=log_context(event="login_user_not_found", email=email),
+                extra=log_context(event="login_user_not_found"),
             )
             raise UnauthorizedError(
                 "Invalid email or password.",
-                internal_detail=f"email {email!r} not found",
+                internal_detail="login failed: no account for the supplied email",
             )
 
         # Verify password
@@ -161,7 +160,6 @@ class AuthService:
             extra=log_context(
                 event="user_login",
                 user_id=user.user_id,
-                email=email,
             ),
         )
 
