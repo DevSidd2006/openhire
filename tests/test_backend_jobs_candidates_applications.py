@@ -213,6 +213,38 @@ class TestJobService:
         assert record.job.job_id == "job_custom_1"
 
     @pytest.mark.asyncio
+    async def test_create_job_rejects_a_duplicate_caller_supplied_job_id(self):
+        """save() is an upsert; a second POST must not replace the first job."""
+        repo = InMemoryJobRepository()
+        service = JobService(job_repository=repo)
+        original = await service.create_job(
+            description=_JD_TEXT, job_id="job_duplicate", title="Original title",
+            created_by_user_id="user_original",
+        )
+
+        with pytest.raises(ConflictError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_duplicate", title="Replacement title",
+                created_by_user_id="user_attacker",
+            )
+
+        stored = await repo.get("job_duplicate")
+        assert stored.created_by_user_id == "user_original"
+        assert stored.job.title == "Original title"
+        assert stored.created_at == original.created_at
+
+    @pytest.mark.asyncio
+    async def test_create_job_without_an_id_still_generates_distinct_ids(self):
+        service = _job_service()
+        first = await service.create_job(description=_JD_TEXT, job_id="job_duplicate")
+        second = await service.create_job(description=_JD_TEXT)
+        third = await service.create_job(description=_JD_TEXT)
+
+        assert second.job_id.startswith("job_")
+        assert third.job_id.startswith("job_")
+        assert len({first.job_id, second.job_id, third.job_id}) == 3
+
+    @pytest.mark.asyncio
     async def test_get_job_not_found_raises_not_found(self):
         with pytest.raises(NotFoundError):
             await _job_service().get_job("never-existed")
@@ -347,6 +379,71 @@ class TestJobService:
         archived = await job_repo.get("job_broken_rubric")
         assert archived is not None, "the JobRecord must still exist (it was saved before the FK-dependent rubric step)"
         assert archived.is_active is False, "a job whose rubric failed must be archived, not left live"
+        assert archived.rubric_generation_failed is True
+
+    @pytest.mark.asyncio
+    async def test_failed_auto_rubric_job_can_be_retried_by_its_creator(self):
+        """A retry with the caller's original id must be possible after the
+        compensating archive, but only for the same creator and only for a
+        job that failed during rubric generation."""
+        class _SometimesBrokenGenerator:
+            def __init__(self):
+                self.calls = 0
+
+            async def execute(self, job_description, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("rubric LLM exploded once")
+                return {"rubric": approved_rubric(version=1).model_copy(
+                    update={"job_id": None, "status": "draft"}
+                )}
+
+        generator = _SometimesBrokenGenerator()
+        job_repo = InMemoryJobRepository()
+        rubric_repo = InMemoryRubricRepository()
+        service = JobService(
+            job_repository=job_repo,
+            rubric_repository=rubric_repo,
+            rubric_generator_factory=lambda: generator,
+        )
+
+        with pytest.raises(DependencyError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_owner",
+            )
+
+        with pytest.raises(ConflictError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_other",
+            )
+
+        retried = await service.create_job(
+            description=_JD_TEXT, job_id="job_retry", created_by_user_id="user_owner",
+        )
+
+        assert retried.is_active is True
+        assert retried.rubric_generation_failed is False
+        assert await rubric_repo.get_approved_for_job("job_retry") is not None
+
+    @pytest.mark.asyncio
+    async def test_normally_archived_job_id_cannot_be_reclaimed(self):
+        repo = InMemoryJobRepository()
+        service = JobService(job_repository=repo)
+        original = await service.create_job(
+            description=_JD_TEXT, job_id="job_archived", title="Original",
+            created_by_user_id="user_owner",
+        )
+        await service.archive_job(original.job_id)
+
+        with pytest.raises(ConflictError):
+            await service.create_job(
+                description=_JD_TEXT, job_id="job_archived", title="Replacement",
+                created_by_user_id="user_owner",
+            )
+
+        stored = await repo.get("job_archived")
+        assert stored.job.title == "Original"
+        assert stored.is_active is False
 
     @pytest.mark.asyncio
     async def test_create_job_without_a_rubric_repository_skips_auto_rubric(self):
@@ -418,6 +515,51 @@ class TestCandidateService:
         assert record.candidate_id.startswith("cand_")
         assert record.resume.candidate_name == "Jane Doe"
         assert record.used_fallback is False
+
+    @pytest.mark.asyncio
+    async def test_register_candidate_accepts_a_caller_supplied_candidate_id(self):
+        service = _candidate_service()
+        record = await service.register_candidate(
+            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane Doe",
+            user_id="user_owner", candidate_id="cand_custom_1",
+        )
+        assert record.candidate_id == "cand_custom_1"
+        assert record.resume.candidate_id == "cand_custom_1"
+
+    @pytest.mark.asyncio
+    async def test_register_candidate_rejects_a_duplicate_caller_supplied_id(self):
+        """A second POST must not take over another user's candidate profile."""
+        repo = InMemoryCandidateRepository()
+        service = CandidateService(candidate_repository=repo)
+        original = await service.register_candidate(
+            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane Doe",
+            user_id="user_owner", candidate_id="cand_duplicate",
+        )
+
+        with pytest.raises(ConflictError):
+            await service.register_candidate(
+                resume_text=_RESUME_TEXT_WEAK, candidate_name="John Smith",
+                user_id="user_attacker", candidate_id="cand_duplicate",
+            )
+
+        stored = await repo.get("cand_duplicate")
+        assert stored.user_id == "user_owner"
+        assert stored.resume.candidate_name == "Jane Doe"
+        assert stored.created_at == original.created_at
+
+    @pytest.mark.asyncio
+    async def test_register_candidate_without_an_id_still_generates_distinct_ids(self):
+        service = _candidate_service()
+        first = await service.register_candidate(
+            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test"
+        )
+        second = await service.register_candidate(
+            resume_text=_RESUME_TEXT_STRONG, candidate_name="Jane", user_id="user_test"
+        )
+
+        assert first.candidate_id.startswith("cand_")
+        assert second.candidate_id.startswith("cand_")
+        assert first.candidate_id != second.candidate_id
 
     @pytest.mark.asyncio
     async def test_get_candidate_not_found_raises_not_found(self):
@@ -985,6 +1127,29 @@ class TestJobsApi:
         assert mine.status_code == 200
         assert any(j["job_id"] == practice.json()["job_id"] for j in mine.json()["jobs"])
 
+    def test_create_job_with_an_existing_id_is_409_and_does_not_replace_it(self, client):
+        first = client.post(
+            "/jobs",
+            json={"description": _JD_TEXT, "job_id": "job_http_duplicate", "title": "Original"},
+        )
+        assert first.status_code == 201
+
+        second = client.post(
+            "/jobs",
+            json={"description": _JD_TEXT, "job_id": "job_http_duplicate", "title": "Replacement"},
+        )
+        assert second.status_code == 409
+        assert second.json()["error"] == "conflict"
+
+        fetched = client.get("/jobs/job_http_duplicate").json()
+        assert fetched["job"]["title"] == "Original"
+
+    def test_openapi_documents_duplicate_id_conflicts(self, client):
+        paths = client.get("/openapi.json").json()["paths"]
+
+        assert "409" in paths["/jobs"]["post"]["responses"]
+        assert "409" in paths["/candidates"]["post"]["responses"]
+
     def test_create_job_requires_nonempty_description(self, client):
         response = client.post("/jobs", json={"description": ""})
         assert response.status_code == 422
@@ -1009,6 +1174,31 @@ class TestCandidatesApi:
         patched = client.patch(f"/candidates/{candidate_id}", json={"skills": ["Rust"]})
         assert patched.status_code == 200
         assert patched.json()["resume"]["skills"] == ["Rust"]
+
+    def test_create_candidate_with_an_existing_id_is_409_and_does_not_replace_it(self, client):
+        first = client.post(
+            "/candidates",
+            json={
+                "resume_text": _RESUME_TEXT_STRONG,
+                "candidate_name": "Jane Doe",
+                "candidate_id": "cand_http_duplicate",
+            },
+        )
+        assert first.status_code == 201
+
+        second = client.post(
+            "/candidates",
+            json={
+                "resume_text": _RESUME_TEXT_WEAK,
+                "candidate_name": "John Smith",
+                "candidate_id": "cand_http_duplicate",
+            },
+        )
+        assert second.status_code == 409
+        assert second.json()["error"] == "conflict"
+
+        fetched = client.get("/candidates/cand_http_duplicate").json()
+        assert fetched["resume"]["candidate_name"] == "Jane Doe"
 
     def test_get_unknown_candidate_is_404(self, client):
         response = client.get("/candidates/never-existed")

@@ -46,6 +46,9 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     response_model=JobResponse,
     status_code=201,
     dependencies=[Depends(apply_llm_context_for_recruiter)],
+    responses={
+        409: {"description": "A job with the supplied job_id already exists."},
+    },
 )
 async def create_job(
     payload: CreateJobRequest,
@@ -55,7 +58,8 @@ async def create_job(
     """POST /jobs - analyze raw job-description text (via the existing
     `JDAnalyzerAgent`) into a structured job posting and store it.
 
-    Errors: 503 `dependency_unavailable` if analysis fails (core/errors.py:
+    Errors: 409 if a caller-supplied `job_id` is already stored; 503
+    `dependency_unavailable` if analysis fails (core/errors.py:
     `DependencyError`); 422 if `description` is empty.
 
     Authorization: `require_authenticated` only - inert while
