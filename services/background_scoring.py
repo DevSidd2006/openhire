@@ -12,7 +12,7 @@ from datetime import datetime
 from agents.technical_evaluator import TechnicalEvaluatorAgent
 from agents.behavioral_evaluator import BehavioralEvaluatorAgent
 from agents.interview_mediator import InterviewMediatorAgent
-from core.errors import ConflictError, NotFoundError
+from core.errors import ConflictError, DependencyError, NotFoundError
 from utils.logging import get_logger
 
 logger = get_logger("background_scoring")
@@ -186,14 +186,17 @@ class BackgroundScoringService:
             return score
 
         except Exception as e:
+            # A provider failure is not a zero score. Returning a fabricated
+            # AnswerScore made the endpoint report HTTP 200 with all-zero
+            # metrics and left the session's average silently wrong.
             logger.error(f"Error scoring answer: {e}")
-            # Return default score on error
-            return AnswerScore(
-                question_id=question_id,
-                question_text=question_text,
-                answer_text=answer_text,
-                competency=competency,
-            )
+            raise DependencyError(
+                "The answer could not be scored. Please retry.",
+                internal_detail=(
+                    f"mediator analysis failed for session {session_id!r}: {e}"
+                ),
+                context={"session_id": session_id},
+            ) from e
 
     async def get_session_scores(self, session_id: str) -> Optional[InterviewScoring]:
         """Get accumulated scores for a session."""
