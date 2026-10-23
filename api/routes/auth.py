@@ -327,12 +327,10 @@ async def exchange_oauth_ticket(
     if not ticket_store.consume(
         request.ticket, ttl_seconds=_OAUTH_TICKET_TTL_SECONDS
     ):
-        response.delete_cookie(
-            _OAUTH_TICKET_COOKIE,
-            path="/",
-            samesite="lax",
-            secure=settings.is_production,
-        )
+        # The error handler builds its own JSONResponse, so a delete_cookie
+        # header set here would be discarded. Consumption is what matters:
+        # every replay is rejected for the remaining ticket lifetime, and the
+        # encrypted cookie expires on its own.
         raise UnauthorizedError(
             "OAuth ticket has already been used.",
             internal_detail="oauth_ticket_already_consumed",
