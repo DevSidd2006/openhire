@@ -8,13 +8,16 @@ auth logs and the LinkedIn upstream-response logs.
 import logging
 
 import pytest
+from fastapi.testclient import TestClient
 
 import services.linkedin_auth_service as linkedin_module
+from api.routes.auth import get_linkedin_service
 from core.config import AppSettings
 from core.errors import BadRequestError, ConflictError, UnauthorizedError
 from repositories.memory import InMemoryUserRepository
 from services.auth_service import AuthService
 from services.linkedin_auth_service import LinkedInAuthService
+from tests.test_linkedin_oauth import _build_test_app
 
 _EMAIL = "privacy.candidate@example.com"
 
@@ -120,3 +123,51 @@ async def test_linkedin_userinfo_error_does_not_log_the_response_body(monkeypatc
     assert "leaked.profile@example.com" not in logged
     assert "Leaked Person" not in logged
     assert "500" in logged
+
+
+class _InactiveLinkedInService:
+    def get_authorization_url(self, state: str) -> str:
+        return f"https://www.linkedin.com/oauth/v2/authorization?state={state}"
+
+    async def exchange_code_for_userinfo(self, _code: str) -> dict:
+        return {
+            "sub": "inactive-member",
+            "email": _EMAIL,
+            "name": "Inactive Candidate",
+            "email_verified": True,
+            "picture": "",
+        }
+
+
+def test_linkedin_inactive_account_log_does_not_include_the_email(caplog):
+    settings = AppSettings(environment="development", linkedin_mock_enabled=True)
+    app, _, user_repo = _build_test_app(settings)
+    container = app.state.container
+    app.dependency_overrides[get_linkedin_service] = lambda: _InactiveLinkedInService()
+
+    with TestClient(app) as client:
+        # Lifespan installs its own default container; restore the test one
+        # so the signup below lands in the repository this test inspects.
+        app.state.container = container
+        signup = client.post(
+            "/auth/signup",
+            json={"email": _EMAIL, "password": "password123", "user_type": "candidate"},
+        )
+        assert signup.status_code == 200
+
+        user = client.portal.call(user_repo.get_by_email, _EMAIL)
+        user.is_active = False
+        client.portal.call(user_repo.save, user)
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            authorize = client.get("/auth/linkedin/authorize", follow_redirects=False)
+            state = authorize.cookies["oauth_state"]
+            response = client.get(
+                f"/auth/linkedin/callback?code=test-code&state={state}:candidate",
+                headers={"Cookie": f"oauth_state={state}"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 401
+    assert _EMAIL not in _logged_text(caplog)
