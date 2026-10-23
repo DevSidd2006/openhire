@@ -408,29 +408,48 @@ class InMemoryUserRepository(UserRepository):
     """Dict-backed `UserRepository`. TEMPORARY - see module docstring.
 
     Stores user accounts in memory with basic email/id lookups.
+
+    Emails are stored lowercase and looked up case-insensitively, matching
+    `PostgresUserRepository`. Without this, local/test runs (which default
+    to this stub) would let "Alice@example.com" and "alice@example.com"
+    register as two accounts and reject a login whose casing differs from
+    signup - behaviour that silently changes once DATABASE_URL is set.
     """
 
     def __init__(self) -> None:
         self._users: Dict[str, UserRecord] = {}
-        self._email_index: Dict[str, str] = {}  # email -> user_id
+        self._email_index: Dict[str, str] = {}  # lowercased email -> user_id
         self._lock = asyncio.Lock()
 
     async def save(self, record: UserRecord) -> UserRecord:
-        """Insert or update by user_id. Idempotent, preserves created_at."""
+        """Insert or update by user_id. Idempotent, preserves created_at.
+
+        Stores email in lowercase for case-insensitive lookups.
+        """
         async with self._lock:
             existing = self._users.get(record.user_id)
             created_at = existing.created_at if existing else record.created_at
+            email = record.email.lower()
             stored = record.model_copy(
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+                update={
+                    "email": email,
+                    "created_at": created_at,
+                    "updated_at": datetime.now(timezone.utc),
+                }
             )
             self._users[record.user_id] = stored
-            self._email_index[record.email] = record.user_id
+            # Drop the old index entry on an email change, so the previous
+            # address stops resolving to this user (as it would in Postgres).
+            if existing is not None and existing.email != email:
+                if self._email_index.get(existing.email) == record.user_id:
+                    del self._email_index[existing.email]
+            self._email_index[email] = record.user_id
             return stored
 
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
-        """Fetch user by email. Returns None if not found."""
+        """Fetch user by email. Case-insensitive. Returns None if not found."""
         async with self._lock:
-            user_id = self._email_index.get(email)
+            user_id = self._email_index.get(email.lower())
             return self._users.get(user_id) if user_id else None
 
     async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
