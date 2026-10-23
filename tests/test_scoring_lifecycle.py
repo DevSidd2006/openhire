@@ -6,17 +6,21 @@ unknown session must be reported as missing rather than represented by a
 fabricated zero score.
 """
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from api.routes import scoring as scoring_routes
 from api.routes.scoring import get_scoring_service
 from core.config import AppSettings
 from core.dependencies import get_app_settings
 from core.errors import ConflictError, DependencyError, NotFoundError
 from core.security import Principal, PrincipalType, require_authenticated
-from repositories.interfaces import SessionRecord
+from repositories.interfaces import CandidateRecord, SessionRecord
+from repositories.memory import InMemoryCandidateRepository, InMemorySessionRepository
+from schemas.resume import ParsedResume
 from services.background_scoring import (
     AnswerScore,
     BackgroundScoringService,
@@ -239,6 +243,11 @@ def test_provider_failure_through_http_is_503(client):
     )
     service.mediator_agent = _BrokenMediator()
     client.app.dependency_overrides[get_scoring_service] = lambda: service
+    _seed_session(
+        client, "session_provider_failure_http",
+        candidate_id="candidate_provider_failure_http",
+        job_id="job_provider_failure_http",
+    )
 
     response = client.post(
         "/scoring/score-answer",
@@ -274,8 +283,8 @@ def test_initialization_requires_candidate_ownership_when_auth_is_enabled(auth_c
     current["principal"] = Principal(
         principal_type=PrincipalType.CANDIDATE, subject_id="user_other"
     )
-    forbidden = client.post("/scoring/initialize", json=payload)
-    assert forbidden.status_code == 403
+    hidden = client.post("/scoring/initialize", json=payload)
+    assert hidden.status_code == 404
 
     current["principal"] = Principal(
         principal_type=PrincipalType.RECRUITER, subject_id="user_recruiter"
@@ -288,3 +297,162 @@ def test_initialization_requires_candidate_ownership_when_auth_is_enabled(auth_c
         session_id="session_owned",
     )
     assert client.post("/scoring/initialize", json=payload).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_initialization_hides_unowned_session_before_pair_validation():
+    sessions = InMemorySessionRepository()
+    candidates = InMemoryCandidateRepository()
+    service = BackgroundScoringService()
+    settings = AppSettings(auth_enabled=True)
+    await sessions.save(SessionRecord(
+        session_id="session_private", candidate_id="cand_private",
+        job_id="job_private", status=SessionStatus.CREATED,
+        application_id="application_private",
+    ))
+    await candidates.save(CandidateRecord(
+        candidate_id="cand_private", user_id="user_owner",
+        resume=ParsedResume(candidate_id="cand_private", candidate_name="Owner"),
+    ))
+    outsider = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="user_other")
+    owner = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="user_owner")
+
+    async def initialize(session_id, candidate_id, job_id, principal):
+        return await scoring_routes.initialize_scoring(
+            request=scoring_routes.InitializeScoringRequest(
+                session_id=session_id, candidate_id=candidate_id, job_id=job_id,
+            ),
+            service=service, sessions=sessions, candidates=candidates,
+            principal=principal, settings=settings,
+        )
+
+    with pytest.raises(NotFoundError) as missing:
+        await initialize("session_missing", "cand_private", "job_private", outsider)
+    with pytest.raises(NotFoundError) as unowned:
+        await initialize("session_private", "cand_wrong", "job_wrong", outsider)
+    assert unowned.value.to_body() == missing.value.to_body()
+
+    with pytest.raises(ConflictError):
+        await initialize("session_private", "cand_wrong", "job_wrong", owner)
+    assert (await initialize("session_private", "cand_private", "job_private", owner))["status"] == "initialized"
+
+
+@pytest.mark.asyncio
+async def test_legacy_session_without_candidate_record_can_initialize():
+    sessions = InMemorySessionRepository()
+    candidates = InMemoryCandidateRepository()
+    service = BackgroundScoringService()
+    principal = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="user_legacy")
+    settings = AppSettings(auth_enabled=True)
+    await sessions.save(SessionRecord(
+        session_id="session_legacy", candidate_id="cand_legacy",
+        job_id="job_legacy", status=SessionStatus.CREATED,
+    ))
+
+    result = await scoring_routes.initialize_scoring(
+        request=scoring_routes.InitializeScoringRequest(
+            session_id="session_legacy", candidate_id="cand_legacy", job_id="job_legacy",
+        ),
+        service=service, sessions=sessions, candidates=candidates,
+        principal=principal, settings=settings,
+    )
+    assert result["status"] == "initialized"
+
+    await sessions.save(SessionRecord(
+        session_id="session_linked", candidate_id="cand_legacy",
+        job_id="job_legacy", status=SessionStatus.CREATED,
+        application_id="application_linked",
+    ))
+    with pytest.raises(NotFoundError):
+        await scoring_routes.initialize_scoring(
+            request=scoring_routes.InitializeScoringRequest(
+                session_id="session_linked", candidate_id="cand_legacy", job_id="job_legacy",
+            ),
+            service=service, sessions=sessions, candidates=candidates,
+            principal=principal, settings=settings,
+        )
+
+
+@pytest.mark.asyncio
+async def test_unowned_session_cannot_be_scored_read_finalized_or_cleared():
+    sessions = InMemorySessionRepository()
+    candidates = InMemoryCandidateRepository()
+    service = BackgroundScoringService()
+    settings = AppSettings(auth_enabled=True)
+    await sessions.save(SessionRecord(
+        session_id="session_owned", candidate_id="cand_owned",
+        job_id="job_owned", status=SessionStatus.CREATED,
+        application_id="application_owned",
+    ))
+    await candidates.save(CandidateRecord(
+        candidate_id="cand_owned", user_id="user_owner",
+        resume=ParsedResume(candidate_id="cand_owned", candidate_name="Owner"),
+    ))
+    await service.initialize_session("session_owned", "cand_owned", "job_owned")
+    outsider = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="user_other")
+    kwargs = dict(
+        service=service, sessions=sessions, candidates=candidates,
+        principal=outsider, settings=settings,
+    )
+
+    class _BrokenMediator:
+        async def analyze_response(self, **_kwargs):
+            raise AssertionError("Unauthorized scoring reached the mediator")
+
+    service.mediator_agent = _BrokenMediator()
+    operations = (
+        lambda: scoring_routes.score_answer(
+            request=scoring_routes.ScoreAnswerRequest(
+                session_id="session_owned", question_id="q1", question_text="Question",
+                answer_text="Answer", competency="Python", candidate_name="Owner",
+            ), **kwargs,
+        ),
+        lambda: scoring_routes.get_session_summary(session_id="session_owned", **kwargs),
+        lambda: scoring_routes.get_session_scores(session_id="session_owned", **kwargs),
+        lambda: scoring_routes.finalize_scoring(session_id="session_owned", **kwargs),
+        lambda: scoring_routes.clear_session_scores(session_id="session_owned", **kwargs),
+    )
+    for operation in operations:
+        with pytest.raises(NotFoundError):
+            await operation()
+
+    assert await service.get_session_scores("session_owned") is not None
+
+    class _WorkingMediator:
+        async def analyze_response(self, **_kwargs):
+            return SimpleNamespace(
+                clarity=8, completeness=9, relevance=7,
+                areas_for_improvement=[],
+            )
+
+    service.mediator_agent = _WorkingMediator()
+    owner_kwargs = {**kwargs, "principal": Principal(
+        principal_type=PrincipalType.CANDIDATE, subject_id="user_owner",
+    )}
+    answer = await scoring_routes.score_answer(
+        request=scoring_routes.ScoreAnswerRequest(
+            session_id="session_owned", question_id="q1", question_text="Question",
+            answer_text="Answer", competency="Python", candidate_name="Owner",
+        ), **owner_kwargs,
+    )
+    assert answer["score"]["clarity"] == 8
+    assert (await scoring_routes.get_session_summary(
+        session_id="session_owned", **owner_kwargs,
+    ))["total_answers"] == 1
+    assert (await scoring_routes.get_session_scores(
+        session_id="session_owned", **owner_kwargs,
+    ))["total_answers"] == 1
+    assert (await scoring_routes.finalize_scoring(
+        session_id="session_owned", **owner_kwargs,
+    ))["total_answers"] == 1
+    assert (await scoring_routes.clear_session_scores(
+        session_id="session_owned", **owner_kwargs,
+    ))["status"] == "cleared"
+    assert await service.get_session_scores("session_owned") is None
+
+
+def test_scoring_routes_require_authentication():
+    for route in scoring_routes.router.routes:
+        assert require_authenticated in {
+            dependency.call for dependency in route.dependant.dependencies
+        }
