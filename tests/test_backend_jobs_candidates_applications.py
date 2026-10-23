@@ -989,6 +989,27 @@ class TestJobsApi:
         response = client.post("/jobs", json={"description": ""})
         assert response.status_code == 422
 
+    def test_create_job_rejects_whitespace_only_title(self, client):
+        response = client.post("/jobs", json={"description": _JD_TEXT, "title": "   "})
+        assert response.status_code == 422
+
+    def test_create_job_trims_surrounding_whitespace_from_title(self, client):
+        response = client.post(
+            "/jobs", json={"description": _JD_TEXT, "title": "  Backend Engineer  "}
+        )
+        assert response.status_code == 201
+        assert response.json()["job"]["title"] == "Backend Engineer"
+
+    def test_patch_job_rejects_whitespace_only_title(self, client):
+        created = client.post("/jobs", json={"description": _JD_TEXT, "title": "Backend Engineer"})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+
+        patched = client.patch(f"/jobs/{job_id}", json={"title": "   "})
+
+        assert patched.status_code == 422
+        assert client.get(f"/jobs/{job_id}").json()["job"]["title"] == "Backend Engineer"
+
 
 class TestCandidatesApi:
     def test_create_get_list_update_candidate(self, client):

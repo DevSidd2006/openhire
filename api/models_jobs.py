@@ -43,7 +43,9 @@ class CreateJobRequest(BaseModel):
     openings: Optional[int] = Field(default=1, ge=1, description="Number of openings/vacancies")
     # Recruiters enter this separately from the free-form description. Keep
     # that exact value instead of asking the JD model to reconstruct it.
-    title: Optional[str] = Field(default=None, min_length=1, max_length=300)
+    # NonEmptyStr strips first, so a whitespace-only title is a 422 rather
+    # than an empty title after JobService's own .strip().
+    title: Optional[NonEmptyStr] = Field(default=None, max_length=300)
 
 
 class JobResponse(BaseModel):
@@ -91,7 +93,7 @@ class UpdateJobRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: Optional[str] = None
+    title: Optional[NonEmptyStr] = None
     description: Optional[str] = None
     department: Optional[str] = None
     level: Optional[str] = None
