@@ -43,6 +43,7 @@ from services.live_interview_service import LiveInterviewService
 from services.gemini_live_token import GeminiLiveTokenService
 from services.llm_credential_service import LLMCredentialService
 from services.matching_service import MatchingService
+from services.oauth_ticket_store import OAuthTicketStore
 from services.recruiter_service import RecruiterService
 
 
@@ -124,6 +125,11 @@ def get_user_repository(request: Request) -> UserRepository:
 
 def get_audit_log_repository(request: Request) -> AuditLogRepository:
     return _container_from_app(request.app).audit_log_repository
+
+
+def get_oauth_ticket_store(request: Request) -> OAuthTicketStore:
+    """Process-wide single-use guard for LinkedIn OAuth tickets."""
+    return _container_from_app(request.app).oauth_ticket_store
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -383,6 +389,7 @@ __all__ = [
     "get_job_service",
     "get_llm_credential_service",
     "get_matching_service",
+    "get_oauth_ticket_store",
     "get_recruiter_service",
     "get_registry",
     "get_session_repository",
