@@ -101,6 +101,19 @@ def _env_list(name: str, default: Optional[List[str]] = None) -> List[str]:
 # could have tokens minted against it by anyone who has read this file.
 DEV_JWT_SECRET_KEY = "dev-secret-key-change-in-production"
 
+# Every signing key that is published in this repository. The startup check
+# must reject all of them in production, not just the development default:
+# `.env.example` is the value most deployments actually start from, and it
+# was previously accepted because the check compared against one constant.
+INSECURE_JWT_SECRET_KEYS = frozenset({
+    DEV_JWT_SECRET_KEY,
+    "your_secure_random_32_byte_jwt_secret_key",
+    # Published in tests/test_live_interview_api.py. It is long enough to
+    # pass a naive entropy/length check, but it is still repository-known
+    # and therefore just as forgeable as the development default.
+    "test-jwt-secret-that-is-at-least-thirty-two-bytes-long",
+})
+
 
 class AppSettings(BaseModel):
     """Validated, immutable service configuration.
@@ -286,11 +299,34 @@ class AppSettings(BaseModel):
 
     # ------------------------------------------------------------------
     @property
+    def jwt_secret_is_blank(self) -> bool:
+        """Whether no JWT signing key has been configured at all."""
+        return not self.jwt_secret_key.strip()
+
+    @property
+    def jwt_secret_is_placeholder(self) -> bool:
+        """Whether the configured key is a published placeholder.
+
+        This is deliberately distinct from a blank secret: operators should
+        not be told they are using a placeholder when they simply forgot to
+        configure a key.
+        """
+        return (
+            not self.jwt_secret_is_blank
+            and self.jwt_secret_key.strip() in INSECURE_JWT_SECRET_KEYS
+        )
+
+    @property
     def jwt_secret_is_default(self) -> bool:
-        """Whether JWT tokens are being signed with the public placeholder
-        rather than a real secret. Checked at startup - see
-        core/lifespan.py:validate_startup_configuration."""
-        return self.jwt_secret_key == DEV_JWT_SECRET_KEY
+        """Whether JWT tokens are being signed with a public placeholder or
+        no secret at all. Checked at startup - see
+        core/lifespan.py:validate_startup_configuration.
+
+        A blank value is just as forgeable as a published one, and
+        `.env.example` ships a different placeholder from
+        `DEV_JWT_SECRET_KEY`, so both are treated as insecure.
+        """
+        return self.jwt_secret_is_blank or self.jwt_secret_is_placeholder
 
     @property
     def is_production(self) -> bool:
