@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_active           boolean NOT NULL DEFAULT true,
     is_practice         boolean NOT NULL DEFAULT false,
     created_by_user_id  text,
+    -- True only when automatic rubric generation/approval failed and the
+    -- row was archived as compensation. Such a row may be reclaimed by its
+    -- creator on retry with the same caller-supplied job_id.
+    rubric_generation_failed boolean NOT NULL DEFAULT false,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz
 );
@@ -52,6 +56,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 -- candidate mock-interview feature.
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL DEFAULT false;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS created_by_user_id text;
+-- Add jobs.rubric_generation_failed for databases created before retryable
+-- job creation was introduced.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rubric_generation_failed boolean NOT NULL DEFAULT false;
 
 -- Backs JobRepository.list_jobs(include_archived): "newest first",
 -- filtered to is_active unless archived postings were asked for.

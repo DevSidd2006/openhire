@@ -82,8 +82,34 @@ class JobService:
         `api.registry.SessionRegistry` already uses for session_id) when the
         caller doesn't supply one, rather than being invented by the LLM -
         JDAnalyzerAgent takes it as an input, not an output.
+
+        A caller-supplied id must not already exist. `JobRepository.save` is
+        an upsert, so without this check a second POST would silently replace
+        another recruiter's job - including its owner, content and active
+        flag. Job ids are visible in URLs, so they are not a secret.
         """
-        job_id = job_id or f"job_{uuid.uuid4().hex[:8]}"
+        if not job_id:
+            job_id = f"job_{uuid.uuid4().hex[:8]}"
+        else:
+            existing = await self._jobs.get(job_id)
+            if existing is not None:
+                # A retry of a failed auto-rubric job is the one safe case
+                # for reusing a caller-supplied id: the previous attempt was
+                # archived by this service and never became usable. Require
+                # the same creator and kind so an unrelated archived job
+                # cannot be reclaimed by someone who guessed its id.
+                retryable_failure = (
+                    existing.rubric_generation_failed
+                    and not existing.is_active
+                    and existing.created_by_user_id == created_by_user_id
+                    and existing.is_practice == is_practice
+                )
+                if not retryable_failure:
+                    raise ConflictError(
+                        "A job with this id already exists.",
+                        internal_detail=f"job_id={job_id!r} is already stored",
+                        context={"job_id": job_id},
+                    )
         analyzer = self._jd_analyzer_factory() if self._jd_analyzer_factory else JDAnalyzerAgent()
 
         agent_result = await analyzer.run(
@@ -110,9 +136,34 @@ class JobService:
                 context={"job_id": job_id},
             )
 
+        # The analyzer's title is only used when the caller did not supply
+        # one. The request-level title constraints cannot see the LLM's
+        # output, so enforce the same nonblank and 300-character limits here.
         updates = {}
         if title is not None:
             updates["title"] = title.strip()
+        else:
+            analyzer_title = job_description.title.strip()
+            if not analyzer_title:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a blank title for "
+                        f"job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if len(analyzer_title) > 300:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a title longer than 300 characters "
+                        f"for job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if analyzer_title != job_description.title:
+                updates["title"] = analyzer_title
         if openings is not None:
             updates["openings"] = openings
         if updates:
@@ -177,10 +228,15 @@ class JobService:
                 exc,
                 extra=log_context(event="rubric_auto_generation_failed", job_id=job_id),
             )
+            failed = await self._jobs.get(job_id)
+            if failed is not None:
+                await self._jobs.save(
+                    failed.model_copy(update={"rubric_generation_failed": True})
+                )
             await self._jobs.archive(job_id)
             raise DependencyError(
                 "The job's scoring rubric could not be generated, so the job was not "
-                "published. Please try again.",
+                "published. Retry with the same job_id to try again.",
                 internal_detail=f"rubric auto-draft/approve failed for job_id={job_id!r}: {exc}",
                 context={"job_id": job_id},
             ) from exc
