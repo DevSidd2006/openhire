@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
+from services.background_scoring import BackgroundScoringService
+from core.dependencies import get_scoring_service
 from services.background_scoring import BackgroundScoringService, AnswerScore
 from core.config import AppSettings
 from core.dependencies import (
@@ -20,14 +22,6 @@ from core.security import Principal, PrincipalType, require_authenticated
 from repositories.interfaces import CandidateRepository, SessionRecord, SessionRepository
 
 router = APIRouter(prefix="/scoring", tags=["scoring"])
-
-# Global scoring service instance
-_scoring_service = BackgroundScoringService()
-
-
-def get_scoring_service() -> BackgroundScoringService:
-    """Get the global scoring service."""
-    return _scoring_service
 
 
 _ELEVATED_SCORING_ROLES = {

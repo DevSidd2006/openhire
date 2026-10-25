@@ -65,7 +65,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
     # configured - see build_default_container below.
     from repositories.postgres import PostgresConnectionPool
 from services.auth_service import AuthService
+from services.background_scoring import BackgroundScoringService
 from services.evaluation_dispatcher import EvaluationDispatcher
+from services.interview_report import InterviewReportGenerator
 
 logger = get_logger("core.container")
 
@@ -112,6 +114,16 @@ class ServiceContainer:
     # present before ever reading from it.
     llm_credential_repository: LLMCredentialRepository
     auth_provider: AuthProvider = field(default_factory=AnonymousAuthProvider)
+
+    # Real-time answer scoring and the report generator that reads it. One
+    # instance each, for the lifetime of the process: the accumulated scores
+    # live inside `BackgroundScoringService.scores`, so `/scoring/*` and
+    # `/reports/*` must resolve the SAME object or reports can never see a
+    # session initialized through the scoring API. Previously each route
+    # module built its own private singleton, which made `/reports/generate`
+    # return "session not found" for every session.
+    scoring_service: BackgroundScoringService = field(default_factory=BackgroundScoringService)
+    report_generator: InterviewReportGenerator = field(default_factory=InterviewReportGenerator)
 
     # True while any repository above is one of the temporary in-process
     # stubs. Surfaced on /health and warned about at startup - see
