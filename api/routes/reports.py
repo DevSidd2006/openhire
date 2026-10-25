@@ -13,10 +13,11 @@ from core.dependencies import (
     get_candidate_repository,
     get_report_generator,
     get_scoring_service,
+    get_session_repository,
 )
 from core.errors import ForbiddenError
 from core.security import Principal, PrincipalType, require_authenticated
-from repositories.interfaces import CandidateRepository
+from repositories.interfaces import CandidateRepository, SessionRepository
 from services.interview_report import InterviewReport, InterviewReportGenerator
 from services.background_scoring import BackgroundScoringService
 
@@ -34,15 +35,16 @@ async def _can_access_session(
     *,
     principal: Principal,
     settings: AppSettings,
-    scoring_service: BackgroundScoringService,
+    session_repository: SessionRepository,
     candidate_repository: CandidateRepository,
 ) -> bool:
     """Whether the caller may read or generate this session's report.
 
     Auth-disabled development keeps the historical capability model: holding
     the session id is enough. Once auth is enabled, a candidate needs either
-    a principal scoped to this exact session or an owned candidate record;
-    recruiters/admins may review any session.
+    a principal scoped to this exact session or an owned candidate record.
+    Legacy sessions without a candidate record use the same session-ID access
+    rule as the scoring API. Recruiters/admins may review any session.
     """
     if not settings.auth_enabled:
         return True
@@ -53,15 +55,13 @@ async def _can_access_session(
     if principal.principal_type is not PrincipalType.CANDIDATE:
         return False
 
-    scoring = await scoring_service.get_session_scores(session_id)
-    if scoring is None:
+    session = await session_repository.get(session_id)
+    if session is None or principal.subject_id is None:
         return False
-    candidate = await candidate_repository.get(scoring.candidate_id)
-    return (
-        candidate is not None
-        and principal.subject_id is not None
-        and candidate.user_id == principal.subject_id
-    )
+    candidate = await candidate_repository.get(session.candidate_id)
+    if candidate is not None:
+        return candidate.user_id == principal.subject_id
+    return session.application_id is None
 
 
 async def _require_session_access(
@@ -69,14 +69,14 @@ async def _require_session_access(
     *,
     principal: Principal,
     settings: AppSettings,
-    scoring_service: BackgroundScoringService,
+    session_repository: SessionRepository,
     candidate_repository: CandidateRepository,
 ) -> None:
     if not await _can_access_session(
         session_id,
         principal=principal,
         settings=settings,
-        scoring_service=scoring_service,
+        session_repository=session_repository,
         candidate_repository=candidate_repository,
     ):
         raise ForbiddenError(
@@ -129,6 +129,7 @@ async def generate_report(
     request: GenerateReportRequest,
     generator: InterviewReportGenerator = Depends(get_report_generator),
     scoring_service: BackgroundScoringService = Depends(get_scoring_service),
+    session_repository: SessionRepository = Depends(get_session_repository),
     candidate_repository: CandidateRepository = Depends(get_candidate_repository),
     principal: Principal = Depends(require_authenticated),
     settings: AppSettings = Depends(get_app_settings),
@@ -142,7 +143,7 @@ async def generate_report(
         request.session_id,
         principal=principal,
         settings=settings,
-        scoring_service=scoring_service,
+        session_repository=session_repository,
         candidate_repository=candidate_repository,
     )
 
@@ -174,6 +175,7 @@ async def get_report(
     session_id: str,
     generator: InterviewReportGenerator = Depends(get_report_generator),
     scoring_service: BackgroundScoringService = Depends(get_scoring_service),
+    session_repository: SessionRepository = Depends(get_session_repository),
     candidate_repository: CandidateRepository = Depends(get_candidate_repository),
     principal: Principal = Depends(require_authenticated),
     settings: AppSettings = Depends(get_app_settings),
@@ -183,7 +185,7 @@ async def get_report(
         session_id,
         principal=principal,
         settings=settings,
-        scoring_service=scoring_service,
+        session_repository=session_repository,
         candidate_repository=candidate_repository,
     )
     report = await _get_fresh_report(
@@ -197,7 +199,7 @@ async def get_report(
 @router.get("/list")
 async def list_reports(
     generator: InterviewReportGenerator = Depends(get_report_generator),
-    scoring_service: BackgroundScoringService = Depends(get_scoring_service),
+    session_repository: SessionRepository = Depends(get_session_repository),
     candidate_repository: CandidateRepository = Depends(get_candidate_repository),
     principal: Principal = Depends(require_authenticated),
     settings: AppSettings = Depends(get_app_settings),
@@ -210,7 +212,7 @@ async def list_reports(
             session_id,
             principal=principal,
             settings=settings,
-            scoring_service=scoring_service,
+            session_repository=session_repository,
             candidate_repository=candidate_repository,
         )
     ]
@@ -226,6 +228,7 @@ async def export_report(
     format: str = "json",
     generator: InterviewReportGenerator = Depends(get_report_generator),
     scoring_service: BackgroundScoringService = Depends(get_scoring_service),
+    session_repository: SessionRepository = Depends(get_session_repository),
     candidate_repository: CandidateRepository = Depends(get_candidate_repository),
     principal: Principal = Depends(require_authenticated),
     settings: AppSettings = Depends(get_app_settings),
@@ -238,7 +241,7 @@ async def export_report(
         session_id,
         principal=principal,
         settings=settings,
-        scoring_service=scoring_service,
+        session_repository=session_repository,
         candidate_repository=candidate_repository,
     )
     report = await _get_fresh_report(

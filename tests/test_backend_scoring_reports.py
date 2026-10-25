@@ -12,16 +12,22 @@ initialize a session, generate a report for it, and read the stored report
 back from the same app instance.
 """
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from api.routes import reports as report_routes
+from api.routes import scoring as scoring_routes
 from core.config import AppSettings
 from core.dependencies import get_app_settings
+from core.errors import ForbiddenError
 from core.security import Principal, PrincipalType, require_authenticated
 from repositories.interfaces import SessionRecord
-from services.background_scoring import AnswerScore
+from repositories.memory import InMemoryCandidateRepository, InMemorySessionRepository
+from services.background_scoring import AnswerScore, BackgroundScoringService
+from services.interview_report import InterviewReportGenerator
 from utils.interview_session import SessionStatus
 
 
@@ -236,3 +242,89 @@ def test_retrieval_refreshes_a_report_generated_before_late_answers(client):
     fetched = client.get(f"/reports/session/{session_id}")
     assert fetched.status_code == 200
     assert fetched.json()["total_answers"] == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_scoring_session_can_generate_and_read_report_with_auth_enabled():
+    sessions = InMemorySessionRepository()
+    candidates = InMemoryCandidateRepository()
+    scoring = BackgroundScoringService()
+    reports = InterviewReportGenerator()
+    principal = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="legacy_user")
+    settings = AppSettings(auth_enabled=True)
+    await sessions.save(SessionRecord(
+        session_id="legacy_report", candidate_id="legacy_candidate",
+        job_id="job_report", status=SessionStatus.CREATED,
+    ))
+
+    initialized = await scoring_routes.initialize_scoring(
+        scoring_routes.InitializeScoringRequest(
+            session_id="legacy_report", candidate_id="legacy_candidate", job_id="job_report",
+        ),
+        service=scoring, sessions=sessions, candidates=candidates,
+        principal=principal, settings=settings,
+    )
+    assert initialized["status"] == "initialized"
+
+    generated = await report_routes.generate_report(
+        report_routes.GenerateReportRequest(
+            session_id="legacy_report", candidate_name="Legacy", job_title="Engineer",
+        ),
+        generator=reports, scoring_service=scoring, session_repository=sessions,
+        candidate_repository=candidates, principal=principal, settings=settings,
+    )
+    assert generated["status"] == "generated"
+    fetched = await report_routes.get_report(
+        "legacy_report", generator=reports, scoring_service=scoring,
+        session_repository=sessions, candidate_repository=candidates,
+        principal=principal, settings=settings,
+    )
+    assert fetched["session_id"] == "legacy_report"
+
+
+@pytest.mark.asyncio
+async def test_owner_keeps_report_access_after_scores_are_cleared():
+    sessions = InMemorySessionRepository()
+    scoring = BackgroundScoringService()
+    reports = InterviewReportGenerator()
+    principal = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="owner")
+    settings = AppSettings(auth_enabled=True)
+
+    class Candidates:
+        async def get(self, candidate_id):
+            return SimpleNamespace(user_id="owner") if candidate_id == "owned_candidate" else None
+
+    candidates = Candidates()
+    await sessions.save(SessionRecord(
+        session_id="owned_report", candidate_id="owned_candidate",
+        job_id="job_report", status=SessionStatus.CREATED,
+    ))
+    await scoring.initialize_session("owned_report", "owned_candidate", "job_report")
+    await report_routes.generate_report(
+        report_routes.GenerateReportRequest(
+            session_id="owned_report", candidate_name="Owner", job_title="Engineer",
+        ),
+        generator=reports, scoring_service=scoring, session_repository=sessions,
+        candidate_repository=candidates, principal=principal, settings=settings,
+    )
+
+    scoring.clear_session("owned_report")
+    fetched = await report_routes.get_report(
+        "owned_report", generator=reports, scoring_service=scoring,
+        session_repository=sessions, candidate_repository=candidates,
+        principal=principal, settings=settings,
+    )
+    assert fetched["session_id"] == "owned_report"
+    listed = await report_routes.list_reports(
+        generator=reports, session_repository=sessions,
+        candidate_repository=candidates, principal=principal, settings=settings,
+    )
+    assert listed["reports"] == ["owned_report"]
+
+    outsider = Principal(principal_type=PrincipalType.CANDIDATE, subject_id="outsider")
+    with pytest.raises(ForbiddenError):
+        await report_routes.get_report(
+            "owned_report", generator=reports, scoring_service=scoring,
+            session_repository=sessions, candidate_repository=candidates,
+            principal=outsider, settings=settings,
+        )
