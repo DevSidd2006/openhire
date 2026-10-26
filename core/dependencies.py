@@ -242,6 +242,8 @@ def get_job_service(request: Request) -> JobService:
         job_repository=container.job_repository,
         jd_analyzer_factory=container.jd_analyzer_factory_for(request.app),
         rubric_repository=container.rubric_repository,
+        locks=container.job_locks,
+        locks_guard=container.job_locks_guard,
     )
 
 

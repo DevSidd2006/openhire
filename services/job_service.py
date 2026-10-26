@@ -15,6 +15,7 @@ competency, a skill, or a weight.
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any, Dict, Optional
 
@@ -42,7 +43,7 @@ class JobService:
     """Use cases for job postings.
 
     Constructed per request, like `InterviewService` - it holds only
-    references (a repository, an optional agent factory), never state.
+    references to collaborators and the container's shared per-job locks.
     """
 
     def __init__(
@@ -52,6 +53,8 @@ class JobService:
         jd_analyzer_factory=None,
         rubric_repository: Optional[RubricRepository] = None,
         rubric_generator_factory=None,
+        locks: dict[str, asyncio.Lock] | None = None,
+        locks_guard: asyncio.Lock | None = None,
     ) -> None:
         self._jobs = job_repository
         # The same wiring-seam pattern as InterviewService's
@@ -64,6 +67,12 @@ class JobService:
         # makes auto-rubric-on-create active in the actual app.
         self._rubrics = rubric_repository
         self._rubric_generator_factory = rubric_generator_factory
+        self._locks: dict[str, asyncio.Lock] = locks if locks is not None else {}
+        self._locks_guard = locks_guard if locks_guard is not None else asyncio.Lock()
+
+    async def _lock_for(self, job_id: str) -> asyncio.Lock:
+        async with self._locks_guard:
+            return self._locks.setdefault(job_id, asyncio.Lock())
 
     async def create_job(
         self,
@@ -287,24 +296,26 @@ class JobService:
         1.0), so an edit that breaks that invariant is rejected with the
         same 422 a bad `POST /jobs` payload would get, not silently stored.
         """
-        record = await self.get_job(job_id)
-        if not record.is_active:
-            raise ConflictError(
-                "Cannot update an archived job",
-                internal_detail=f"job_id={job_id!r} is archived",
-            )
+        lock = await self._lock_for(job_id)
+        async with lock:
+            record = await self.get_job(job_id)
+            if not record.is_active:
+                raise ConflictError(
+                    "Cannot update an archived job",
+                    internal_detail=f"job_id={job_id!r} is archived",
+                )
 
-        merged = record.job.model_dump()
-        merged.update(patch)
-        try:
-            updated_job = JobDescription(**merged)
-        except ValidationError as exc:
-            raise JobPatchValidationError(exc) from exc
+            merged = record.job.model_dump()
+            merged.update(patch)
+            try:
+                updated_job = JobDescription(**merged)
+            except ValidationError as exc:
+                raise JobPatchValidationError(exc) from exc
 
-        updated_record = record.model_copy(update={"job": updated_job})
-        stored = await self._jobs.save(updated_record)
-        logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
-        return stored
+            updated_record = record.model_copy(update={"job": updated_job})
+            stored = await self._jobs.save(updated_record)
+            logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
+            return stored
 
     async def archive_job(self, job_id: str) -> JobRecord:
         """Soft-delete: mark a job as no longer accepting applications.
@@ -314,14 +325,16 @@ class JobService:
         both. Idempotent: archiving an already-archived job just returns its
         current state rather than erroring.
         """
-        record = await self._jobs.archive(job_id)
-        if record is None:
-            raise NotFoundError(
-                "No job found for the given job_id",
-                internal_detail=f"job record missing for job_id={job_id!r}",
-            )
-        logger.info("job archived", extra=log_context(event="job_archived", job_id=job_id))
-        return record
+        lock = await self._lock_for(job_id)
+        async with lock:
+            record = await self._jobs.archive(job_id)
+            if record is None:
+                raise NotFoundError(
+                    "No job found for the given job_id",
+                    internal_detail=f"job record missing for job_id={job_id!r}",
+                )
+            logger.info("job archived", extra=log_context(event="job_archived", job_id=job_id))
+            return record
 
 
 __all__ = ["JobService"]
