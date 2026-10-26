@@ -15,8 +15,8 @@ competency, a skill, or a weight.
 """
 from __future__ import annotations
 
-import uuid
 import asyncio
+import uuid
 from typing import Any, Dict, Optional
 
 from pydantic import ValidationError
@@ -43,7 +43,7 @@ class JobService:
     """Use cases for job postings.
 
     Constructed per request, like `InterviewService` - it holds only
-    references (a repository, an optional agent factory), never state.
+    references to collaborators and the container's shared per-job locks.
     """
 
     def __init__(
@@ -69,7 +69,7 @@ class JobService:
         self._rubric_generator_factory = rubric_generator_factory
         self._locks: dict[str, asyncio.Lock] = locks if locks is not None else {}
         self._locks_guard = locks_guard if locks_guard is not None else asyncio.Lock()
-    
+
     async def _lock_for(self, job_id: str) -> asyncio.Lock:
         async with self._locks_guard:
             return self._locks.setdefault(job_id, asyncio.Lock())
@@ -307,30 +307,15 @@ class JobService:
 
             merged = record.job.model_dump()
             merged.update(patch)
-            updated_job = JobDescription(**merged)
+            try:
+                updated_job = JobDescription(**merged)
+            except ValidationError as exc:
+                raise JobPatchValidationError(exc) from exc
 
             updated_record = record.model_copy(update={"job": updated_job})
             stored = await self._jobs.save(updated_record)
             logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
             return stored
-        record = await self.get_job(job_id)
-        if not record.is_active:
-            raise ConflictError(
-                "Cannot update an archived job",
-                internal_detail=f"job_id={job_id!r} is archived",
-            )
-
-        merged = record.job.model_dump()
-        merged.update(patch)
-        try:
-            updated_job = JobDescription(**merged)
-        except ValidationError as exc:
-            raise JobPatchValidationError(exc) from exc
-
-        updated_record = record.model_copy(update={"job": updated_job})
-        stored = await self._jobs.save(updated_record)
-        logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
-        return stored
 
     async def archive_job(self, job_id: str) -> JobRecord:
         """Soft-delete: mark a job as no longer accepting applications.

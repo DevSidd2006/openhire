@@ -148,8 +148,8 @@ class ServiceContainer:
     _fallback_registry: SessionRegistry = field(default_factory=SessionRegistry)
     live_interview_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
     live_interview_locks_guard: asyncio.Lock = field(default_factory=asyncio.Lock)
-    job_locks: dict[str, asyncio.Lock] = field(default_factory = dict)
-    job_locks_guard: asyncio.Lock = field(default_factory = asyncio.Lock)
+    job_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    job_locks_guard: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def registry_for(self, app) -> SessionRegistry:
         """The session runtime registry this request should use.
