@@ -34,9 +34,11 @@ from repositories.interfaces import (
 from services.admin_service import AdminService
 from services.application_service import ApplicationService
 from services.auth_service import AuthService
+from services.background_scoring import BackgroundScoringService
 from services.bug_report_service import BugReportService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
+from services.interview_report import InterviewReportGenerator
 from services.interview_service import InterviewService
 from services.job_service import JobService
 from services.live_interview_service import LiveInterviewService
@@ -130,6 +132,14 @@ def get_audit_log_repository(request: Request) -> AuditLogRepository:
 def get_oauth_ticket_store(request: Request) -> OAuthTicketStore:
     """Process-wide single-use guard for LinkedIn OAuth tickets."""
     return _container_from_app(request.app).oauth_ticket_store
+def get_scoring_service(request: Request) -> BackgroundScoringService:
+    """The one accumulated-score store shared by the scoring and report APIs."""
+    return _container_from_app(request.app).scoring_service
+
+
+def get_report_generator(request: Request) -> InterviewReportGenerator:
+    """The report store shared by every report endpoint on this app."""
+    return _container_from_app(request.app).report_generator
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -392,6 +402,8 @@ __all__ = [
     "get_oauth_ticket_store",
     "get_recruiter_service",
     "get_registry",
+    "get_report_generator",
+    "get_scoring_service",
     "get_session_repository",
     "get_transcript_repository",
     "get_user_repository",

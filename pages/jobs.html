@@ -14,11 +14,11 @@
 </main>
 <script src="js/auth.js"></script><script src="js/app.js"></script>
 <script>
-  guardAuthenticatedPage();
-  renderNavbar('jobs');
-  const listEl = document.getElementById('candidateJobList');
-  const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   (async () => {
+    if (!await guardAuthenticatedPage()) return;
+    renderNavbar('jobs');
+    const listEl = document.getElementById('candidateJobList');
+    const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     try {
       const jobs = await fetchJobs();
       listEl.innerHTML = jobs.length ? jobs.map(job => `<div class="job-card reveal" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'"><h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem;">${escapeHtml(job.title || 'Open role')}</h4><p style="font-size:0.85rem; color:var(--ink-3); margin-bottom:0.85rem; line-height:1.55;">${escapeHtml((job.description || '').substring(0, 120))}...</p><div style="display:flex; justify-content:space-between; align-items:center;"><span class="tag">${job.competencies.length} Skills</span><button class="btn-sm btn-primary" onclick="event.stopPropagation(); window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'">Apply <i class="ph-bold ph-arrow-right"></i></button></div></div>`).join('') : '<div class="empty-state"><div class="empty-title">No open positions</div><p>Check back when the next role opens.</p></div>';
