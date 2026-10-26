@@ -324,8 +324,10 @@ async def exchange_oauth_ticket(
     # Verification is stateless, so two concurrent requests can both reach
     # this point before either response deletes the browser cookie. Mark the
     # ticket atomically before issuing tokens; only the winner may proceed.
+    # Fernet uses integer timestamps and accepts age == TTL. Keep the
+    # consumed record for one extra second to cover that final second.
     if not ticket_store.consume(
-        request.ticket, ttl_seconds=_OAUTH_TICKET_TTL_SECONDS
+        request.ticket, ttl_seconds=_OAUTH_TICKET_TTL_SECONDS + 1
     ):
         # The error handler builds its own JSONResponse, so a delete_cookie
         # header set here would be discarded. Consumption is what matters:

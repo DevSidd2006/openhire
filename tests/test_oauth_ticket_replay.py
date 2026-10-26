@@ -1,9 +1,11 @@
 """One-time OAuth tickets must stay one-time under concurrency."""
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from api.routes.auth import _oauth_ticket_cipher
 from core.config import AppSettings
 from services.oauth_ticket_store import OAuthTicketStore
 from tests.test_linkedin_oauth import _build_test_app
@@ -102,3 +104,31 @@ def test_concurrent_exchange_requests_cannot_both_succeed():
         statuses = sorted(pool.map(lambda _index: exchange(), range(2)))
 
     assert statuses == [200, 401]
+
+
+def test_exchange_rejects_replay_during_fernet_final_valid_second():
+    settings = _settings()
+    app, _, _ = _build_test_app(settings)
+    ticket, encrypted = _issue_ticket(app)
+    cipher = _oauth_ticket_cipher(settings)
+    issued = cipher.extract_timestamp(encrypted.encode())
+
+    with patch("time.time", return_value=issued + 0.10), patch(
+        "services.oauth_ticket_store.time.monotonic", return_value=500.0
+    ):
+        first = _client_with_ticket(app, encrypted).post(
+            "/auth/linkedin/exchange", json={"ticket": ticket}
+        )
+    assert first.status_code == 200
+
+    # 60.01 seconds have elapsed, but Fernet still accepts this cookie
+    # because its integer timestamp age is exactly 60 seconds.
+    with patch("time.time", return_value=issued + 60.11), patch(
+        "services.oauth_ticket_store.time.monotonic", return_value=560.01
+    ):
+        cipher.decrypt(encrypted.encode(), ttl=60)
+        replay = _client_with_ticket(app, encrypted).post(
+            "/auth/linkedin/exchange", json={"ticket": ticket}
+        )
+    assert replay.status_code == 401
+    assert replay.json()["error"] == "unauthorized"
