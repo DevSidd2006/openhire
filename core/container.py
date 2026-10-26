@@ -67,6 +67,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time only, never at runtime
 from services.auth_service import AuthService
 from services.background_scoring import BackgroundScoringService
 from services.evaluation_dispatcher import EvaluationDispatcher
+from services.oauth_ticket_store import OAuthTicketStore
 from services.interview_report import InterviewReportGenerator
 
 logger = get_logger("core.container")
@@ -113,6 +114,9 @@ class ServiceContainer:
     # nothing; core/llm_context.py is what actually gates on the key being
     # present before ever reading from it.
     llm_credential_repository: LLMCredentialRepository
+    # Shared by every OAuth exchange request in this process, so a ticket
+    # cannot be exchanged twice concurrently. See services/oauth_ticket_store.py.
+    oauth_ticket_store: OAuthTicketStore = field(default_factory=OAuthTicketStore)
     auth_provider: AuthProvider = field(default_factory=AnonymousAuthProvider)
 
     # Real-time answer scoring and the report generator that reads it. One

@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from cryptography.fernet import Fernet, InvalidToken
 
 from core.config import AppSettings, get_settings
-from core.dependencies import get_user_repository
+from core.dependencies import get_oauth_ticket_store, get_user_repository
 from core.errors import UnauthorizedError
 from core.logging import get_logger
 from core.security import Principal, require_authenticated
@@ -46,6 +46,7 @@ from schemas.auth import (
 )
 from services.auth_service import AuthService
 from services.linkedin_auth_service import LinkedInAuthService
+from services.oauth_ticket_store import OAuthTicketStore
 
 logger = get_logger("api.routes.auth")
 
@@ -295,6 +296,7 @@ async def exchange_oauth_ticket(
     http_request: Request,
     response: Response,
     settings: AppSettings = Depends(get_settings),
+    ticket_store: OAuthTicketStore = Depends(get_oauth_ticket_store),
 ) -> AuthResponse:
     """Exchange a short-lived one-time ticket for access and refresh tokens.
 
@@ -317,6 +319,23 @@ async def exchange_oauth_ticket(
         raise UnauthorizedError(
             "Invalid or expired OAuth ticket.",
             internal_detail="oauth_ticket_invalid_or_expired",
+        )
+
+    # Verification is stateless, so two concurrent requests can both reach
+    # this point before either response deletes the browser cookie. Mark the
+    # ticket atomically before issuing tokens; only the winner may proceed.
+    # Fernet uses integer timestamps and accepts age == TTL. Keep the
+    # consumed record for one extra second to cover that final second.
+    if not ticket_store.consume(
+        request.ticket, ttl_seconds=_OAUTH_TICKET_TTL_SECONDS + 1
+    ):
+        # The error handler builds its own JSONResponse, so a delete_cookie
+        # header set here would be discarded. Consumption is what matters:
+        # every replay is rejected for the remaining ticket lifetime, and the
+        # encrypted cookie expires on its own.
+        raise UnauthorizedError(
+            "OAuth ticket has already been used.",
+            internal_detail="oauth_ticket_already_consumed",
         )
 
     # Delete before returning so a successful ticket cannot be replayed.
