@@ -69,6 +69,22 @@ def _matching_score(match_score=0.8):
 
 class TestRubricDrivenScoring:
     @pytest.mark.asyncio
+    async def test_unknown_job_fit_does_not_crash_explanation_formatting(self):
+        result = await ScoringAgent().execute(
+            job_description=_job({"Python": 1.0}),
+            technical_evaluation=_tech_eval([
+                CompetencyScore(competency_name="Python", score=8.0, confidence=0.9, explanation="ok"),
+            ]),
+            behavioral_evaluation=_behav_eval(),
+            matching_score=_matching_score(match_score=None),
+            candidate_id="cand_001",
+        )
+
+        scores = result["candidate_scores"]
+        assert scores.job_fit_score is None
+        assert "Job Fit: unknown" in scores.explanation
+
+    @pytest.mark.asyncio
     async def test_a_changing_jd_weights_changes_rubric_score(self):
         """(A) Same evaluator scores, different job rubric weights -> different
         rubric_score. This is the load-bearing proof for P0-3: the rubric

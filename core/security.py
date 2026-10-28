@@ -164,23 +164,29 @@ class JWTAuthProvider:
         self._auth_service = auth_service
 
     async def authenticate(self, request: Request) -> Principal:
-        """Extract and validate JWT token from Authorization header.
+        """Extract and validate JWT token.
 
-        Returns the Principal if token is valid. Returns ANONYMOUS if no
-        token is presented. Raises UnauthorizedError if a token IS presented
-        but is invalid/expired.
+        Dual Auth Priority:
+          1. Authorization: Bearer <token> header (CLI, tests, API clients)
+          2. openhire_access_token cookie (Browser navigation & OAuth callbacks)
         """
-        # Read Authorization header
-        auth_header = request.headers.get("Authorization", "").strip()
-        if not auth_header:
-            return ANONYMOUS
+        token: Optional[str] = None
 
-        # Parse "Bearer <token>" format
-        try:
-            scheme, _, token = auth_header.partition(" ")
-            if scheme.lower() != "bearer" or not token:
-                return ANONYMOUS
-        except ValueError:
+        # 1. Read Authorization header
+        auth_header = request.headers.get("Authorization", "").strip()
+        if auth_header:
+            try:
+                scheme, _, extracted = auth_header.partition(" ")
+                if scheme.lower() == "bearer" and extracted:
+                    token = extracted.strip()
+            except ValueError:
+                token = None
+
+        # 2. Fall back to cookie
+        if not token:
+            token = request.cookies.get("openhire_access_token")
+
+        if not token:
             return ANONYMOUS
 
         # Validate token and return Principal

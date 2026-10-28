@@ -33,7 +33,14 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 _MAX_RESUME_FILE_BYTES = 5 * 1024 * 1024
 
 
-@router.post("", response_model=CandidateResponse, status_code=201)
+@router.post(
+    "",
+    response_model=CandidateResponse,
+    status_code=201,
+    responses={
+        409: {"description": "A candidate with the supplied candidate_id already exists."},
+    },
+)
 async def register_candidate(
     payload: RegisterCandidateRequest,
     service: CandidateService = Depends(get_candidate_service),
@@ -42,8 +49,9 @@ async def register_candidate(
     """POST /candidates - parse raw resume text (via the existing
     `ResumeParserAgent`) into a structured candidate profile and store it.
 
-    Errors: 503 `dependency_unavailable` only if even the parser's own
-    deterministic fallback fails (a genuine unexpected error - see
+    Errors: 409 if a caller-supplied `candidate_id` is already stored; 503
+    `dependency_unavailable` only if even the parser's own deterministic
+    fallback fails (a genuine unexpected error - see
     agents/resume_parser/agent.py's module docstring); 422 for a missing
     `resume_text`/`candidate_name`.
 

@@ -74,6 +74,7 @@ def _job_record_from_row(row: asyncpg.Record) -> JobRecord:
         job=JobDescription.model_validate(row["job"]),
         is_active=row["is_active"],
         is_practice=row["is_practice"],
+        rubric_generation_failed=row["rubric_generation_failed"],
         created_by_user_id=row["created_by_user_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -221,20 +222,24 @@ class PostgresJobRepository(JobRepository):
             row = await conn.fetchrow(
                 """
                 INSERT INTO jobs
-                    (job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, now())
+                    (job_id, job, is_active, is_practice, rubric_generation_failed,
+                     created_by_user_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, now())
                 ON CONFLICT (job_id) DO UPDATE
                     SET job = EXCLUDED.job,
                         is_active = EXCLUDED.is_active,
                         is_practice = EXCLUDED.is_practice,
+                        rubric_generation_failed = EXCLUDED.rubric_generation_failed,
                         created_by_user_id = EXCLUDED.created_by_user_id,
                         updated_at = now()
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 record.job_id,
                 record.job.model_dump(mode="json"),
                 record.is_active,
                 record.is_practice,
+                record.rubric_generation_failed,
                 record.created_by_user_id,
                 record.created_at,
             )
@@ -267,7 +272,8 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = false, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )
@@ -281,7 +287,8 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = true, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )

@@ -15,8 +15,11 @@ competency, a skill, or a weight.
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any, Dict, Optional
+
+from pydantic import ValidationError
 
 from agents.jd_analyzer.agent import JDAnalyzerAgent
 from agents.rubric_generator.agent import RubricGeneratorAgent
@@ -28,11 +31,19 @@ from schemas.job import JobDescription
 logger = get_logger("services.job")
 
 
+class JobPatchValidationError(ValueError):
+    """Only the merged request state failed JobDescription validation."""
+
+    def __init__(self, validation_error: ValidationError) -> None:
+        self.validation_error = validation_error
+        super().__init__(str(validation_error))
+
+
 class JobService:
     """Use cases for job postings.
 
     Constructed per request, like `InterviewService` - it holds only
-    references (a repository, an optional agent factory), never state.
+    references to collaborators and the container's shared per-job locks.
     """
 
     def __init__(
@@ -42,6 +53,8 @@ class JobService:
         jd_analyzer_factory=None,
         rubric_repository: Optional[RubricRepository] = None,
         rubric_generator_factory=None,
+        locks: dict[str, asyncio.Lock] | None = None,
+        locks_guard: asyncio.Lock | None = None,
     ) -> None:
         self._jobs = job_repository
         # The same wiring-seam pattern as InterviewService's
@@ -54,6 +67,12 @@ class JobService:
         # makes auto-rubric-on-create active in the actual app.
         self._rubrics = rubric_repository
         self._rubric_generator_factory = rubric_generator_factory
+        self._locks: dict[str, asyncio.Lock] = locks if locks is not None else {}
+        self._locks_guard = locks_guard if locks_guard is not None else asyncio.Lock()
+
+    async def _lock_for(self, job_id: str) -> asyncio.Lock:
+        async with self._locks_guard:
+            return self._locks.setdefault(job_id, asyncio.Lock())
 
     async def create_job(
         self,
@@ -72,8 +91,34 @@ class JobService:
         `api.registry.SessionRegistry` already uses for session_id) when the
         caller doesn't supply one, rather than being invented by the LLM -
         JDAnalyzerAgent takes it as an input, not an output.
+
+        A caller-supplied id must not already exist. `JobRepository.save` is
+        an upsert, so without this check a second POST would silently replace
+        another recruiter's job - including its owner, content and active
+        flag. Job ids are visible in URLs, so they are not a secret.
         """
-        job_id = job_id or f"job_{uuid.uuid4().hex[:8]}"
+        if not job_id:
+            job_id = f"job_{uuid.uuid4().hex[:8]}"
+        else:
+            existing = await self._jobs.get(job_id)
+            if existing is not None:
+                # A retry of a failed auto-rubric job is the one safe case
+                # for reusing a caller-supplied id: the previous attempt was
+                # archived by this service and never became usable. Require
+                # the same creator and kind so an unrelated archived job
+                # cannot be reclaimed by someone who guessed its id.
+                retryable_failure = (
+                    existing.rubric_generation_failed
+                    and not existing.is_active
+                    and existing.created_by_user_id == created_by_user_id
+                    and existing.is_practice == is_practice
+                )
+                if not retryable_failure:
+                    raise ConflictError(
+                        "A job with this id already exists.",
+                        internal_detail=f"job_id={job_id!r} is already stored",
+                        context={"job_id": job_id},
+                    )
         analyzer = self._jd_analyzer_factory() if self._jd_analyzer_factory else JDAnalyzerAgent()
 
         agent_result = await analyzer.run(
@@ -100,9 +145,34 @@ class JobService:
                 context={"job_id": job_id},
             )
 
+        # The analyzer's title is only used when the caller did not supply
+        # one. The request-level title constraints cannot see the LLM's
+        # output, so enforce the same nonblank and 300-character limits here.
         updates = {}
         if title is not None:
             updates["title"] = title.strip()
+        else:
+            analyzer_title = job_description.title.strip()
+            if not analyzer_title:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a blank title for "
+                        f"job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if len(analyzer_title) > 300:
+                raise DependencyError(
+                    "The job description did not include a usable title.",
+                    internal_detail=(
+                        f"JDAnalyzerAgent returned a title longer than 300 characters "
+                        f"for job_id={job_id!r}"
+                    ),
+                    context={"job_id": job_id},
+                )
+            if analyzer_title != job_description.title:
+                updates["title"] = analyzer_title
         if openings is not None:
             updates["openings"] = openings
         if updates:
@@ -167,10 +237,15 @@ class JobService:
                 exc,
                 extra=log_context(event="rubric_auto_generation_failed", job_id=job_id),
             )
+            failed = await self._jobs.get(job_id)
+            if failed is not None:
+                await self._jobs.save(
+                    failed.model_copy(update={"rubric_generation_failed": True})
+                )
             await self._jobs.archive(job_id)
             raise DependencyError(
                 "The job's scoring rubric could not be generated, so the job was not "
-                "published. Please try again.",
+                "published. Retry with the same job_id to try again.",
                 internal_detail=f"rubric auto-draft/approve failed for job_id={job_id!r}: {exc}",
                 context={"job_id": job_id},
             ) from exc
@@ -221,21 +296,26 @@ class JobService:
         1.0), so an edit that breaks that invariant is rejected with the
         same 422 a bad `POST /jobs` payload would get, not silently stored.
         """
-        record = await self.get_job(job_id)
-        if not record.is_active:
-            raise ConflictError(
-                "Cannot update an archived job",
-                internal_detail=f"job_id={job_id!r} is archived",
-            )
+        lock = await self._lock_for(job_id)
+        async with lock:
+            record = await self.get_job(job_id)
+            if not record.is_active:
+                raise ConflictError(
+                    "Cannot update an archived job",
+                    internal_detail=f"job_id={job_id!r} is archived",
+                )
 
-        merged = record.job.model_dump()
-        merged.update(patch)
-        updated_job = JobDescription(**merged)
+            merged = record.job.model_dump()
+            merged.update(patch)
+            try:
+                updated_job = JobDescription(**merged)
+            except ValidationError as exc:
+                raise JobPatchValidationError(exc) from exc
 
-        updated_record = record.model_copy(update={"job": updated_job})
-        stored = await self._jobs.save(updated_record)
-        logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
-        return stored
+            updated_record = record.model_copy(update={"job": updated_job})
+            stored = await self._jobs.save(updated_record)
+            logger.info("job updated", extra=log_context(event="job_updated", job_id=job_id))
+            return stored
 
     async def archive_job(self, job_id: str) -> JobRecord:
         """Soft-delete: mark a job as no longer accepting applications.
@@ -245,14 +325,16 @@ class JobService:
         both. Idempotent: archiving an already-archived job just returns its
         current state rather than erroring.
         """
-        record = await self._jobs.archive(job_id)
-        if record is None:
-            raise NotFoundError(
-                "No job found for the given job_id",
-                internal_detail=f"job record missing for job_id={job_id!r}",
-            )
-        logger.info("job archived", extra=log_context(event="job_archived", job_id=job_id))
-        return record
+        lock = await self._lock_for(job_id)
+        async with lock:
+            record = await self._jobs.archive(job_id)
+            if record is None:
+                raise NotFoundError(
+                    "No job found for the given job_id",
+                    internal_detail=f"job record missing for job_id={job_id!r}",
+                )
+            logger.info("job archived", extra=log_context(event="job_archived", job_id=job_id))
+            return record
 
 
 __all__ = ["JobService"]

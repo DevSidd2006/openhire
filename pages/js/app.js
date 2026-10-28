@@ -47,6 +47,13 @@ function isAuthTokenIssuingPath(path) {
 }
 
 async function apiRequest(path, options = {}) {
+  // OAuth callback pages may start API work before their page-level guard
+  // finishes exchanging the one-time ticket. Serialize all normal API calls
+  // behind that initialization so they never race the token exchange.
+  if (typeof initAuth === 'function' && !isAuthTokenIssuingPath(path)) {
+    await initAuth();
+  }
+
   const opts = Object.assign({}, options);
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   opts.headers = isFormData
@@ -133,7 +140,7 @@ function normalizeJob(record) {
   const job = record.job || {};
   return {
     job_id: record.job_id,
-    title: job.title || record.job_id,
+    title: job.title || 'Open role',
     description: job.description || '',
     competencies: (job.competencies || []).map((c) => c.name),
     is_active: record.is_active,
@@ -252,14 +259,20 @@ async function createInterviewWithMode(path, body) {
   return apiRequest(path, { method: 'POST', body });
 }
 
-/** Creates the interview session for an application that is already
- * SHORTLISTED and has none yet. Realtime Gemini Live is preferred; the
- * turn-based interview is used only when the backend reports that realtime
- * interviewing was disabled or was not configured before creating a live
- * session. Returns the session_id. */
+/** Creates or repairs the interview session for a shortlisted application.
+ * Gemini Live is the only interview transport. If an application still
+ * points at a pre-Live session, the backend creates and links a replacement
+ * Gemini Live session while preserving the old record for auditability. */
 async function ensureInterviewSession(application) {
   if (application.session_id) {
-    return application.session_id;
+    try {
+      await apiRequest(`/live-sessions/${encodeURIComponent(application.session_id)}`);
+      return application.session_id;
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+      // The linked record is an older adaptive/turn-based session. Continue
+      // below so the server can relink this application to Gemini Live.
+    }
   }
   const [job, candidate] = await Promise.all([
     apiRequest(`/jobs/${encodeURIComponent(application.job_id)}`),
@@ -272,24 +285,13 @@ async function ensureInterviewSession(application) {
     parsed_resume: candidate.resume,
     application_id: application.application_id,
   };
-  try {
-    const session = await createInterviewWithMode('/live-sessions', body);
-    return session.session_id;
-  } catch (error) {
-    const code = error.data && error.data.error;
-    const canUseLegacy = [
-      'gemini_live_disabled',
-      'gemini_live_unconfigured',
-    ].includes(code);
-    if (!canUseLegacy) throw error;
-    const session = await createInterviewWithMode('/sessions', {
-      ...body,
-      // Preserve the existing short legacy demo when realtime is unavailable.
-      max_questions: 5,
-    });
-    return session.session_id;
-  }
+  const session = await createInterviewWithMode('/live-sessions', body);
+  return session.session_id;
 }
+
+// The interview page can repair a stale link when opened directly from an
+// old application URL, without duplicating the creation logic.
+globalThis.ensureInterviewSession = ensureInterviewSession;
 
 function getCurrentUser() {
   const user = localStorage.getItem('openhire_user');
@@ -333,7 +335,12 @@ async function resolveCandidateId() {
   }
 }
 
-function logoutUser() {
+async function logoutUser() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (err) {
+    // Proceed with client logout even if network request fails
+  }
   localStorage.removeItem('openhire_user');
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');
@@ -392,6 +399,7 @@ function renderNavbar(activePage = '') {
       <nav class="nav-links">
         <a href="index.html">Overview</a>
         ${!isAdmin ? `<a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>` : ''}
+        ${!isRecruiter && !isAdmin ? `<a href="mock-interviews.html" class="${activePage === 'mock-interviews' ? 'active' : ''}">Mock Interviews</a><a href="jobs.html" class="${activePage === 'jobs' ? 'active' : ''}">Jobs</a>` : ''}
         ${isRecruiter ? `<a href="create-job.html" class="${activePage === 'create-job' ? 'active' : ''}">+ Job</a>` : ''}
         ${isRecruiter ? `<a href="screening.html" class="${activePage === 'screening' ? 'active' : ''}">Screening</a>` : ''}
         <a href="leaderboard.html" class="${activePage === 'leaderboard' ? 'active' : ''}">Leaderboard</a>

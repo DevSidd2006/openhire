@@ -70,7 +70,10 @@ def _looks_meaningful(text: Optional[str]) -> bool:
     stripped = (text or "").strip()
     if len(stripped) < _MIN_MEANINGFUL_CHARS:
         return False
-    words = re.findall(r"[A-Za-z]{2,}", stripped)
+    # Count letters in ANY script — [A-Za-z] rejected text-only Hindi (and
+    # other non-Latin) resumes as "not meaningful", forcing a wasteful OCR
+    # pass that then replaced correctly extracted text.
+    words = re.findall(r"[^\W\d_]{2,}", stripped)
     return len(words) >= _MIN_MEANINGFUL_WORDS
 
 

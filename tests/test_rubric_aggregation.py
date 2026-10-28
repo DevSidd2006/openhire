@@ -1,8 +1,7 @@
-"""Tests for coverage-aware aggregation (Task 5).
+"""Tests for coverage-aware aggregation (Task 1).
 
-Coverage is a first-class output: a resume too sparse to judge is an
-UNKNOWN, not a REJECT, and conflating the two is where false-negative risk
-lives.
+Coverage is a first-class output: partial evidence is scoreable while still
+being flagged for informational human review.
 """
 import pytest
 
@@ -49,12 +48,24 @@ def test_insufficient_evidence_is_excluded_not_zeroed():
     assert result.uncited_competencies == ["B"]
 
 
-def test_low_coverage_routes_to_human_review_instead_of_ranking():
+def test_low_coverage_is_flagged_but_remains_scoreable():
     comps = [_comp("A", 0.3), _comp("B", 0.7)]
     result = aggregate(
         comps, [_verdict("A", 4), _verdict("B", 3, EvidenceSufficiency.INSUFFICIENT)]
     )
     assert result.coverage < COVERAGE_THRESHOLD
+    assert result.final_score == pytest.approx(0.8)
+    assert result.band == "strong"
+    assert result.needs_human_review is True
+
+
+def test_partial_coverage_returns_normalized_score_and_review_flag():
+    comps = [_comp("A", 0.25), _comp("B", 0.75)]
+    result = aggregate(comps, [_verdict("A", 4)])
+
+    assert result.coverage == pytest.approx(0.25)
+    assert result.final_score == pytest.approx(0.8)
+    assert result.band == "strong"
     assert result.needs_human_review is True
 
 

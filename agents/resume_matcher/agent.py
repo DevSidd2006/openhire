@@ -128,10 +128,10 @@ class ResumeMatcherAgent(BaseAgent):
     def _explain(result, verdicts: List[CompetencyVerdict]) -> str:
         if result.needs_human_review:
             return (
-                f"Insufficient resume evidence to rank this candidate "
+                f"Resume evidence coverage is limited for this candidate "
                 f"(coverage {result.coverage:.0%}). Unscored: "
-                f"{', '.join(result.uncited_competencies)}. Routed to human review "
-                "rather than scored low - a sparse resume is an unknown, not a reject."
+                f"{', '.join(result.uncited_competencies)}. Flagged with an evidence caveat "
+                "while still receiving an automated score."
             )
         parts = [
             f"{v.competency_name}: {v.score}/5 ({len(v.cited_span_ids)} cited span(s))"

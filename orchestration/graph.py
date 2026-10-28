@@ -232,8 +232,8 @@ def create_pipeline_graph():
         `shortlisted_candidates` here means "successfully scored and
         rankable" - it is NOT a hire/no-hire judgment. The matcher no longer
         emits a shortlist recommendation, because deciding is a recruiter's
-        job; candidates whose coverage was too thin to rank are excluded from
-        the ranking and surfaced for human review instead.
+        job; candidates with partial coverage remain rankable and retain an
+        informational evidence-quality flag.
         """
         if not state["job_description"]:
             return {"errors": state["errors"] + ["No job description; skipping resume matching"]}
@@ -262,9 +262,12 @@ def create_pipeline_graph():
         errors = []
         for candidate_id, agent_result in zip(candidate_ids, agent_results):
             result = _unwrap(agent_result)
-            if result.get("matching_score"):
-                matching_scores[candidate_id] = result["matching_score"]
-                if not result.get("needs_human_review"):
+            matching_score = result.get("matching_score")
+            if matching_score:
+                matching_scores[candidate_id] = matching_score
+                # needs_human_review is informational. A real score remains
+                # rankable; only a missing score is non-rankable.
+                if matching_score.match_score is not None:
                     rankable.append(candidate_id)
             else:
                 errors.append(f"Matching failed for {candidate_id}")
@@ -536,7 +539,7 @@ def create_pipeline_graph():
         candidate was shortlisted - even if EVERY shortlisted candidate ended
         up incomplete (e.g. every technical evaluation failed). That case is
         represented explicitly (entries=[], everyone in
-        incomplete_candidates, explanation states human review is required)
+        incomplete_candidates, explanation states the evaluation is incomplete)
         rather than short-circuited into a bare error with no leaderboard
         object at all. Only a genuinely empty shortlist (nothing to rank or
         report on, in any state) skips leaderboard creation.
@@ -566,7 +569,7 @@ def create_pipeline_graph():
         if not reports:
             errors = errors + [
                 f"No candidate could be scored for this run - all {len(incomplete_candidates)} "
-                "shortlisted candidate(s) are incomplete and require human review."
+                "shortlisted candidate(s) have incomplete evaluations."
             ]
 
         if result.get("leaderboard"):

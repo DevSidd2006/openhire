@@ -15,7 +15,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from agents.resume_parser.agent import ResumeParserAgent
-from core.errors import DependencyError, ForbiddenError, NotFoundError
+from core.errors import ConflictError, DependencyError, ForbiddenError, NotFoundError
 from core.logging import get_logger, log_context
 from repositories.interfaces import CandidateRecord, CandidateRepository
 from schemas.resume import ParsedResume
@@ -50,8 +50,19 @@ class CandidateService:
         which takes it as an input.
 
         `user_id` links the candidate to the authenticated user who owns it.
+
+        A caller-supplied id must not already exist. `CandidateRepository.save`
+        is an upsert, so without this check a second POST would replace another
+        candidate's profile and reassign its `user_id` to the caller.
         """
-        candidate_id = candidate_id or f"cand_{uuid.uuid4().hex[:8]}"
+        if not candidate_id:
+            candidate_id = f"cand_{uuid.uuid4().hex[:8]}"
+        elif await self._candidates.get(candidate_id) is not None:
+            raise ConflictError(
+                "A candidate with this id already exists.",
+                internal_detail=f"candidate_id={candidate_id!r} is already stored",
+                context={"candidate_id": candidate_id},
+            )
         parsed_resume, used_fallback, warning = await self._parse(
             resume_text=resume_text, candidate_id=candidate_id, candidate_name=candidate_name,
         )

@@ -89,8 +89,8 @@
 
         <div class="metric-item">
           <div>
-            <div style="font-weight:500;">Human Review</div>
-            <div style="font-size:11.5px; color:var(--ink-3);">Recruiter follow-up required?</div>
+            <div style="font-weight:500;">Review Signal</div>
+            <div style="font-size:11.5px; color:var(--ink-3);">Informational evidence or integrity flag</div>
           </div>
           <span class="score-pill high" id="humanReview">No</span>
         </div>
@@ -127,6 +127,7 @@
   const appId = urlParams.get('app_id');
   const jobId = urlParams.get('job_id');
   const candidateId = urlParams.get('candidate_id');
+  let currentRoleTitle = 'Open role';
 
   function setRecommendationColor(rec) {
     const el = document.getElementById('recommendationText');
@@ -142,17 +143,24 @@
 
   function renderReport(evaluation, applicationMeta) {
     document.getElementById('reportHeaderMeta').textContent =
-      `Candidate: ${(applicationMeta && applicationMeta.candidate_name) || evaluation.result.candidate_name} • Role: ${evaluation.job_id}`;
+      `Candidate: ${(applicationMeta && applicationMeta.candidate_name) || evaluation.result.candidate_name} • Role: ${currentRoleTitle}`;
 
     const report = evaluation.result;
+    const formatScore = (value) => (
+      value === null || value === undefined || Number.isNaN(Number(value))
+        ? '—'
+        : Number(value).toFixed(1)
+    );
     setRecommendationColor(report.recommendation);
     document.getElementById('recommendationExplanation').textContent = report.explanation;
-    document.getElementById('compositeScore').textContent = report.scores.weighted_final_score.toFixed(1);
-    document.getElementById('technicalScore').textContent = `${report.scores.technical_score.toFixed(1)} / 10`;
+    document.getElementById('compositeScore').textContent = formatScore(report.scores.weighted_final_score);
+    document.getElementById('technicalScore').textContent = `${formatScore(report.scores.technical_score)} / 10`;
     document.getElementById('technicalSummary').textContent = report.technical_summary;
-    document.getElementById('behavioralScore').textContent = `${report.scores.behavioral_score.toFixed(1)} / 10`;
+    document.getElementById('behavioralScore').textContent = `${formatScore(report.scores.behavioral_score)} / 10`;
     document.getElementById('behavioralSummary').textContent = report.behavioral_summary;
-    document.getElementById('jobFitScore').textContent = `${report.scores.job_fit_score.toFixed(1)} / 10`;
+    document.getElementById('jobFitScore').textContent = report.scores.job_fit_score === null || report.scores.job_fit_score === undefined
+      ? 'Unknown'
+      : `${formatScore(report.scores.job_fit_score)} / 10`;
     document.getElementById('jobFitSummary').textContent = report.job_fit_summary;
     const integrityCount = report.integrity_flags.length;
     const biasCount = report.bias_flags.length;
@@ -193,14 +201,17 @@
   // and never reached an interview - so no evaluation will EVER appear no
   // matter how long this page waits.
   async function resolveEvaluation() {
-    if (sessionId) {
-      const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
-      return data.evaluation;
-    }
+    // Gemini Live reports are application-centric. Prefer this lookup when
+    // app_id is present; the session-centric endpoint is legacy-only.
     if (appId) {
       const app = await apiRequest(`/applications/${encodeURIComponent(appId)}`);
       if (!app.application.session_id) return 'no_interview';
+      resolvedApplicationId = appId;
       const data = await apiRequest(`/applications/${encodeURIComponent(appId)}/evaluation`);
+      return data.evaluation;
+    }
+    if (sessionId) {
+      const data = await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/evaluation`);
       return data.evaluation;
     }
     if (jobId && candidateId) {
@@ -258,6 +269,14 @@
   async function loadEvaluation() {
     attempts += 1;
     try {
+      if (jobId) {
+        try {
+          const job = await fetchJob(jobId);
+          currentRoleTitle = job.title || 'Open role';
+        } catch (_) {
+          currentRoleTitle = 'Open role';
+        }
+      }
       const evaluation = await resolveEvaluation();
       // Independent of evaluation status - the transcript exists as soon
       // as the interview seals, which is often before scoring finishes.

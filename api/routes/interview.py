@@ -42,7 +42,7 @@ from core.dependencies import (
     get_evaluation_service,
     get_interview_service,
 )
-from core.security import Principal, require_authenticated
+from core.security import Principal, get_principal, require_authenticated
 from repositories.interfaces import EvaluationJob, EvaluationStatus
 from schemas.application import ApplicationStatus
 from services.application_service import ApplicationService
@@ -85,6 +85,7 @@ async def _enforce_session_ownership(
     session_id: str, candidate_id: str, principal: Principal, *,
     service: InterviewService, candidate_service: CandidateService,
     allow_recruiter: bool = True,
+    allow_public_capability: bool = False,
 ) -> None:
     """Reject callers who neither own this session's candidate nor hold
     recruiter:read, but ONLY once this session is linked to an application -
@@ -97,6 +98,8 @@ async def _enforce_session_ownership(
     the first place, so it is left exactly as inert as before this check
     existed.
     """
+    if allow_public_capability and not principal.is_authenticated:
+        return
     if allow_recruiter and principal.has_scopes(["recruiter:read"]):
         return
     try:
@@ -228,7 +231,7 @@ async def get_session_state(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> SessionStateResponse:
     """GET /sessions/{id} - a controlled snapshot of session state. Never
     returns the raw InterviewState or the transcript.
@@ -250,6 +253,7 @@ async def get_session_state(
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
         service=service, candidate_service=candidate_service,
+        allow_public_capability=True,
     )
     state = runner.get_state()
 
@@ -279,7 +283,7 @@ async def submit_answer(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> SubmitAnswerResponse:
     """POST /sessions/{id}/answers - the candidate's answer is untrusted
     content; it is passed straight through to
@@ -302,6 +306,7 @@ async def submit_answer(
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
         service=service, candidate_service=candidate_service, allow_recruiter=False,
+        allow_public_capability=True,
     )
 
     result = await service.submit_answer(session_id, payload.answer_text)
@@ -329,7 +334,7 @@ async def finish_session(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> FinishSessionResponse:
     """POST /sessions/{id}/finish - request explicit termination. Delegates
     entirely to `InterviewSessionRunner.request_finish()`, which routes
@@ -347,6 +352,7 @@ async def finish_session(
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
         service=service, candidate_service=candidate_service, allow_recruiter=False,
+        allow_public_capability=True,
     )
 
     state = await service.finish_session(session_id)
@@ -373,7 +379,7 @@ async def get_session_evaluation(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ) -> SessionEvaluationResponse:
     """GET /sessions/{id}/evaluation - this session's evaluation job, if one
     has been triggered.
@@ -399,6 +405,7 @@ async def get_session_evaluation(
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
         service=service, candidate_service=candidate_service,
+        allow_public_capability=True,
     )
     evaluation_job = await evaluations.get_evaluation_for_session(session_id)
     return SessionEvaluationResponse(session_id=session_id, evaluation=evaluation_job)
@@ -410,7 +417,7 @@ async def get_evaluation_report(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(get_principal),
 ):
     """GET /sessions/{session_id}/evaluation/report - Get the completed evaluation report for a session.
 
@@ -424,6 +431,7 @@ async def get_evaluation_report(
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
         service=service, candidate_service=candidate_service,
+        allow_public_capability=True,
     )
     evaluation_job = await evaluations.get_evaluation_for_session(session_id)
 

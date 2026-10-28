@@ -24,9 +24,9 @@
     <p class="page-sub">Browse open drives, apply with your resume, and launch your voice interview.</p>
   </div>
 
-  <div class="card reveal">
+  <div class="card reveal" id="practiceSection" style="display:none;">
     <div class="card-header">
-      <h3 class="card-title" style="font-size:1.15rem;">Practice Interview</h3>
+      <h3 class="card-title" style="font-size:1.15rem;">Mock Interviews</h3>
       <span class="chip chip-info">Self-serve</span>
     </div>
     <p class="card-sub" style="margin-top:0;">
@@ -41,14 +41,27 @@
     <div id="practiceJobList" style="margin-top:1rem;"></div>
   </div>
 
-  <div class="card reveal">
+  <div class="card reveal" id="realJobsSection" style="display:none;">
     <div class="card-header">
-      <h3 class="card-title" style="font-size:1.15rem;">Available Positions</h3>
+      <h3 class="card-title" style="font-size:1.15rem;">Real Job Listings</h3>
       <span class="chip chip-success">Active</span>
     </div>
     <div id="candidateJobList" class="grid-2" style="margin-top:0.25rem;">
       <!-- Dynamic list -->
     </div>
+  </div>
+
+  <div class="grid-2 reveal" style="margin-bottom:1.5rem;">
+    <a class="card" href="mock-interviews.html" style="text-decoration:none; color:inherit;">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Mock Interviews</h3><span class="chip chip-info">Practice</span></div>
+      <p class="card-sub">Create and revisit private practice interviews using your own job description.</p>
+      <span class="btn-primary" style="display:inline-block; margin-top:0.75rem;">Open Mock Interviews</span>
+    </a>
+    <a class="card" href="jobs.html" style="text-decoration:none; color:inherit;">
+      <div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Real Job Listings</h3><span class="chip chip-success">Active</span></div>
+      <p class="card-sub">Browse recruiter-posted roles and apply with your resume.</p>
+      <span class="btn-primary" style="display:inline-block; margin-top:0.75rem;">Browse Jobs</span>
+    </a>
   </div>
 
   <div class="card reveal">
@@ -64,9 +77,6 @@
 <script src="js/auth.js"></script>
 <script src="js/app.js"></script>
 <script>
-  guardAuthenticatedPage();
-  renderNavbar('dashboard');
-
   const listEl = document.getElementById('candidateJobList');
   const appListEl = document.getElementById('candidateApplicationsList');
   function escapeHtml(text) {
@@ -74,15 +84,19 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
-  appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
 
   (async () => {
+    if (!await guardAuthenticatedPage()) return;
+    renderNavbar('dashboard');
+
+    listEl.innerHTML = '<p class="card-sub">Loading postings…</p>';
+    appListEl.innerHTML = '<p class="card-sub">Loading applications…</p>';
+
     try {
       const jobs = await fetchJobs();
       listEl.innerHTML = jobs.length ? jobs.map(job => `
         <div class="job-card reveal" onclick="window.location.href='job-detail.html?job_id=${encodeURIComponent(job.job_id)}'">
-          <h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem; letter-spacing:-0.01em;">${job.title || job.job_id}</h4>
+          <h4 style="font-weight:600; font-size:1rem; margin-bottom:0.35rem; letter-spacing:-0.01em;">${job.title || 'Open role'}</h4>
           <p style="font-size:0.85rem; color:var(--ink-3); margin-bottom:0.85rem; line-height:1.55;">
             ${(job.description || '').substring(0, 100)}...
           </p>
@@ -132,7 +146,7 @@
         } else if (app.status === 'rejected') {
           statusBadge = '<span class="chip">Not Shortlisted</span>';
         } else if (app.status === 'needs_human_review') {
-          statusBadge = '<span class="chip chip-warning">Under Review</span>';
+          statusBadge = '<span class="chip chip-warning">Scored with Evidence Caveat</span>';
         } else {
           statusBadge = `<span class="chip">${app.status.replace(/_/g, ' ')}</span>`;
         }
@@ -141,7 +155,7 @@
         <div class="card" style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:1rem 1.25rem;">
           <div style="flex:1; min-width:240px;">
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem; flex-wrap:wrap;">
-            <h4 style="font-weight:600; font-size:1.05rem; margin:0; letter-spacing:-0.01em;">Role: ${escapeHtml(app.job_title || app.job_id)}</h4>
+            <h4 style="font-weight:600; font-size:1.05rem; margin:0; letter-spacing:-0.01em;">Role: ${escapeHtml(app.job_title || 'Open role')}</h4>
               ${statusBadge}
             </div>
             <p class="card-sub" style="margin:0;">
