@@ -34,15 +34,18 @@ from repositories.interfaces import (
 from services.admin_service import AdminService
 from services.application_service import ApplicationService
 from services.auth_service import AuthService
+from services.background_scoring import BackgroundScoringService
 from services.bug_report_service import BugReportService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
+from services.interview_report import InterviewReportGenerator
 from services.interview_service import InterviewService
 from services.job_service import JobService
 from services.live_interview_service import LiveInterviewService
 from services.gemini_live_token import GeminiLiveTokenService
 from services.llm_credential_service import LLMCredentialService
 from services.matching_service import MatchingService
+from services.oauth_ticket_store import OAuthTicketStore
 from services.recruiter_service import RecruiterService
 
 
@@ -124,6 +127,19 @@ def get_user_repository(request: Request) -> UserRepository:
 
 def get_audit_log_repository(request: Request) -> AuditLogRepository:
     return _container_from_app(request.app).audit_log_repository
+
+
+def get_oauth_ticket_store(request: Request) -> OAuthTicketStore:
+    """Process-wide single-use guard for LinkedIn OAuth tickets."""
+    return _container_from_app(request.app).oauth_ticket_store
+def get_scoring_service(request: Request) -> BackgroundScoringService:
+    """The one accumulated-score store shared by the scoring and report APIs."""
+    return _container_from_app(request.app).scoring_service
+
+
+def get_report_generator(request: Request) -> InterviewReportGenerator:
+    """The report store shared by every report endpoint on this app."""
+    return _container_from_app(request.app).report_generator
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -226,6 +242,8 @@ def get_job_service(request: Request) -> JobService:
         job_repository=container.job_repository,
         jd_analyzer_factory=container.jd_analyzer_factory_for(request.app),
         rubric_repository=container.rubric_repository,
+        locks=container.job_locks,
+        locks_guard=container.job_locks_guard,
     )
 
 
@@ -383,8 +401,11 @@ __all__ = [
     "get_job_service",
     "get_llm_credential_service",
     "get_matching_service",
+    "get_oauth_ticket_store",
     "get_recruiter_service",
     "get_registry",
+    "get_report_generator",
+    "get_scoring_service",
     "get_session_repository",
     "get_transcript_repository",
     "get_user_repository",

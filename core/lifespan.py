@@ -169,11 +169,22 @@ def validate_startup_configuration(
     # public, anyone at all) can mint a valid access token for any account,
     # including an admin's. Production must refuse to start on it.
     if settings.is_production and settings.jwt_secret_is_default:
+        if settings.jwt_secret_is_blank:
+            problem = (
+                "ENVIRONMENT=production with an empty JWT_SECRET_KEY - tokens "
+                "would be signed with an empty key, so anyone could forge a "
+                "session for any account. "
+            )
+        else:
+            problem = (
+                "ENVIRONMENT=production with a placeholder JWT_SECRET_KEY - "
+                "tokens would be signed with a key published in this "
+                "repository's source, so anyone could forge a session for any "
+                "account. "
+            )
         problems.append(
-            "ENVIRONMENT=production with the default JWT_SECRET_KEY - tokens "
-            "would be signed with a placeholder published in this "
-            "repository's source, so anyone could forge a session for any "
-            "account. Set JWT_SECRET_KEY to a real secret, e.g. "
+            problem
+            + "Set JWT_SECRET_KEY to a real secret, e.g. "
             "python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"."
         )
 

@@ -20,25 +20,26 @@
 </main>
 <script src="js/auth.js"></script><script src="js/app.js"></script>
 <script>
-  const currentUser = getCurrentUser();
-  if (currentUser && currentUser.role === 'recruiter') {
-    window.location.replace('recruiter.html');
-  }
-  guardAuthenticatedPage();
-  renderNavbar('mock-interviews');
-  const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  const listEl = document.getElementById('practiceJobList');
-  document.getElementById('practiceCreateBtn').addEventListener('click', async () => {
-    const status = document.getElementById('practiceStatus');
-    const description = document.getElementById('practiceJdText').value.trim();
-    if (!description) { status.textContent = 'Paste a job description first.'; status.className = 'form-status error'; return; }
-    status.textContent = 'Analyzing job description…'; status.className = 'form-status';
-    try {
-      const job = await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
-      window.location.href = `apply.html?job_id=${encodeURIComponent(job.job_id)}`;
-    } catch (err) { status.textContent = err.message || 'Could not create the mock interview.'; status.className = 'form-status error'; }
-  });
   (async () => {
+    if (!await guardAuthenticatedPage()) return;
+    const currentUser = getCurrentUser();
+    if (currentUser && currentUser.role === 'recruiter') {
+      window.location.replace('recruiter.html');
+      return;
+    }
+    renderNavbar('mock-interviews');
+    const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const listEl = document.getElementById('practiceJobList');
+    document.getElementById('practiceCreateBtn').addEventListener('click', async () => {
+      const status = document.getElementById('practiceStatus');
+      const description = document.getElementById('practiceJdText').value.trim();
+      if (!description) { status.textContent = 'Paste a job description first.'; status.className = 'form-status error'; return; }
+      status.textContent = 'Analyzing job description…'; status.className = 'form-status';
+      try {
+        const job = await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
+        window.location.href = `apply.html?job_id=${encodeURIComponent(job.job_id)}`;
+      } catch (err) { status.textContent = err.message || 'Could not create the mock interview.'; status.className = 'form-status error'; }
+    });
     try {
       const raw = await apiRequest('/jobs/practice/mine');
       const jobs = (raw.jobs || []).map(normalizeJob);

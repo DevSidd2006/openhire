@@ -185,19 +185,22 @@ class InMemoryJobRepository(JobRepository):
             existing = self._jobs.get(record.job_id)
             created_at = existing.created_at if existing else record.created_at
             stored = record.model_copy(
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
             )
             self._jobs[record.job_id] = stored
-            return stored
+            return stored.model_copy(deep=True)
 
     async def get(self, job_id: str) -> Optional[JobRecord]:
         async with self._lock:
-            return self._jobs.get(job_id)
+            stored = self._jobs.get(job_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def list_jobs(self, *, include_archived: bool = False) -> List[JobRecord]:
         async with self._lock:
             matches = [
-                r for r in self._jobs.values() if include_archived or r.is_active
+                r.model_copy(deep=True)
+                for r in self._jobs.values() if include_archived or r.is_active
             ]
         return sorted(matches, key=lambda r: r.created_at, reverse=True)
 
@@ -207,10 +210,11 @@ class InMemoryJobRepository(JobRepository):
             if existing is None:
                 return None
             archived = existing.model_copy(
-                update={"is_active": False, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"is_active": False, "updated_at": datetime.now(timezone.utc)},
             )
             self._jobs[job_id] = archived
-            return archived
+            return archived.model_copy(deep=True)
 
     async def restore(self, job_id: str) -> Optional[JobRecord]:
         async with self._lock:
@@ -218,10 +222,11 @@ class InMemoryJobRepository(JobRepository):
             if existing is None:
                 return None
             restored = existing.model_copy(
-                update={"is_active": True, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"is_active": True, "updated_at": datetime.now(timezone.utc)},
             )
             self._jobs[job_id] = restored
-            return restored
+            return restored.model_copy(deep=True)
 
 
 class InMemoryCandidateRepository(CandidateRepository):
@@ -236,19 +241,22 @@ class InMemoryCandidateRepository(CandidateRepository):
             existing = self._candidates.get(record.candidate_id)
             created_at = existing.created_at if existing else record.created_at
             stored = record.model_copy(
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
             )
             self._candidates[record.candidate_id] = stored
-            return stored
+            return stored.model_copy(deep=True)
 
     async def get(self, candidate_id: str) -> Optional[CandidateRecord]:
         async with self._lock:
-            return self._candidates.get(candidate_id)
+            stored = self._candidates.get(candidate_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def list_candidates(self, *, include_hidden: bool = False) -> List[CandidateRecord]:
         async with self._lock:
             matches = [
-                c for c in self._candidates.values() if include_hidden or not c.is_hidden
+                c.model_copy(deep=True)
+                for c in self._candidates.values() if include_hidden or not c.is_hidden
             ]
         return sorted(matches, key=lambda r: r.created_at, reverse=True)
 
@@ -258,19 +266,26 @@ class InMemoryCandidateRepository(CandidateRepository):
             if existing is None:
                 return None
             updated = existing.model_copy(
-                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)},
             )
             self._candidates[candidate_id] = updated
-            return updated
+            return updated.model_copy(deep=True)
 
     async def get_many(self, candidate_ids: List[str]) -> List[CandidateRecord]:
         wanted = set(candidate_ids)
         async with self._lock:
-            return [c for cid, c in self._candidates.items() if cid in wanted]
+            return [
+                c.model_copy(deep=True)
+                for cid, c in self._candidates.items() if cid in wanted
+            ]
 
     async def list_for_user(self, user_id: str) -> List[CandidateRecord]:
         async with self._lock:
-            candidates = [c for c in self._candidates.values() if c.user_id == user_id]
+            candidates = [
+                c.model_copy(deep=True)
+                for c in self._candidates.values() if c.user_id == user_id
+            ]
         return sorted(candidates, key=lambda r: r.created_at, reverse=True)
 
 
@@ -283,13 +298,16 @@ class InMemoryApplicationRepository(ApplicationRepository):
 
     async def save(self, application: Application) -> Application:
         async with self._lock:
-            stored = application.model_copy(update={"updated_at": datetime.now(timezone.utc)})
+            stored = application.model_copy(
+                deep=True, update={"updated_at": datetime.now(timezone.utc)}
+            )
             self._applications[application.application_id] = stored
-            return stored
+            return stored.model_copy(deep=True)
 
     async def get(self, application_id: str) -> Optional[Application]:
         async with self._lock:
-            return self._applications.get(application_id)
+            stored = self._applications.get(application_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def get_for_job_and_candidate(
         self, job_id: str, candidate_id: str
@@ -297,7 +315,7 @@ class InMemoryApplicationRepository(ApplicationRepository):
         async with self._lock:
             for application in self._applications.values():
                 if application.job_id == job_id and application.candidate_id == candidate_id:
-                    return application
+                    return application.model_copy(deep=True)
         return None
 
     async def list_for_job(
@@ -305,7 +323,8 @@ class InMemoryApplicationRepository(ApplicationRepository):
     ) -> List[Application]:
         async with self._lock:
             matches = [
-                a for a in self._applications.values()
+                a.model_copy(deep=True)
+                for a in self._applications.values()
                 if a.job_id == job_id and (include_hidden or not a.is_hidden)
             ]
         return sorted(matches, key=lambda a: a.created_at, reverse=True)
@@ -315,7 +334,8 @@ class InMemoryApplicationRepository(ApplicationRepository):
     ) -> List[Application]:
         async with self._lock:
             matches = [
-                a for a in self._applications.values()
+                a.model_copy(deep=True)
+                for a in self._applications.values()
                 if a.candidate_id == candidate_id and (include_hidden or not a.is_hidden)
             ]
         return sorted(matches, key=lambda a: a.created_at, reverse=True)
@@ -323,7 +343,8 @@ class InMemoryApplicationRepository(ApplicationRepository):
     async def list_all(self, *, include_hidden: bool = False) -> List[Application]:
         async with self._lock:
             matches = [
-                a for a in self._applications.values() if include_hidden or not a.is_hidden
+                a.model_copy(deep=True)
+                for a in self._applications.values() if include_hidden or not a.is_hidden
             ]
         return sorted(matches, key=lambda a: a.created_at, reverse=True)
 
@@ -333,10 +354,11 @@ class InMemoryApplicationRepository(ApplicationRepository):
             if existing is None:
                 return None
             updated = existing.model_copy(
-                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"is_hidden": is_hidden, "updated_at": datetime.now(timezone.utc)},
             )
             self._applications[application_id] = updated
-            return updated
+            return updated.model_copy(deep=True)
 
 
 class InMemoryEvaluationRepository(EvaluationRepository):
@@ -445,17 +467,27 @@ class InMemoryUserRepository(UserRepository):
                     del self._email_index[existing.email]
             self._email_index[email] = record.user_id
             return stored
+                deep=True,
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
+            )
+            self._users[record.user_id] = stored
+            self._email_index[record.email] = record.user_id
+            return stored.model_copy(deep=True)
 
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
         """Fetch user by email. Case-insensitive. Returns None if not found."""
         async with self._lock:
             user_id = self._email_index.get(email.lower())
             return self._users.get(user_id) if user_id else None
+            user_id = self._email_index.get(email)
+            stored = self._users.get(user_id) if user_id else None
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def get_by_id(self, user_id: str) -> Optional[UserRecord]:
         """Fetch user by user_id. Returns None if not found."""
         async with self._lock:
-            return self._users.get(user_id)
+            stored = self._users.get(user_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def list_users(
         self,
@@ -465,7 +497,7 @@ class InMemoryUserRepository(UserRepository):
         is_active: Optional[bool] = None,
     ) -> List[UserRecord]:
         async with self._lock:
-            matches = list(self._users.values())
+            matches = [u.model_copy(deep=True) for u in self._users.values()]
         if user_type is not None:
             matches = [u for u in matches if u.user_type == user_type]
         if is_active is not None:
@@ -488,12 +520,14 @@ class InMemoryAuditLogRepository(AuditLogRepository):
 
     async def save(self, record: AuditLogRecord) -> AuditLogRecord:
         async with self._lock:
-            self._records.append(record)
-            return record
+            self._records.append(record.model_copy(deep=True))
+            return record.model_copy(deep=True)
 
     async def list_for_admin(self, admin_id: str) -> List[AuditLogRecord]:
         async with self._lock:
-            matches = [r for r in self._records if r.admin_id == admin_id]
+            matches = [
+                r.model_copy(deep=True) for r in self._records if r.admin_id == admin_id
+            ]
         return sorted(matches, key=lambda r: r.created_at, reverse=True)
 
 
@@ -517,21 +551,25 @@ class InMemoryRubricRepository(RubricRepository):
         self._rubrics: dict[str, JobRubric] = {}
 
     async def save(self, rubric: JobRubric) -> JobRubric:
-        self._rubrics[rubric.rubric_id] = rubric
-        return rubric
+        self._rubrics[rubric.rubric_id] = rubric.model_copy(deep=True)
+        return rubric.model_copy(deep=True)
 
     async def get(self, rubric_id: str) -> Optional[JobRubric]:
-        return self._rubrics.get(rubric_id)
+        stored = self._rubrics.get(rubric_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def get_approved_for_job(self, job_id: str) -> Optional[JobRubric]:
         for rubric in self._rubrics.values():
             if rubric.job_id == job_id and rubric.status is RubricStatus.APPROVED:
-                return rubric
+                return rubric.model_copy(deep=True)
         return None
 
     async def list_versions_for_job(self, job_id: str) -> list[JobRubric]:
         return sorted(
-            (r for r in self._rubrics.values() if r.job_id == job_id),
+            (
+                r.model_copy(deep=True)
+                for r in self._rubrics.values() if r.job_id == job_id
+            ),
             key=lambda r: r.version,
         )
 
@@ -544,12 +582,12 @@ class InMemoryRubricRepository(RubricRepository):
         for other in list(self._rubrics.values()):
             if other.job_id == rubric.job_id and other.status is RubricStatus.APPROVED:
                 self._rubrics[other.rubric_id] = other.model_copy(
-                    update={"status": RubricStatus.SUPERSEDED}
+                    deep=True, update={"status": RubricStatus.SUPERSEDED}
                 )
 
-        approved = rubric.model_copy(update={"status": RubricStatus.APPROVED})
+        approved = rubric.model_copy(deep=True, update={"status": RubricStatus.APPROVED})
         self._rubrics[rubric_id] = approved
-        return approved
+        return approved.model_copy(deep=True)
 
 
 class InMemoryBugReportRepository(BugReportRepository):
@@ -564,18 +602,20 @@ class InMemoryBugReportRepository(BugReportRepository):
             existing = self._reports.get(record.bug_id)
             created_at = existing.created_at if existing else record.created_at
             stored = record.model_copy(
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
             )
             self._reports[record.bug_id] = stored
-            return stored
+            return stored.model_copy(deep=True)
 
     async def get(self, bug_id: str) -> Optional[BugReportRecord]:
         async with self._lock:
-            return self._reports.get(bug_id)
+            stored = self._reports.get(bug_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def list_all(self) -> List[BugReportRecord]:
         async with self._lock:
-            reports = list(self._reports.values())
+            reports = [r.model_copy(deep=True) for r in self._reports.values()]
         return sorted(reports, key=lambda r: r.created_at, reverse=True)
 
 
@@ -591,14 +631,16 @@ class InMemoryLLMCredentialRepository(LLMCredentialRepository):
             existing = self._credentials.get(record.user_id)
             created_at = existing.created_at if existing else record.created_at
             stored = record.model_copy(
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)}
+                deep=True,
+                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
             )
             self._credentials[record.user_id] = stored
-            return stored
+            return stored.model_copy(deep=True)
 
     async def get(self, user_id: str) -> Optional[LLMCredentialRecord]:
         async with self._lock:
-            return self._credentials.get(user_id)
+            stored = self._credentials.get(user_id)
+        return stored.model_copy(deep=True) if stored is not None else None
 
     async def delete(self, user_id: str) -> None:
         async with self._lock:

@@ -67,6 +67,21 @@ class LiveInterviewService:
         self._locks_guard = locks_guard if locks_guard is not None else asyncio.Lock()
 
     async def _lock_for(self, session_id: str) -> asyncio.Lock:
+        """Return the per-session lock, creating it only for a real session.
+
+        Callers reach this before `_get_live` inside the critical section.
+        If this helper inserted a lock unconditionally, any request with an
+        arbitrary path-parameter id would add a permanent entry to
+        `self._locks` even though the request then fails with 404. The
+        lookup here is only an existence gate; `_get_live` repeats it under
+        the lock so the live-state validation and the read that follows
+        cannot be split by a concurrent write.
+        """
+        if await self._sessions.get(session_id) is None:
+            raise NotFoundError(
+                "The live interview session was not found.",
+                context={"session_id": session_id},
+            )
         async with self._locks_guard:
             return self._locks.setdefault(session_id, asyncio.Lock())
 

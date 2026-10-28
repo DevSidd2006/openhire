@@ -95,6 +95,23 @@ async def create_started_session(service: LiveInterviewService) -> SessionRecord
 
 
 @pytest.mark.asyncio
+async def test_unknown_session_ids_do_not_allocate_lock_entries(service):
+    """A 404 path must not grow the process-global lock table."""
+    for index in range(200):
+        with pytest.raises(NotFoundError):
+            await service.start(f"missing-{index}")
+
+    assert service._locks == {}
+
+
+@pytest.mark.asyncio
+async def test_a_real_session_still_gets_one_lock_entry(service):
+    record = await create_started_session(service)
+
+    assert list(service._locks) == [record.session_id]
+
+
+@pytest.mark.asyncio
 async def test_create_and_start_snapshot_inputs_and_set_time_budget(service, clock):
     record = await service.create_session(
         job_description=job(),

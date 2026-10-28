@@ -350,6 +350,12 @@ class JobRecord(BaseModel):
     job_id: str
     job: JobDescription
     is_active: bool = True
+    # Set when the job row was saved but automatic rubric generation or
+    # approval failed, so the row was archived as a compensating action.
+    # A retry with the same caller-supplied job_id is allowed only for this
+    # state and only by the same creator - normal archived jobs stay
+    # protected from ID reuse.
+    rubric_generation_failed: bool = False
     # A candidate-created practice job (JD they pasted themselves, to
     # rehearse for) is stored as an ordinary JobRecord through the same
     # pipeline as a recruiter's real posting - is_practice/created_by_user_id

@@ -480,9 +480,12 @@ async function loadSystemStatus() {
       s.database.connected ? 'Database: connected' : 'Database: unreachable',
       s.database.connected,
     ));
+    const jwtSecretLabel = s.jwt_secret_is_blank
+      ? 'JWT secret: NOT CONFIGURED'
+      : (s.jwt_secret_is_placeholder ? 'JWT secret: PLACEHOLDER' : 'JWT secret: configured');
     flags.appendChild(statusChip(
-      s.jwt_secret_is_placeholder ? 'JWT secret: PLACEHOLDER' : 'JWT secret: configured',
-      !s.jwt_secret_is_placeholder,
+      jwtSecretLabel,
+      !s.jwt_secret_is_blank && !s.jwt_secret_is_placeholder,
     ));
     flags.appendChild(statusChip(
       s.auth_enabled ? 'Auth: enabled' : 'Auth: disabled',
