@@ -453,11 +453,12 @@ class InMemoryUserRepository(UserRepository):
             created_at = existing.created_at if existing else record.created_at
             email = record.email.lower()
             stored = record.model_copy(
+                deep=True,
                 update={
                     "email": email,
                     "created_at": created_at,
                     "updated_at": datetime.now(timezone.utc),
-                }
+                },
             )
             self._users[record.user_id] = stored
             # Drop the old index entry on an email change, so the previous
@@ -466,20 +467,12 @@ class InMemoryUserRepository(UserRepository):
                 if self._email_index.get(existing.email) == record.user_id:
                     del self._email_index[existing.email]
             self._email_index[email] = record.user_id
-            return stored
-                deep=True,
-                update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
-            )
-            self._users[record.user_id] = stored
-            self._email_index[record.email] = record.user_id
             return stored.model_copy(deep=True)
 
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
         """Fetch user by email. Case-insensitive. Returns None if not found."""
         async with self._lock:
             user_id = self._email_index.get(email.lower())
-            return self._users.get(user_id) if user_id else None
-            user_id = self._email_index.get(email)
             stored = self._users.get(user_id) if user_id else None
         return stored.model_copy(deep=True) if stored is not None else None
 
