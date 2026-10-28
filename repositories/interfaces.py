@@ -73,7 +73,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -81,6 +81,7 @@ from schemas.application import Application
 from schemas.rubric import JobRubric
 from schemas.interview import InterviewState, InterviewTranscript
 from schemas.job import JobDescription
+from schemas.live_interview import LiveInterviewState
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
 from utils.interview_session import SessionStatus
@@ -157,6 +158,8 @@ class SessionRecord(BaseModel):
     state: Optional[InterviewState] = None
     job_description: Optional[JobDescription] = None
     parsed_resume: Optional[ParsedResume] = None
+    interview_mode: Literal["adaptive", "gemini_live"] = "adaptive"
+    live_state: Optional[LiveInterviewState] = None
 
     @classmethod
     def from_runner(cls, session_id: str, runner: InterviewSessionRunner) -> "SessionRecord":
@@ -200,6 +203,8 @@ class SessionRecord(BaseModel):
             termination_reason=state.termination_reason if state else None,
             questions_asked=state.questions_asked if state else 0,
             questions_answered=state.questions_answered if state else 0,
+            interview_mode="adaptive",
+            live_state=None,
         )
 
 
@@ -345,6 +350,12 @@ class JobRecord(BaseModel):
     job_id: str
     job: JobDescription
     is_active: bool = True
+    # Set when the job row was saved but automatic rubric generation or
+    # approval failed, so the row was archived as a compensating action.
+    # A retry with the same caller-supplied job_id is allowed only for this
+    # state and only by the same creator - normal archived jobs stay
+    # protected from ID reuse.
+    rubric_generation_failed: bool = False
     # A candidate-created practice job (JD they pasted themselves, to
     # rehearse for) is stored as an ordinary JobRecord through the same
     # pipeline as a recruiter's real posting - is_practice/created_by_user_id
@@ -521,7 +532,7 @@ class UserRepository(ABC):
 
     @abstractmethod
     async def get_by_email(self, email: str) -> Optional[UserRecord]:
-        """Fetch user by email. Returns None if not found."""
+        """Fetch user by email, case-insensitively. Returns None if not found."""
 
     @abstractmethod
     async def get_by_id(self, user_id: str) -> Optional[UserRecord]:

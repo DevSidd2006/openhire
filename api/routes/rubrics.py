@@ -81,6 +81,8 @@ class LeaderboardRowView(BaseModel):
     semantic_score: Optional[float] = None
     coverage: float
     band: Optional[str] = None
+    # Informational evidence-quality signal; never a workflow gate.
+    needs_human_review: bool = False
     explanation: str
     competency_verdicts: List[CompetencyVerdictView]
 
@@ -245,10 +247,13 @@ async def get_match_leaderboard(
             pending.append(row)
         elif application.matching_score is None:
             pending.append(row)
-        elif application.matching_score.needs_human_review:
-            needs_review.append(row)
         else:
             ranked.append(row)
+            if application.matching_score.needs_human_review:
+                # Keep this compatibility/filtering view, but do not remove a
+                # scored row from the ranked results. The flag is
+                # informational; only a missing score is non-rankable.
+                needs_review.append(row)
 
     ranked.sort(key=lambda r: r.match_score if r.match_score is not None else -1.0, reverse=True)
     for position, row in enumerate(ranked, start=1):
@@ -331,6 +336,7 @@ async def _build_row(application, candidates: CandidateRepository) -> Leaderboar
         semantic_score=application.semantic_score,
         coverage=score.coverage if score else 0.0,
         band=score.band if score else None,
+        needs_human_review=score.needs_human_review if score else False,
         explanation=score.explanation if score else "Not scored yet.",
         competency_verdicts=verdict_views,
     )

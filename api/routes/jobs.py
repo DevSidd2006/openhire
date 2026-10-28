@@ -9,6 +9,7 @@ job-description extraction logic lives here - that stays inside
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.exceptions import RequestValidationError
 
 from api.dependencies import apply_llm_context_for_recruiter
 from api.models_applications import ApplicationListResponse, MatchingRunResponse
@@ -30,9 +31,11 @@ from core.dependencies import (
     get_job_service,
     get_recruiter_service,
 )
-from core.security import Principal, require_authenticated, require_scopes
+from core.config import get_settings
+from core.errors import ForbiddenError
+from core.security import Principal, PrincipalType, require_authenticated, require_candidate, require_scopes
 from services.application_service import ApplicationService
-from services.job_service import JobService
+from services.job_service import JobPatchValidationError, JobService
 from services.recruiter_service import RecruiterService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -43,6 +46,9 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     response_model=JobResponse,
     status_code=201,
     dependencies=[Depends(apply_llm_context_for_recruiter)],
+    responses={
+        409: {"description": "A job with the supplied job_id already exists."},
+    },
 )
 async def create_job(
     payload: CreateJobRequest,
@@ -52,7 +58,8 @@ async def create_job(
     """POST /jobs - analyze raw job-description text (via the existing
     `JDAnalyzerAgent`) into a structured job posting and store it.
 
-    Errors: 503 `dependency_unavailable` if analysis fails (core/errors.py:
+    Errors: 409 if a caller-supplied `job_id` is already stored; 503
+    `dependency_unavailable` if analysis fails (core/errors.py:
     `DependencyError`); 422 if `description` is empty.
 
     Authorization: `require_authenticated` only - inert while
@@ -60,6 +67,10 @@ async def create_job(
     needs real role persistence, which is blocked on the database/auth
     teammate; see the Chunk 2 handoff.
     """
+    settings = get_settings()
+    if settings.auth_enabled and payload.is_practice and principal.principal_type is not PrincipalType.CANDIDATE:
+        raise ForbiddenError("Only candidate accounts can create mock interviews.")
+
     record = await service.create_job(
         description=payload.description,
         job_id=payload.job_id,
@@ -74,7 +85,7 @@ async def create_job(
 @router.get("/practice/mine", response_model=JobListResponse)
 async def list_my_practice_jobs(
     service: JobService = Depends(get_job_service),
-    principal: Principal = Depends(require_authenticated),
+    principal: Principal = Depends(require_candidate),
 ) -> JobListResponse:
     """GET /jobs/practice/mine - the calling candidate's own practice jobs
     (mock-interview JDs they created for themselves), newest first. Never
@@ -121,7 +132,17 @@ async def update_job(
     the edited fields fail `JobDescription`'s own validation (e.g.
     competency weights no longer summing to 1.0).
     """
-    record = await service.update_job(job_id, payload.model_dump(exclude_unset=True))
+    try:
+        record = await service.update_job(job_id, payload.model_dump(exclude_unset=True))
+    except JobPatchValidationError as exc:
+        # The partial DTO can be valid on its own yet make the merged job
+        # invalid. Send those domain field errors through the API's existing
+        # safe 422 handler instead of letting them reach the catch-all 500.
+        errors = [
+            {**error, "loc": ("body", *error["loc"])}
+            for error in exc.validation_error.errors(include_input=False, include_context=False)
+        ]
+        raise RequestValidationError(errors) from exc
     return JobResponse.from_record(record)
 
 

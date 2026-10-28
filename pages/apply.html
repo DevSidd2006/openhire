@@ -63,9 +63,18 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
-  document.getElementById('applyTargetJob').textContent = jobId ? `Target Role: ${jobId}` : 'No job selected';
+  let jobTitle = jobId ? 'Open role' : 'No job selected';
+  document.getElementById('applyTargetJob').textContent = jobId ? 'Loading role…' : 'No job selected';
   if (!jobId) {
     document.getElementById('btnApply').disabled = true;
+  } else {
+    fetchJob(jobId).then(job => {
+      jobTitle = job.title || 'Open role';
+      document.getElementById('applyTargetJob').textContent = `Target Role: ${jobTitle}`;
+    }).catch(() => {
+      jobTitle = 'Open role';
+      document.getElementById('applyTargetJob').textContent = 'Target Role: Open role';
+    });
   }
 
   const user = getCurrentUser();
@@ -181,7 +190,7 @@
             <div class="result-icon result-icon-success"><i class="ph-bold ph-check" aria-hidden="true"></i></div>
             <h2 style="font-family:var(--font-serif); font-weight:400; font-size:1.9rem; color:var(--ink); margin-bottom:0.5rem;">Resume Shortlisted</h2>
             <p class="card-sub" style="font-size:1rem; margin-bottom:1.25rem;">
-              Congratulations <strong>${escapeHtml(name)}</strong>, your qualifications have been automatically verified and shortlisted for <strong>${escapeHtml(jobId)}</strong>.
+              Congratulations <strong>${escapeHtml(name)}</strong>, your qualifications have been automatically verified and shortlisted for <strong>${escapeHtml(jobTitle)}</strong>.
             </p>
 
             <div style="background:var(--canvas); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1.25rem; margin-bottom:1.5rem; text-align:left;">
@@ -217,7 +226,7 @@
             <div class="result-icon"><i class="ph-bold ph-file-x" aria-hidden="true"></i></div>
             <h2 style="font-family:var(--font-serif); font-weight:400; font-size:1.9rem; color:var(--ink); margin-bottom:0.5rem;">Application Evaluated</h2>
             <p class="card-sub" style="font-size:0.95rem; margin-bottom:1.25rem;">
-              Thank you for applying to <strong>${escapeHtml(jobId)}</strong>.
+              Thank you for applying to <strong>${escapeHtml(jobTitle)}</strong>.
             </p>
             <div style="background:var(--canvas); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem; text-align:left;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
@@ -237,9 +246,9 @@
         cardEl.innerHTML = `
           <div style="text-align:center; padding:1.5rem 0.5rem;">
             <div class="result-icon"><i class="ph-bold ph-hourglass" aria-hidden="true"></i></div>
-            <h2 style="font-family:var(--font-serif); font-weight:400; font-size:1.9rem; color:var(--ink); margin-bottom:0.5rem;">Application Under Review</h2>
+            <h2 style="font-family:var(--font-serif); font-weight:400; font-size:1.9rem; color:var(--ink); margin-bottom:0.5rem;">Application Scoring Pending</h2>
             <p class="card-sub" style="font-size:0.95rem; margin-bottom:1.25rem;">
-              Your resume has been parsed and queued for review for <strong>${escapeHtml(jobId)}</strong>.
+              Your resume has been parsed and is waiting for automated scoring for <strong>${escapeHtml(jobTitle)}</strong>.
             </p>
             <div style="background:var(--canvas); border:1px solid var(--surface-border); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem; text-align:left;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
@@ -247,7 +256,7 @@
                 <span class="tag">${escapeHtml(ourApplication.status.replace(/_/g, ' '))}</span>
               </div>
               <p style="font-size:0.85rem; color:var(--ink-3); margin:0;">
-                ${displayPct !== null ? `Match score: ${displayPct}%. ` : ''}A recruiter will review your application. You will be able to launch your interview from your dashboard once approved.
+                ${displayPct !== null ? `Match score: ${displayPct}%. ` : ''}Your interview will become available from your dashboard once automated scoring completes.
               </p>
             </div>
             <button class="btn-primary" style="width:100%;" onclick="window.location.href='${dashboardHref}'">

@@ -16,7 +16,9 @@ class CandidateScores(BaseModel):
     # Component scores (0-10 scale)
     technical_score: float = Field(ge=0.0, le=10.0)
     behavioral_score: float = Field(ge=0.0, le=10.0)
-    job_fit_score: float = Field(ge=0.0, le=10.0)
+    # None means the resume match had insufficient evidence to produce a
+    # defensible job-fit score; it must remain unknown rather than become 0.
+    job_fit_score: Optional[float] = Field(default=None, ge=0.0, le=10.0)
 
     # Weighted final score (0-10 scale)
     weighted_final_score: float = Field(ge=0.0, le=10.0)
@@ -30,6 +32,11 @@ class CandidateScores(BaseModel):
     # Fraction (0-1) of the job's total competency weight that was actually
     # matched to an evaluator score and contributed to competency_scores.
     rubric_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # Fraction (0-1) of the candidate's evaluated competency profile weight
+    # backed by valid, traceable evidence. Distinct from rubric_coverage,
+    # which measures completeness against the job's full rubric.
+    evidence_backed_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
 
     # Filled in by the LeaderboardAgent once all candidates are ranked
     percentile_rank: float = Field(default=0.0, ge=0.0, le=100.0)
@@ -67,7 +74,7 @@ class CandidateReport(BaseModel):
     requires_human_review: bool = False
 
     # Recommendation
-    recommendation: str  # "strong_candidate", "candidate", "human_review", "insufficient_evidence"
+    recommendation: str  # "strong_candidate", "candidate", "insufficient_evidence"
     explanation: str
 
 
@@ -81,7 +88,7 @@ class LeaderboardEntry(BaseModel):
     weighted_score: float
     technical_score: float
     behavioral_score: float
-    job_fit_score: float
+    job_fit_score: Optional[float] = None
     percentile_rank: float
 
     recommendation: str

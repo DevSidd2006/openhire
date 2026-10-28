@@ -12,6 +12,7 @@ from datetime import datetime
 from agents.technical_evaluator import TechnicalEvaluatorAgent
 from agents.behavioral_evaluator import BehavioralEvaluatorAgent
 from agents.interview_mediator import InterviewMediatorAgent
+from core.errors import ConflictError, DependencyError, NotFoundError
 from utils.logging import get_logger
 
 logger = get_logger("background_scoring")
@@ -107,7 +108,27 @@ class BackgroundScoringService:
     async def initialize_session(
         self, session_id: str, candidate_id: str, job_id: str
     ) -> InterviewScoring:
-        """Initialize scoring for a new interview session."""
+        """Initialize scoring for an interview session.
+
+        Idempotent for the same candidate/job pair: a reconnect or a retried
+        request must not erase answers that were already accumulated. A
+        different candidate or job for an existing session is a conflict,
+        not a reason to overwrite the session.
+        """
+        existing = self.scores.get(session_id)
+        if existing is not None:
+            if existing.candidate_id != candidate_id or existing.job_id != job_id:
+                raise ConflictError(
+                    "This scoring session already belongs to another candidate or job.",
+                    internal_detail=(
+                        f"session {session_id!r} was initialized for "
+                        f"candidate {existing.candidate_id!r} / job {existing.job_id!r}"
+                    ),
+                    context={"session_id": session_id},
+                )
+            logger.info(f"Scoring already initialized for session {session_id}")
+            return existing
+
         scoring = InterviewScoring(
             session_id=session_id,
             candidate_id=candidate_id,
@@ -131,13 +152,10 @@ class BackgroundScoringService:
         Runs mediator analysis to get clarity/completeness/relevance scores.
         """
         if session_id not in self.scores:
-            logger.error(f"Session {session_id} not found")
-            # Create default score
-            return AnswerScore(
-                question_id=question_id,
-                question_text=question_text,
-                answer_text=answer_text,
-                competency=competency,
+            logger.warning(f"Scoring answer for unknown session {session_id}")
+            raise NotFoundError(
+                "Scoring has not been initialized for this session.",
+                context={"session_id": session_id},
             )
 
         try:
@@ -168,14 +186,17 @@ class BackgroundScoringService:
             return score
 
         except Exception as e:
+            # A provider failure is not a zero score. Returning a fabricated
+            # AnswerScore made the endpoint report HTTP 200 with all-zero
+            # metrics and left the session's average silently wrong.
             logger.error(f"Error scoring answer: {e}")
-            # Return default score on error
-            return AnswerScore(
-                question_id=question_id,
-                question_text=question_text,
-                answer_text=answer_text,
-                competency=competency,
-            )
+            raise DependencyError(
+                "The answer could not be scored. Please retry.",
+                internal_detail=(
+                    f"mediator analysis failed for session {session_id!r}: {e}"
+                ),
+                context={"session_id": session_id},
+            ) from e
 
     async def get_session_scores(self, session_id: str) -> Optional[InterviewScoring]:
         """Get accumulated scores for a session."""

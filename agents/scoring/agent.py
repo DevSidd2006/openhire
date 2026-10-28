@@ -59,6 +59,7 @@ from schemas.evaluation import (
     CompetencyScore,
 )
 from schemas.job import JobDescription
+from utils.evidence import compute_evidence_backed_coverage
 
 
 class ScoringAgent(BaseAgent):
@@ -137,15 +138,23 @@ class ScoringAgent(BaseAgent):
         # separately below but does not enter this computation (see module
         # docstring for why).
         weighted_final = rubric_score
+        job_fit_display = f"{job_fit_score:.1f}" if job_fit_score is not None else "unknown"
 
         explanation = (
             f"Final score: {weighted_final:.1f}/10 = rubric_score (100% - weighted by the job's own "
             f"competency rubric; coverage: {rubric_coverage * 100:.0f}% of rubric weight matched). "
             f"{coverage_note}"
-            f"job_fit_score ({job_fit_score:.1f}/10, from resume/experience match) is reported "
+            f"job_fit_score ({job_fit_display}/10, from resume/experience match) is reported "
             f"separately and does NOT affect this score - it already gated shortlisting. "
             f"Raw component scores for reference - Technical: {tech_score:.1f}, "
-            f"Behavioral: {behav_score:.1f}, Job Fit: {job_fit_score:.1f}."
+            f"Behavioral: {behav_score:.1f}, Job Fit: {job_fit_display}."
+        )
+
+        evidence_backed_coverage = compute_evidence_backed_coverage(
+            competency_scores=matched_competencies,
+            rubric=job_description,
+            candidate_id=candidate_id,
+            transcript=kwargs.get("interview_transcript"),
         )
 
         scores = CandidateScores(
@@ -158,6 +167,7 @@ class ScoringAgent(BaseAgent):
             weighted_final_score=weighted_final,
             competency_scores=matched_competencies,
             rubric_coverage=rubric_coverage,
+            evidence_backed_coverage=evidence_backed_coverage,
             percentile_rank=0.0,  # Will be calculated in leaderboard
             explanation=explanation,
             confidence=min(technical_evaluation.confidence, behavioral_evaluation.confidence),

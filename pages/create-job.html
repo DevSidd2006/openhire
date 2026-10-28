@@ -39,7 +39,7 @@
 
     <div class="form-group">
       <label class="form-label">Target Number of Openings / Vacancies</label>
-      <input type="number" id="jobOpenings" class="form-control" placeholder="1" value="1" min="1" max="100">
+      <input type="number" id="jobOpenings" class="form-control" placeholder="1" value="1" min="1">
       <p class="form-hint">
         After AI interviews, exactly this number of top-ranked candidates will be automatically selected for hire/offer on the leaderboard.
       </p>
@@ -69,8 +69,8 @@
       alert('Please provide a job description.');
       return;
     }
-    if (!Number.isInteger(openingsVal) || openingsVal < 1 || openingsVal > 100) {
-      alert('Target openings must be a whole number between 1 and 100.');
+    if (!Number.isInteger(openingsVal) || openingsVal < 1) {
+      alert('Target openings must be a whole number of at least 1.');
       return;
     }
 

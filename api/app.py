@@ -7,6 +7,12 @@ configuring a module-level singleton at import time.
 `app = create_app()` is still exported at module level because
 `api.app:app` is the documented uvicorn target, the deployment entry point,
 and what `tests/test_api.py` and `tests/test_voice_layer.py` import.
+This module builds the application through ``create_app()`` rather than
+configuring a module-level singleton at import time.
+
+``app = create_app()`` is still exported at module level because
+``api.app:app`` is the documented Uvicorn target, deployment entry point,
+and import target used by the tests.
 
 Runnable in mock mode with no API key:
 
@@ -29,6 +35,23 @@ Wiring seams preserved:
 These remain pure wiring hooks and are read on every request.
 The dependency container (`core/container.py`) reads through to them
 rather than shadowing them.
+Starting the server does not call any LLM, speech, or vector provider.
+Configuration is read from ``config/settings.py`` and ``core/config.py``,
+while providers are resolved lazily at first use.
+
+Wiring seams preserved
+----------------------
+The following application-state wiring hooks remain available and are read
+by the dependency container on every request:
+
+    app.state.registry
+    app.state.interviewer_factory
+    app.state.voice_service_factory
+    app.state.jd_analyzer_factory
+    app.state.resume_parser_factory
+    app.state.resume_matcher_factory
+    app.state.evaluation_agent_factories
+    app.state.leaderboard_factory
 """
 
 from pathlib import Path
@@ -47,6 +70,7 @@ from api.routes.evaluations import router as evaluations_router
 from api.routes.interview import router as interview_router
 from api.routes.interview_mediator import router as interview_mediator_router
 from api.routes.jobs import router as jobs_router
+from api.routes.live_interview import router as live_interview_router
 from api.routes.llm_credentials import router as llm_credentials_router
 from api.routes.reports import router as reports_router
 from api.routes.rubrics import router as rubrics_router
@@ -73,6 +97,15 @@ from core.middleware import install_middleware
 #
 # StaticFiles provides read-only static hosting and confines access
 # beneath the mounted directory.
+# ``pages/voice-interview.html`` builds its WebSocket URL from
+# ``location.host``. Serving the page from the API keeps browser
+# fetch/WebSocket requests same-origin.
+#
+# CORS remains available through CORS_ALLOW_ORIGINS for separately hosted
+# frontends, but is disabled unless explicitly configured.
+#
+# StaticFiles confines requests to this directory, and there is no
+# user-controlled path joined here.
 _PAGES_DIR = Path(__file__).resolve().parent.parent / "pages"
 
 
@@ -86,6 +119,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     Passing an explicit settings object allows tests to create an
     independently configured application without modifying environment
     variables for the rest of the test session.
+    """Build and return a fully wired FastAPI application.
+
+    Args:
+        settings: Optional explicit application settings. When omitted,
+            the process-wide cached settings are used.
+
+    Passing explicit settings allows tests to construct differently
+    configured applications without mutating the environment used by
+    other tests.
     """
 
     from api.registry import SessionRegistry
@@ -110,8 +152,16 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     # ------------------------------------------------------------------
     # Pre-existing wiring seams
     # ------------------------------------------------------------------
+    # Application wiring seams
+    # ------------------------------------------------------------------
+    #
+    # These are intentionally stored on app.state rather than copied into
+    # the dependency container. This preserves test/deployment overrides
+    # and allows the container to read the current values on each request.
 
     app.state.registry = SessionRegistry()
+
+    # Existing interview/voice seams.
     app.state.interviewer_factory = None
     app.state.voice_service_factory = None
 
@@ -123,6 +173,9 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     # - ResumeMatcherAgent
     #
     # None means the agent resolves its own default LLM provider.
+    app.state.gemini_live_token_factory = None
+
+    # Chunk 2: job/candidate/matching agent seams.
     app.state.jd_analyzer_factory = None
     app.state.resume_parser_factory = None
     app.state.resume_matcher_factory = None
@@ -136,6 +189,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.leaderboard_factory = None
 
     # Make the application settings available through app.state.
+    # Chunk 4: evaluation-agent seam.
+    app.state.evaluation_agent_factories = None
+
+    # Chunk 5: leaderboard-agent seam.
+    app.state.leaderboard_factory = None
+
+    # Keep settings accessible through the application state.
     app.state.settings = settings
 
     # ------------------------------------------------------------------
@@ -169,6 +229,14 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         prefix=settings.api_prefix,
     )
 
+    # API routers
+    # ------------------------------------------------------------------
+
+    app.include_router(auth_router, prefix=settings.api_prefix)
+    app.include_router(admin_router, prefix=settings.api_prefix)
+    app.include_router(interview_router, prefix=settings.api_prefix)
+    app.include_router(voice_router, prefix=settings.api_prefix)
+    app.include_router(live_interview_router, prefix=settings.api_prefix)
     app.include_router(
         interview_mediator_router,
         prefix=settings.api_prefix,
@@ -214,6 +282,14 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         prefix=settings.api_prefix,
     )
 
+    app.include_router(scoring_router, prefix=settings.api_prefix)
+    app.include_router(reports_router, prefix=settings.api_prefix)
+    app.include_router(jobs_router, prefix=settings.api_prefix)
+    app.include_router(rubrics_router, prefix=settings.api_prefix)
+    app.include_router(candidates_router, prefix=settings.api_prefix)
+    app.include_router(applications_router, prefix=settings.api_prefix)
+    app.include_router(evaluations_router, prefix=settings.api_prefix)
+    app.include_router(bugs_router, prefix=settings.api_prefix)
     app.include_router(
         llm_credentials_router,
         prefix=settings.api_prefix,
@@ -230,6 +306,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         tags=["health"],
     )
     async def health() -> HealthResponse:
+        """Return a lightweight liveness response.
+
+        This endpoint intentionally performs no LLM, provider, database,
+        or upstream health checks. It is designed to be cheap enough for
+        continuous load-balancer polling.
+
+        The response body remains exactly:
+
+            {"status": "ok"}
         """
         Liveness endpoint.
 
@@ -262,6 +347,24 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     async def root(
         container: ServiceContainer = Depends(get_container),
     ) -> dict:
+    # Root operational summary
+    # ------------------------------------------------------------------
+
+    @app.api_route(
+        f"{settings.api_prefix}/",
+        methods=["GET", "HEAD"],
+        include_in_schema=False,
+    )
+    async def root(
+        container: ServiceContainer = Depends(get_container),
+    ) -> dict:
+        """Return a credential-free operational summary.
+
+        ``public_summary()`` exposes provider names only and never exposes
+        API keys, connection strings, or filesystem paths.
+
+        Persistence is explicitly reported so an ephemeral deployment does
+        not appear durable when its data is lost on restart.
         """
         Return a credential-free summary of the running service.
 
@@ -284,6 +387,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------
     # Static pages
+    # Optional static frontend
     # ------------------------------------------------------------------
 
     if settings.serve_static_pages and _PAGES_DIR.is_dir():
@@ -308,4 +412,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 #     uvicorn api.app:app --reload
 #
 # and existing tests depend on it.
+# Uvicorn/deployment/test entry point.
+#
+# Usage:
+#
+#     python -m uvicorn api.app:app --reload
+#
+# The public ``api.app:app`` contract remains unchanged.
 app = create_app()

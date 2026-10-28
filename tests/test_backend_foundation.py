@@ -239,6 +239,46 @@ class TestStartupValidation:
             )
         assert "JWT_SECRET_KEY" in exc.value.internal_detail
 
+    @pytest.mark.parametrize(
+        "secret",
+        [
+            "your_secure_random_32_byte_jwt_secret_key",
+            "test-jwt-secret-that-is-at-least-thirty-two-bytes-long",
+            "   ",
+            "",
+        ],
+    )
+    def test_production_rejects_public_or_blank_jwt_secrets(self, secret):
+        """The .env.example placeholder, the test fixture and a blank value
+        are all public knowledge; none may be used to sign production
+        tokens."""
+        settings = AppSettings(environment="production", jwt_secret_key=secret)
+        with pytest.raises(ConfigurationError) as exc:
+            validate_startup_configuration(
+                settings, self._container(settings, persistence_is_ephemeral=False)
+            )
+        assert "JWT_SECRET_KEY" in exc.value.internal_detail
+
+    def test_blank_and_placeholder_secrets_are_distinguished(self):
+        blank = AppSettings(jwt_secret_key="")
+        placeholder = AppSettings()
+
+        assert blank.jwt_secret_is_blank is True
+        assert blank.jwt_secret_is_placeholder is False
+        assert blank.jwt_secret_is_default is True
+
+        assert placeholder.jwt_secret_is_blank is False
+        assert placeholder.jwt_secret_is_placeholder is True
+        assert placeholder.jwt_secret_is_default is True
+
+    def test_blank_secret_startup_error_says_it_is_empty(self):
+        settings = AppSettings(environment="production", jwt_secret_key="")
+        with pytest.raises(ConfigurationError) as exc:
+            validate_startup_configuration(
+                settings, self._container(settings, persistence_is_ephemeral=False)
+            )
+        assert "empty JWT_SECRET_KEY" in exc.value.internal_detail
+
     def test_production_with_a_real_jwt_secret_is_allowed(self):
         settings = AppSettings(
             environment="production", jwt_secret_key="a-real-secret-from-the-environment"
@@ -1056,7 +1096,7 @@ class TestLayering:
         offenders = []
         for path in root.rglob("*.py"):
             parts = set(path.parts)
-            if parts & {"venv", "__pycache__", ".git", "tests"}:
+            if parts & {"venv", ".venv", "__pycache__", ".git", ".worktrees", "tests"}:
                 continue
             if path.name == "memory.py" or path.parent.name == "repositories":
                 continue

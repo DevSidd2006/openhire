@@ -1,15 +1,14 @@
 /**
  * Minimal & fast navigation and state handler
  */
-// The backend URL. When hosted on Vercel or locally, connects to the deployed EC2 backend
-// unless running on the same origin (e.g. backend serving /app).
+// Prefer an explicit per-page override. Local pages use the same FastAPI origin
+// so development-only routes such as /live-sessions/demo stay local.
 const DEFAULT_RENDER_BACKEND = 'https://openhire.devsidd.tech';
-const API_BASE = DEFAULT_RENDER_BACKEND || ((
-  location.hostname === 'localhost' ||
-  location.hostname === '127.0.0.1')
-    ? ''
-    : DEFAULT_RENDER_BACKEND
-);
+const API_BASE = typeof window.OPENHIRE_API_URL === 'string'
+  ? window.OPENHIRE_API_URL.replace(/\/+$/, '')
+  : ((location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? ''
+      : DEFAULT_RENDER_BACKEND);
 
 /** Helper to construct WebSocket URL for the session, resolving against API_BASE or location.host */
 function getWebSocketUrl(path) {
@@ -48,6 +47,13 @@ function isAuthTokenIssuingPath(path) {
 }
 
 async function apiRequest(path, options = {}) {
+  // OAuth callback pages may start API work before their page-level guard
+  // finishes exchanging the one-time ticket. Serialize all normal API calls
+  // behind that initialization so they never race the token exchange.
+  if (typeof initAuth === 'function' && !isAuthTokenIssuingPath(path)) {
+    await initAuth();
+  }
+
   const opts = Object.assign({}, options);
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   opts.headers = isFormData
@@ -134,7 +140,7 @@ function normalizeJob(record) {
   const job = record.job || {};
   return {
     job_id: record.job_id,
-    title: job.title || record.job_id,
+    title: job.title || 'Open role',
     description: job.description || '',
     competencies: (job.competencies || []).map((c) => c.name),
     is_active: record.is_active,
@@ -249,36 +255,43 @@ async function fetchAdminSystemStatus() {
   return apiRequest('/admin/system/status');
 }
 
-/** Creates the interview session for an application that is already
- * SHORTLISTED and has none yet - fetches the full job/resume records
- * POST /sessions needs (it takes the full JobDescription/ParsedResume, not
- * just their ids - see api/models.py:CreateSessionRequest), and links it
- * to the application in the same call. Returns the session_id. */
+async function createInterviewWithMode(path, body) {
+  return apiRequest(path, { method: 'POST', body });
+}
+
+/** Creates or repairs the interview session for a shortlisted application.
+ * Gemini Live is the only interview transport. If an application still
+ * points at a pre-Live session, the backend creates and links a replacement
+ * Gemini Live session while preserving the old record for auditability. */
 async function ensureInterviewSession(application) {
   if (application.session_id) {
-    return application.session_id;
+    try {
+      await apiRequest(`/live-sessions/${encodeURIComponent(application.session_id)}`);
+      return application.session_id;
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+      // The linked record is an older adaptive/turn-based session. Continue
+      // below so the server can relink this application to Gemini Live.
+    }
   }
   const [job, candidate] = await Promise.all([
     apiRequest(`/jobs/${encodeURIComponent(application.job_id)}`),
     apiRequest(`/candidates/${encodeURIComponent(application.candidate_id)}`),
   ]);
-  const session = await apiRequest('/sessions', {
-    method: 'POST',
-    body: {
-      candidate_id: application.candidate_id,
-      job_id: application.job_id,
-      job_description: job.job,
-      parsed_resume: candidate.resume,
-      application_id: application.application_id,
-      // The backend default (MAX_QUESTIONS_PER_INTERVIEW=12,
-      // config/settings.py) is realistic for a real interview but too long
-      // for a live demo click-through - keep this a short, deliberate demo
-      // constant, not a behavior change to the adaptive engine itself.
-      max_questions: 5,
-    },
-  });
+  const body = {
+    candidate_id: application.candidate_id,
+    job_id: application.job_id,
+    job_description: job.job,
+    parsed_resume: candidate.resume,
+    application_id: application.application_id,
+  };
+  const session = await createInterviewWithMode('/live-sessions', body);
   return session.session_id;
 }
+
+// The interview page can repair a stale link when opened directly from an
+// old application URL, without duplicating the creation logic.
+globalThis.ensureInterviewSession = ensureInterviewSession;
 
 function getCurrentUser() {
   const user = localStorage.getItem('openhire_user');
@@ -322,7 +335,12 @@ async function resolveCandidateId() {
   }
 }
 
-function logoutUser() {
+async function logoutUser() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (err) {
+    // Proceed with client logout even if network request fails
+  }
   localStorage.removeItem('openhire_user');
   localStorage.removeItem('openhire_access_token');
   localStorage.removeItem('openhire_refresh_token');
@@ -381,6 +399,7 @@ function renderNavbar(activePage = '') {
       <nav class="nav-links">
         <a href="index.html">Overview</a>
         ${!isAdmin ? `<a href="${dashboardHref}" class="${activePage === 'dashboard' ? 'active' : ''}">Dashboard</a>` : ''}
+        ${!isRecruiter && !isAdmin ? `<a href="mock-interviews.html" class="${activePage === 'mock-interviews' ? 'active' : ''}">Mock Interviews</a><a href="jobs.html" class="${activePage === 'jobs' ? 'active' : ''}">Jobs</a>` : ''}
         ${isRecruiter ? `<a href="create-job.html" class="${activePage === 'create-job' ? 'active' : ''}">+ Job</a>` : ''}
         ${isRecruiter ? `<a href="screening.html" class="${activePage === 'screening' ? 'active' : ''}">Screening</a>` : ''}
         <a href="leaderboard.html" class="${activePage === 'leaderboard' ? 'active' : ''}">Leaderboard</a>

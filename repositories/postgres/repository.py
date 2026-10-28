@@ -57,6 +57,7 @@ from schemas.interview import (
     InterviewTranscript,
 )
 from schemas.job import JobDescription
+from schemas.live_interview import LiveInterviewState
 from schemas.resume import ParsedResume
 from schemas.scoring import CandidateReport
 from utils.interview_session import SessionStatus
@@ -73,6 +74,7 @@ def _job_record_from_row(row: asyncpg.Record) -> JobRecord:
         job=JobDescription.model_validate(row["job"]),
         is_active=row["is_active"],
         is_practice=row["is_practice"],
+        rubric_generation_failed=row["rubric_generation_failed"],
         created_by_user_id=row["created_by_user_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -153,6 +155,12 @@ def _session_record_from_row(row: asyncpg.Record) -> SessionRecord:
             if row["parsed_resume_snapshot"] is not None
             else None
         ),
+        interview_mode=row["interview_mode"],
+        live_state=(
+            LiveInterviewState.model_validate(row["live_state"])
+            if row["live_state"] is not None
+            else None
+        ),
     )
 
 
@@ -214,20 +222,24 @@ class PostgresJobRepository(JobRepository):
             row = await conn.fetchrow(
                 """
                 INSERT INTO jobs
-                    (job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, now())
+                    (job_id, job, is_active, is_practice, rubric_generation_failed,
+                     created_by_user_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, now())
                 ON CONFLICT (job_id) DO UPDATE
                     SET job = EXCLUDED.job,
                         is_active = EXCLUDED.is_active,
                         is_practice = EXCLUDED.is_practice,
+                        rubric_generation_failed = EXCLUDED.rubric_generation_failed,
                         created_by_user_id = EXCLUDED.created_by_user_id,
                         updated_at = now()
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 record.job_id,
                 record.job.model_dump(mode="json"),
                 record.is_active,
                 record.is_practice,
+                record.rubric_generation_failed,
                 record.created_by_user_id,
                 record.created_at,
             )
@@ -260,7 +272,8 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = false, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )
@@ -274,7 +287,8 @@ class PostgresJobRepository(JobRepository):
                 UPDATE jobs
                 SET is_active = true, updated_at = now()
                 WHERE job_id = $1
-                RETURNING job_id, job, is_active, is_practice, created_by_user_id, created_at, updated_at
+                RETURNING job_id, job, is_active, is_practice, rubric_generation_failed,
+                          created_by_user_id, created_at, updated_at
                 """,
                 job_id,
             )
@@ -522,8 +536,8 @@ class PostgresSessionRepository(SessionRepository):
                         session_id, interview_id, candidate_id, job_id, application_id,
                         status, termination_reason, questions_asked, questions_answered,
                         state, job_description_snapshot, parsed_resume_snapshot,
-                        created_at, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+                        interview_mode, live_state, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
                     ON CONFLICT (session_id) DO UPDATE SET
                         interview_id = EXCLUDED.interview_id,
                         candidate_id = EXCLUDED.candidate_id,
@@ -536,6 +550,8 @@ class PostgresSessionRepository(SessionRepository):
                         state = EXCLUDED.state,
                         job_description_snapshot = EXCLUDED.job_description_snapshot,
                         parsed_resume_snapshot = EXCLUDED.parsed_resume_snapshot,
+                        interview_mode = EXCLUDED.interview_mode,
+                        live_state = EXCLUDED.live_state,
                         updated_at = now()
                     RETURNING *
                     """,
@@ -557,6 +573,12 @@ class PostgresSessionRepository(SessionRepository):
                     (
                         record.parsed_resume.model_dump(mode="json")
                         if record.parsed_resume is not None
+                        else None
+                    ),
+                    record.interview_mode,
+                    (
+                        record.live_state.model_dump(mode="json")
+                        if record.live_state is not None
                         else None
                     ),
                     record.created_at,

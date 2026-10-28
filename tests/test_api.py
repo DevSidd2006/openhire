@@ -424,6 +424,34 @@ class TestMockModeStartup:
         assert r.status_code == 200
         assert r.json()["evidence"] is not None
 
+    def test_embedding_provider_code_default_is_mock(self):
+        """Regression test: config/settings.py must default EMBEDDING_PROVIDER
+        to 'mock' when the env var is unset, matching .env.example.
+
+        This test removes EMBEDDING_PROVIDER from the environment and reloads
+        config.settings to verify the ACTUAL code default - not the value set
+        by conftest.py or a .env file. The offline-first development promise
+        requires that a fresh checkout works without any API keys.
+        """
+        import importlib
+        import os
+        import config.settings as settings_module
+
+        original_value = os.environ.pop("EMBEDDING_PROVIDER", None)
+        try:
+            importlib.reload(settings_module)
+            assert settings_module.EMBEDDING_PROVIDER == "mock", (
+                f"EMBEDDING_PROVIDER code default is '{settings_module.EMBEDDING_PROVIDER}', "
+                f"expected 'mock'. The default in config/settings.py must match .env.example "
+                f"so developers can run the project offline without API keys."
+            )
+        finally:
+            if original_value is not None:
+                os.environ["EMBEDDING_PROVIDER"] = original_value
+            else:
+                os.environ.setdefault("EMBEDDING_PROVIDER", "mock")
+            importlib.reload(settings_module)
+
 
 # ---------------------------------------------------------------------------
 # Full API -> evaluation pipeline integration (P5 Phase 16)

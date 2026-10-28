@@ -83,7 +83,11 @@ class ReportGeneratorAgent(BaseAgent):
                 scores=candidate_scores,
                 technical_summary=technical_evaluation.explanation if technical_evaluation else "No technical evaluation",
                 behavioral_summary=behavioral_evaluation.explanation if behavioral_evaluation else "No behavioral evaluation",
-                job_fit_summary=f"Match score: {candidate_scores.job_fit_score:.1f}/10",
+                job_fit_summary=(
+                    f"Match score: {candidate_scores.job_fit_score:.1f}/10"
+                    if candidate_scores.job_fit_score is not None
+                    else "Match score: unknown (insufficient resume evidence)"
+                ),
                 recommendation=recommendation,
                 strengths=self._compile_strengths(technical_evaluation, behavioral_evaluation),
                 weaknesses=self._compile_weaknesses(technical_evaluation, behavioral_evaluation),
@@ -120,26 +124,18 @@ class ReportGeneratorAgent(BaseAgent):
         integrity_eval: IntegrityEvaluation = None,
         claim_verifications: Optional[List[ClaimVerification]] = None,
     ) -> str:
-        """Determine hiring recommendation."""
+        """Determine the automated recommendation from the final score.
+
+        Integrity, bias, and claim-review flags remain informational metadata
+        on the report and do not block score-based recommendations.
+        """
         final_score = scores.weighted_final_score
-
-        # Check for disqualifying issues
-        if integrity_eval and integrity_eval.requires_human_review and integrity_eval.overall_integrity != "clear":
-            return "human_review"
-
-        if bias_audit and bias_audit.requires_human_review:
-            return "human_review"
-
-        if claim_verifications and any(v.requires_human_review for v in claim_verifications):
-            return "human_review"
 
         # Score-based recommendation
         if final_score >= 8.5:
             return "strong_candidate"
-        elif final_score >= 7.0:
-            return "candidate"
         elif final_score >= 5.5:
-            return "human_review"
+            return "candidate"
         else:
             return "insufficient_evidence"
 
@@ -171,11 +167,16 @@ class ReportGeneratorAgent(BaseAgent):
 
     def _generate_summary(self, scores: CandidateScores, recommendation: str) -> str:
         """Generate executive summary."""
+        job_fit = (
+            f"{scores.job_fit_score:.1f}/10"
+            if scores.job_fit_score is not None
+            else "unknown"
+        )
         return (
             f"Recommendation: {recommendation}\n"
             f"Overall Score: {scores.weighted_final_score:.1f}/10\n"
             f"Technical: {scores.technical_score:.1f}/10 | "
             f"Behavioral: {scores.behavioral_score:.1f}/10 | "
-            f"Job Fit: {scores.job_fit_score:.1f}/10\n"
+            f"Job Fit: {job_fit}\n"
             f"See detailed sections below for evidence."
         )

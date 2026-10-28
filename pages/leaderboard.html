@@ -105,7 +105,12 @@
   let targetOpenings = 1;
 
   if (jobId) {
-    document.getElementById('leaderboardMeta').textContent = `Ranked applicants for role: ${jobId}`;
+    document.getElementById('leaderboardMeta').textContent = 'Loading role…';
+    fetchJob(jobId).then(job => {
+      document.getElementById('leaderboardMeta').textContent = `Ranked applicants for role: ${job.title || 'Open role'}`;
+    }).catch(() => {
+      document.getElementById('leaderboardMeta').textContent = 'Ranked applicants for role: Open role';
+    });
   } else {
     document.getElementById('leaderboardMeta').textContent = 'No job selected.';
     tbody.innerHTML = '<tr><td colspan="7" class="card-sub">Open this page from a specific job (Recruiter Dashboard → a posting → Leaderboard) to see its ranked candidates.</td></tr>';

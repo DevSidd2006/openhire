@@ -35,25 +35,39 @@ _current_llm_provider: ContextVar[Optional["LLMProvider"]] = ContextVar(
 )
 
 
-def set_context_provider(provider: Optional["LLMProvider"]) -> Token:
-    """Set the provider for the current context (request). Returns a Token
-    that MUST be passed to reset_context_provider when the request ends -
-    see api/dependencies for the yield-dependency that does this."""
+def set_context_provider(
+    provider: Optional["LLMProvider"],
+) -> Token[Optional["LLMProvider"]]:
+    """Set the provider for the current context (request).
+
+    Returns a Token that MUST be passed to reset_context_provider()
+    when the request ends - see api/dependencies for the yield-dependency
+    that manages this lifecycle.
+    """
     return _current_llm_provider.set(provider)
 
 
-def reset_context_provider(token: Token) -> None:
-    """Undo a prior set_context_provider call. Always call this in a
-    `finally` block paired with the `set_context_provider` that produced
-    `token`, so a provider never outlives the request that set it."""
+def reset_context_provider(token: Token[Optional["LLMProvider"]]) -> None:
+    """Undo a prior set_context_provider call.
+
+    Always call this in a `finally` block paired with the
+    set_context_provider() call that produced `token`, so a provider
+    never outlives the request that set it.
+    """
     _current_llm_provider.reset(token)
 
 
 def get_context_provider() -> Optional["LLMProvider"]:
-    """The provider set for the current context, or None if none is set -
-    read by providers/llm/__init__.py:get_llm_provider() before it falls
-    back to the environment-based dispatch."""
+    """The provider set for the current context, or None if none is set.
+
+    Read by providers/llm/__init__.py:get_llm_provider() before it falls
+    back to the environment-based dispatch.
+    """
     return _current_llm_provider.get()
 
 
-__all__ = ["get_context_provider", "reset_context_provider", "set_context_provider"]
+__all__ = [
+    "get_context_provider",
+    "reset_context_provider",
+    "set_context_provider",
+]
