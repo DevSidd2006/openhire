@@ -909,6 +909,30 @@ class TestAdminServiceSystemStatus:
         assert real_status["jwt_secret_is_blank"] is False
 
     @pytest.mark.asyncio
+    async def test_system_status_response_schema_keeps_jwt_secret_flags(self):
+        """GET /admin/system/status validates the service dict through
+        SystemStatusResponse (api/routes/admin.py) - pydantic silently drops
+        undeclared fields, so any flag the admin console reads
+        (pages/admin.html) must be declared on the schema too. A missing
+        jwt_secret_is_blank declaration would render a blank secret as
+        'configured'."""
+        from schemas.admin import SystemStatusResponse
+
+        for name, settings in (
+            ("development default", AppSettings()),
+            ("blank", AppSettings(jwt_secret_key="")),
+            (
+                ".env.example placeholder",
+                AppSettings(jwt_secret_key="your_secure_random_32_byte_jwt_secret_key"),
+            ),
+            ("real", AppSettings(jwt_secret_key="a-real-generated-secret")),
+        ):
+            status = await _system_status_service(settings=settings).get_system_status()
+            rendered = SystemStatusResponse.model_validate(status)
+            assert rendered.jwt_secret_is_placeholder is status["jwt_secret_is_placeholder"], name
+            assert rendered.jwt_secret_is_blank is status["jwt_secret_is_blank"], name
+
+    @pytest.mark.asyncio
     async def test_reports_evaluation_queue_running_count(self):
         service = _system_status_service(evaluation_dispatcher=_FakeDispatcher(running_count=3))
         status = await service.get_system_status()

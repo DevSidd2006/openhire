@@ -120,6 +120,7 @@ class SystemStatusResponse(BaseModel):
     persistence: str
     auth_enabled: bool
     jwt_secret_is_placeholder: bool
+    jwt_secret_is_blank: bool
     providers: ProviderStatus
     database: DatabaseStatus
     evaluation_queue: EvaluationQueueStatus
