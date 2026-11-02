@@ -198,6 +198,14 @@ async function changeMyPassword(currentPassword, newPassword) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+window.escapeHtml = escapeHtml;
+window.esc = escapeHtml;
+
 const OPENHIRE_LLM_PROVIDERS = [
   ['openai', 'OpenAI'], ['gemini', 'Gemini'], ['anthropic', 'Anthropic'],
   ['groq', 'Groq'], ['nvidia_nim', 'NVIDIA NIM'], ['openrouter', 'OpenRouter'],
@@ -217,13 +225,14 @@ const OPENHIRE_LLM_MODELS = {
 async function mountLlmWorkflowSettings(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return { save: async () => {} };
-  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc = window.escapeHtml;
   try {
     const [credentials, settings] = await Promise.all([apiRequest('/auth/me/llm-credentials'), apiRequest('/auth/me/llm-settings')]);
     let provider = settings.provider || (credentials.find(c => c.credential_id === settings.default_credential_id) || {}).provider || OPENHIRE_LLM_PROVIDERS[0][0];
     let credentialId = settings.default_credential_id || '';
     let model = settings.model || '';
     let modeValue = settings.mode || 'platform';
+    let settingsChanged = false;
     const key = () => credentials.find(c => c.credential_id === credentialId);
     const label = () => modeValue === 'platform' ? 'OpenHire Platform' : `${OPENHIRE_LLM_PROVIDERS.find(p => p[0] === provider)?.[1] || provider} - ${model || 'default model'}${key() ? ` - ${key().name}` : ''}`;
     container.innerHTML = `<div class="byok-workflow-control"><label class="form-label" for="${containerId}Mode">AI provider mode</label><select class="form-control" id="${containerId}Mode"><option value="platform">Platform</option><option value="byok">BYOK</option></select><div class="byok-workflow-summary"><span id="${containerId}Summary"></span><button type="button" class="btn-outline btn-sm" id="${containerId}Change" hidden>Change</button></div><span class="form-status" id="${containerId}Status" aria-live="polite"></span></div>`;
@@ -254,22 +263,30 @@ async function mountLlmWorkflowSettings(containerId) {
       overlay.querySelector('[data-apply]').onclick = () => {
         const selected = credentials.find(x => x.credential_id === c.value);
         if (!selected) { overlay.querySelector('[data-status]').textContent = 'Add an active key from Profile - API Keys to use BYOK.'; return; }
-        provider = p.value; credentialId = selected.credential_id; model = m.value; modeValue = 'byok'; mode.value = 'byok'; sync(); overlay.hidden = true;
+        provider = p.value; credentialId = selected.credential_id; model = m.value; modeValue = 'byok'; mode.value = 'byok'; settingsChanged = true; sync(); overlay.hidden = true;
       };
       overlay.hidden = false;
     };
-    mode.onchange = () => { modeValue = mode.value; sync(); if (modeValue === 'byok') openModal(); else overlay.hidden = true; };
+    mode.onchange = () => { modeValue = mode.value; settingsChanged = true; sync(); if (modeValue === 'byok') openModal(); else overlay.hidden = true; };
     change.onclick = openModal;
     const save = async () => {
+      if (!settingsChanged && modeValue === (settings.mode || 'platform')) {
+        return;
+      }
       if (modeValue === 'byok' && !key()) throw new Error('Select an active API key in the BYOK settings dialog.');
       status.textContent = 'Saving AI settings...'; status.className = 'form-status';
       await apiRequest('/auth/me/llm-settings', {method:'PUT', body:{mode:modeValue, provider, default_credential_id:modeValue === 'byok' ? credentialId : null, fallback_to_other_keys:settings.fallback_to_other_keys !== false, fallback_to_platform:settings.fallback_to_platform !== false, model:modeValue === 'byok' ? model : null}});
       status.textContent = 'AI settings saved.'; status.className = 'form-status success';
+      settingsChanged = false;
     };
     return { save };
   } catch (err) {
-    container.innerHTML = `<p class="card-sub">AI provider settings could not load: ${esc(err.message)}</p>`;
-    return { save: async () => { throw new Error('AI provider settings could not be loaded.'); } };
+    if (err.status === 404) {
+      container.innerHTML = '<p class="card-sub" style="margin:0; font-size:12px; color:var(--ink-3);">AI provider: platform default.</p>';
+    } else {
+      container.innerHTML = `<p class="card-sub" style="margin:0; font-size:12px; color:var(--ink-3);">AI provider settings unavailable.</p>`;
+    }
+    return { save: async () => {} };
   }
 }
 

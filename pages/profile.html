@@ -376,12 +376,15 @@ const BYOK_MODELS = {
   openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'],
 };
 
+const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[c]));
+
 async function renderApiKeysCard(profile) {
   const container = document.getElementById('apiKeysBody');
   if (!profile || !['recruiter', 'candidate', 'admin'].includes(profile.user_type)) {
     container.innerHTML = '<p class="card-sub">Sign in to manage your AI provider settings.</p>'; return;
   }
-  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   try {
     const [credentials, settings, usage, health] = await Promise.all([apiRequest('/auth/me/llm-credentials'), apiRequest('/auth/me/llm-settings'), apiRequest('/auth/me/llm-usage'), apiRequest('/auth/me/llm-provider-health')]);
     const providers = BYOK_PROVIDERS.map(p => `<option value="${p.value}">${p.label}</option>`).join('');
@@ -432,6 +435,10 @@ async function renderApiKeysCard(profile) {
     form.onsubmit = async event => { event.preventDefault(); const submit = document.getElementById('credentialSubmit'); submit.disabled = true; formStatus.textContent = form.dataset.editId ? 'Saving credential...' : 'Testing and saving credential...'; formStatus.className = 'form-status'; const payload = {name:document.getElementById('credentialName').value.trim(), provider:document.getElementById('credentialProvider').value, model:document.getElementById('credentialModel').value || null}; const apiKey = document.getElementById('credentialKey').value.trim(); if (apiKey) payload.api_key = apiKey; try { if (form.dataset.editId) await apiRequest('/auth/me/llm-credentials/' + encodeURIComponent(form.dataset.editId), {method:'PATCH', body:payload}); else { payload.api_key = apiKey; await apiRequest('/auth/me/llm-credentials', {method:'POST', body:payload}); } await renderApiKeysCard(profile); } catch(e) { formStatus.textContent = e.message; formStatus.className = 'form-status error'; submit.disabled = false; } };
     document.getElementById('llmUsage').innerHTML = usage.length ? usage.map(u => `<p class="byok-usage-row">${esc(BYOK_PROVIDERS.find(p => p.value === u.provider)?.label || u.provider)} - ${esc((credentials.find(c => c.credential_id === u.credential_id) || {}).name || 'Deleted credential')} <span>${u.requests} requests - ${u.successes} successful - ${u.failures} failed - ${u.input_tokens}+${u.output_tokens} tokens</span></p>`).join('') : '<p class="card-sub">No usage recorded yet.</p>';
   } catch (err) {
+    if (err.status === 404) {
+      container.innerHTML = `<p class="card-sub">API keys are not enabled on this deployment yet.</p>`;
+      return;
+    }
     container.innerHTML = `<p class="card-sub">Could not load your API key settings: ${esc(err.message)}</p>`;
   }
 }

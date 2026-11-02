@@ -25,7 +25,7 @@ from api.models_llm_credentials import (
 )
 from core.config import AppSettings, get_settings
 from core.dependencies import get_llm_credential_service
-from core.errors import ForbiddenError, NotFoundError
+from core.errors import BadRequestError, ForbiddenError, NotFoundError
 from core.security import Principal, PrincipalType, require_authenticated
 from services.llm_credential_service import LLMCredentialService
 from services.provider_health import PROVIDERS, check_provider, platform_credentials
@@ -38,10 +38,18 @@ def _require_byok_enabled(settings: AppSettings = Depends(get_settings)) -> None
         raise NotFoundError("BYOK is not enabled on this deployment.")
 
 
-async def _require_recruiter(principal: Principal = Depends(require_authenticated)) -> Principal:
+async def _require_recruiter(
+    principal: Principal = Depends(require_authenticated),
+    settings: AppSettings = Depends(get_settings),
+) -> Principal:
+    if not settings.auth_enabled:
+        return principal
     if principal.principal_type not in (PrincipalType.CANDIDATE, PrincipalType.RECRUITER, PrincipalType.ADMIN):
         raise ForbiddenError("BYOK is available to signed-in accounts.")
     return principal
+
+
+_require_account = _require_recruiter
 
 
 @router.get("/llm-provider-health", dependencies=[Depends(_require_byok_enabled)])
@@ -77,17 +85,22 @@ async def get_provider_health(service: LLMCredentialService = Depends(get_llm_cr
 @router.post("/llm-provider-health/test", dependencies=[Depends(_require_byok_enabled)])
 async def test_provider_health(payload: TestLLMCredentialRequest, service: LLMCredentialService = Depends(get_llm_credential_service), principal: Principal = Depends(_require_recruiter)):
     payload.validate_provider()
+    provider = payload.provider or "gemini"
+    configured = platform_credentials()
+    if provider not in configured:
+        raise BadRequestError(f"Unsupported provider {provider!r}.")
     if payload.credential_id == "platform":
-        key, model, _ = platform_credentials()[payload.provider or ""]
-        result = await check_provider(payload.provider or "", key, payload.model or model)
-        await service.save_platform_health(payload.provider or "", result)
+        key, model, _ = configured[provider]
+        result = await check_provider(provider, key, payload.model or model)
+        if principal.principal_type is PrincipalType.ADMIN:
+            await service.save_platform_health(provider, result)
     elif payload.credential_id:
         result = await service.test_saved(principal.subject_id, payload.model, payload.credential_id)
     elif payload.api_key:
-        result = await service.test_key(provider=payload.provider or "", api_key=payload.api_key, model=payload.model)
+        result = await service.test_key(provider=provider, api_key=payload.api_key.strip(), model=payload.model)
     else:
-        key, model, _ = platform_credentials()[payload.provider or ""]
-        result = await check_provider(payload.provider or "", key, payload.model or model)
+        key, model, _ = configured[provider]
+        result = await check_provider(provider, key, payload.model or model)
     return result
 
 

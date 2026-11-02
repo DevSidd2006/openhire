@@ -127,7 +127,8 @@ class AnthropicProvider(LLMProvider):
     """Anthropic Messages API adapter; uses the shared async HTTP client library."""
 
     def __init__(self, api_key: str, model: str):
-        self.api_key, self.model = api_key, model
+        self.api_key = api_key.strip()
+        self.model = model
         self.last_usage = {}
 
     async def _call(self, prompt: str, max_tokens: int) -> str:
@@ -138,11 +139,16 @@ class AnthropicProvider(LLMProvider):
                     "x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"
                 }, json={"model": self.model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]})
             if response.status_code >= 400:
-                error = f"Anthropic request failed ({response.status_code})"
+                detail = response.text
+                try:
+                    err_data = response.json()
+                    if isinstance(err_data, dict) and "error" in err_data and "message" in err_data["error"]:
+                        detail = err_data["error"]["message"]
+                except Exception:
+                    pass
+                error = f"Anthropic request failed ({response.status_code}): {detail}"
                 if response.status_code == 429 or response.status_code >= 500:
-                    from providers.base import LLMTransientError
                     raise LLMTransientError(error)
-                from providers.base import LLMPermanentError
                 raise LLMPermanentError(error)
             data = response.json()
             usage = data.get("usage") or {}
@@ -158,11 +164,22 @@ class AnthropicProvider(LLMProvider):
 
     async def generate_structured(self, prompt: str, schema, **kwargs):
         import json
-        from providers.base import LLMTransientError
-        result = await self._call(prompt + "\nReturn only JSON conforming to this JSON Schema:\n" + json.dumps(schema), kwargs.get("max_tokens", 2048))
+        import re
+        result = await self._call(prompt + "\nReturn only valid JSON conforming to this JSON Schema:\n" + json.dumps(schema), kwargs.get("max_tokens", 2048))
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"\s*```$", "", cleaned).strip()
         try:
-            return json.loads(result)
+            return json.loads(cleaned)
         except (ValueError, TypeError) as exc:
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    return json.loads(cleaned[start:end + 1])
+                except Exception:
+                    pass
             raise LLMTransientError("Anthropic returned malformed structured JSON") from exc
 
 

@@ -122,6 +122,7 @@ class LLMCredentialService:
         upsert it. Raises BadRequestError (400) on an invalid key, writing
         nothing - a bad key must be caught here, not discovered later by a
         candidate mid-interview."""
+        api_key = api_key.strip()
         result = await check_provider(provider, api_key, model)
         if not result["connected"]:
             raise BadRequestError(
@@ -254,6 +255,7 @@ class LLMCredentialService:
         self, *, provider: str, api_key: str, model: Optional[str] = None
     ) -> dict:
         """Test auth and model access through provider metadata; no AI generation."""
+        api_key = api_key.strip()
         result = await check_provider(provider, api_key, model)
         result["success"] = result["connected"]
         result["message"] = ("API key is valid and the selected model is accessible." if result["connected"]

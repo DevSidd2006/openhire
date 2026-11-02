@@ -107,3 +107,37 @@ async def test_openrouter_verifies_key_then_model_catalog(monkeypatch):
     result = await provider_health.check_provider("openrouter", "secret", "openai/gpt-4o-mini")
     assert result["connected"] is True
     assert calls == ["https://openrouter.ai/api/v1/auth/key", "https://openrouter.ai/api/v1/models"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_latest_model_alias_resolution(monkeypatch):
+    class Client:
+        def __init__(self, **_kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_args): pass
+        async def get(self, url, headers):
+            return httpx.Response(200, json={"data": [{"id": "claude-3-5-sonnet-20241022"}]})
+
+    monkeypatch.setattr(provider_health.httpx, "AsyncClient", Client)
+    result = await provider_health.check_provider("anthropic", "  secret-key \n", "claude-3-5-sonnet-latest")
+    assert result["connected"] is True
+    assert result["status"] == "connected"
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_structured_output_handles_markdown_fences(monkeypatch):
+    from providers.llm import AnthropicProvider
+
+    class Client:
+        def __init__(self, **_kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_args): pass
+        async def post(self, url, headers, json):
+            content = "```json\n{\"decision\": \"hire\", \"confidence\": 0.95}\n```"
+            return httpx.Response(200, json={"content": [{"text": content}], "usage": {"input_tokens": 10, "output_tokens": 20}})
+
+    monkeypatch.setattr("httpx.AsyncClient", Client)
+    provider = AnthropicProvider(api_key=" test-key ", model="claude-3-5-sonnet-latest")
+    assert provider.api_key == "test-key"
+    output = await provider.generate_structured("evaluate candidate", schema={"type": "object"})
+    assert output == {"decision": "hire", "confidence": 0.95}

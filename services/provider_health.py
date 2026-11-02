@@ -47,6 +47,7 @@ async def check_provider(provider: str, api_key: str | None, model: str | None, 
     stamp = datetime.now(timezone.utc).isoformat()
     if provider not in PROVIDERS:
         return {"provider": provider, "model": model, "status": "connection_error", "auth_status": "unknown", "connected": False, "last_tested_at": stamp, "last_successful_test_at": None, "error_code": "unsupported_provider", "message": "Unsupported provider."}
+    api_key = api_key.strip() if api_key else None
     if not api_key:
         return {"provider": provider, "model": model, "status": "not_configured", "auth_status": "not_configured", "connected": False, "last_tested_at": None, "last_successful_test_at": None, "error_code": None, "message": "No API key is configured."}
     base = platform_credentials()[provider][2]
@@ -64,8 +65,19 @@ async def check_provider(provider: str, api_key: str | None, model: str | None, 
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     models_response = await client.get("https://openrouter.ai/api/v1/models", headers=headers)
                 available = models_response.status_code < 300 and model in _model_ids(provider, models_response.json())
+            elif provider == "gemini":
+                available = True
+            elif provider == "anthropic":
+                raw_ids = _model_ids(provider, data)
+                if model in raw_ids:
+                    available = True
+                elif model.endswith("-latest"):
+                    prefix = model.removesuffix("-latest")
+                    available = any(m.startswith(prefix) for m in raw_ids)
+                else:
+                    available = False
             else:
-                available = True if provider == "gemini" else model in _model_ids(provider, data)
+                available = model in _model_ids(provider, data)
             if available:
                 return {"provider": provider, "model": model, "status": "connected", "auth_status": "valid", "connected": True, "last_tested_at": stamp, "last_successful_test_at": stamp, "error_code": None, "message": "Credential and model verified.", "latency_ms": max(1, int((time.monotonic()-started)*1000))}
             return {"provider": provider, "model": model, "status": "model_unavailable", "auth_status": "valid", "connected": False, "last_tested_at": stamp, "last_successful_test_at": None, "error_code": "model_unavailable", "message": "The key is valid, but the selected model is not available to this account."}

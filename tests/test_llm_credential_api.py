@@ -321,3 +321,34 @@ async def test_test_key_unauthenticated_returns_401(client_and_auth):
     client, _auth_service = client_and_auth
     response = client.post("/auth/me/llm-credential/test", json={"api_key": "sk-test"})
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_provider_health_endpoints(client_and_auth):
+    client, auth_service = client_and_auth
+    _user, token, _r = await auth_service.signup(
+        email="health_tester@example.com", password="password123", user_type="recruiter"
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    res = client.get("/auth/me/llm-provider-health", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "mode" in data and "providers" in data
+
+    with _mock_validation_ok():
+        test_res = client.post("/auth/me/llm-provider-health/test", json={"provider": "gemini", "credential_id": "platform"}, headers=headers)
+    assert test_res.status_code == 200
+    assert test_res.json()["connected"] is True
+
+
+@pytest.mark.asyncio
+async def test_auth_disabled_allows_credential_endpoints(client_and_auth):
+    client, _auth_service = client_and_auth
+    from core.config import get_settings
+    settings = get_settings().model_copy(update={"auth_enabled": False})
+    client.app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        response = client.get("/auth/me/llm-credentials")
+        assert response.status_code == 200
+    finally:
+        client.app.dependency_overrides.pop(get_settings, None)
