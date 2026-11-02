@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
-<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<link rel="stylesheet" href="css/style.css?v=byok-ui-polish">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -27,6 +27,11 @@
     <button class="btn-secondary" onclick="runMatching()" title="Applications are already scored on apply - this only retries anyone stuck pending (e.g. a scoring failure, or a rubric approved after they applied)"><i class="ph-bold ph-arrows-clockwise"></i>Retry Pending Scores</button>
     <button class="btn-outline" onclick="goToLeaderboard()"><i class="ph-bold ph-ranking"></i>Final Leaderboard</button>
     <button class="btn-outline" onclick="window.history.back()"><i class="ph-bold ph-arrow-left"></i>Back</button>
+  </div>
+
+  <div class="card reveal" style="margin-bottom:1.5rem;">
+    <h3 class="card-title" style="font-size:1rem; margin-bottom:.75rem;">AI settings for retry scoring</h3>
+    <div id="screeningLlmSettings"></div>
   </div>
 
   <div class="stats-strip reveal" id="screeningStats">
@@ -91,10 +96,11 @@
 </div>
 
 <script src="js/auth.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=byok-ui-polish"></script>
 <script>
   guardRecruiterPage();
   renderNavbar('screening');
+  const screeningLlmSettingsReady = mountLlmWorkflowSettings('screeningLlmSettings');
 
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
@@ -389,6 +395,8 @@
       return;
     }
     try {
+      const llmSettings = await screeningLlmSettingsReady;
+      await llmSettings.save();
       const result = await apiRequest(`/jobs/${encodeURIComponent(jobId)}/match`, { method: 'POST' });
       alert(result.matched > 0
         ? `Retried ${result.matched} pending applicant(s): ${result.shortlisted} shortlisted, ${result.rejected} rejected.`

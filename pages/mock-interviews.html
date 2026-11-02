@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenHire — Mock Interviews</title>
 <link rel="icon" type="image/svg+xml" href="assets/openhire.svg">
-<link rel="stylesheet" href="css/style.css?v=theme-toggle"><script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/style.css?v=byok-ui-polish"><script src="js/theme.js"></script>
 </head>
 <body>
 <div id="navbarContainer"></div><div id="impersonationBanner"></div>
@@ -13,12 +13,18 @@
   <div class="card reveal">
     <div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Start a mock interview</h3><span class="chip chip-info">Private practice</span></div>
     <textarea id="practiceJdText" class="form-control" rows="6" placeholder="Paste a job description here..." style="width:100%; margin:1rem 0 0.75rem;"></textarea>
+    <div id="practiceResumeFields" hidden>
+      <div class="form-group"><label class="form-label" for="practiceCandidateName">Your name</label><input id="practiceCandidateName" class="form-control" type="text" autocomplete="name"></div>
+      <div class="form-group"><label class="form-label" for="practiceResumeText">Resume or background</label><textarea id="practiceResumeText" class="form-control" rows="6" placeholder="Paste your resume or a summary of your experience and skills"></textarea></div>
+    </div>
+    <p class="card-sub" id="practiceResumeStatus" aria-live="polite"></p>
+    <div id="practiceLlmSettings" style="border-top:1px solid var(--line); margin:1rem 0; padding-top:1rem;"></div>
     <button class="btn-primary" id="practiceCreateBtn"><i class="ph-bold ph-microphone"></i>Start mock interview</button>
     <div class="form-status" id="practiceStatus"></div>
   </div>
   <div class="card reveal"><div class="card-header"><h3 class="card-title" style="font-size:1.15rem;">Your mock interviews</h3></div><div id="practiceJobList"><p class="card-sub">Loading mock interviews…</p></div></div>
 </main>
-<script src="js/auth.js"></script><script src="js/app.js"></script>
+<script src="js/auth.js?v=byok-workflow"></script><script src="js/app.js?v=byok-ui-polish"></script>
 <script>
   (async () => {
     if (!await guardAuthenticatedPage()) return;
@@ -28,22 +34,65 @@
       return;
     }
     renderNavbar('mock-interviews');
+    const practiceLlmSettings = await mountLlmWorkflowSettings('practiceLlmSettings');
+    const requestedPracticeJobId = new URLSearchParams(window.location.search).get('job_id');
+    let existingPracticeJob = null;
+    const practiceResumeFields = document.getElementById('practiceResumeFields');
+    const practiceResumeStatus = document.getElementById('practiceResumeStatus');
+    let practiceCandidate = null;
+    try {
+      practiceCandidate = await apiRequest('/candidates/me');
+      practiceResumeStatus.textContent = 'Using your saved resume for this private mock interview.';
+    } catch (err) {
+      if (err.status === 404) {
+        practiceResumeFields.hidden = false;
+        document.getElementById('practiceCandidateName').value = (currentUser && currentUser.name) || '';
+        practiceResumeStatus.textContent = 'Add a resume or background summary to personalize your practice interview.';
+      } else {
+        practiceResumeStatus.textContent = `Could not load your resume: ${err.message}`;
+      }
+    }
+    if (requestedPracticeJobId) {
+      try {
+        const mine = await apiRequest('/jobs/practice/mine');
+        if (!(mine.jobs || []).some(item => item.job_id === requestedPracticeJobId)) {
+          throw new Error('That is not one of your private practice interviews.');
+        }
+        const job = await apiRequest(`/jobs/${encodeURIComponent(requestedPracticeJobId)}`);
+        if (!job.is_practice) {
+          throw new Error('That is not one of your private practice interviews.');
+        }
+        existingPracticeJob = job;
+        document.getElementById('practiceJdText').value = (job.job && job.job.description) || '';
+      } catch (err) {
+        document.getElementById('practiceCreateBtn').disabled = true;
+        practiceResumeStatus.textContent = `Could not load this practice interview: ${err.message}`;
+      }
+    }
     const escapeHtml = text => String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const listEl = document.getElementById('practiceJobList');
     document.getElementById('practiceCreateBtn').addEventListener('click', async () => {
       const status = document.getElementById('practiceStatus');
       const description = document.getElementById('practiceJdText').value.trim();
       if (!description) { status.textContent = 'Paste a job description first.'; status.className = 'form-status error'; return; }
+      if (!practiceCandidate && (!document.getElementById('practiceCandidateName').value.trim() || !document.getElementById('practiceResumeText').value.trim())) {
+        status.textContent = 'Enter your name and resume or background summary first.'; status.className = 'form-status error'; return;
+      }
       status.textContent = 'Analyzing job description…'; status.className = 'form-status';
       try {
-        const job = await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
-        window.location.href = `apply.html?job_id=${encodeURIComponent(job.job_id)}`;
+        await practiceLlmSettings.save();
+        if (!practiceCandidate) {
+          practiceCandidate = await apiRequest('/candidates', {method:'POST', body:{candidate_name:document.getElementById('practiceCandidateName').value.trim(),resume_text:document.getElementById('practiceResumeText').value.trim()}});
+        }
+        const job = existingPracticeJob || await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
+        const session = await apiRequest('/sessions', {method:'POST', body:{job_id:job.job_id,candidate_id:practiceCandidate.candidate_id,job_description:job.job,parsed_resume:practiceCandidate.resume}});
+        window.location.href = `interview.html?session_id=${encodeURIComponent(session.session_id)}`;
       } catch (err) { status.textContent = err.message || 'Could not create the mock interview.'; status.className = 'form-status error'; }
     });
     try {
       const raw = await apiRequest('/jobs/practice/mine');
       const jobs = (raw.jobs || []).map(normalizeJob);
-      listEl.innerHTML = jobs.length ? jobs.map(job => `<div class="job-card" style="margin-bottom:0.5rem;" onclick="window.location.href='apply.html?job_id=${encodeURIComponent(job.job_id)}'"><h4 style="font-weight:600; font-size:0.95rem; margin-bottom:0.25rem;">${escapeHtml(job.title || 'Mock interview')}</h4><span class="chip chip-info">Practice</span></div>`).join('') : '<p class="card-sub">No mock interviews yet.</p>';
+      listEl.innerHTML = jobs.length ? jobs.map(job => `<div class="job-card" style="margin-bottom:0.5rem;" onclick="window.location.href='mock-interviews.html?job_id=${encodeURIComponent(job.job_id)}'"><h4 style="font-weight:600; font-size:0.95rem; margin-bottom:0.25rem;">${escapeHtml(job.title || 'Mock interview')}</h4><span class="chip chip-info">Practice</span></div>`).join('') : '<p class="card-sub">No mock interviews yet.</p>';
     } catch (err) { listEl.innerHTML = `<p class="card-sub" style="color:var(--danger-text);">Could not load mock interviews: ${escapeHtml(err.message)}</p>`; }
   })();
 </script>

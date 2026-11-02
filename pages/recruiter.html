@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<link rel="stylesheet" href="css/style.css?v=byok-ui-polish">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -76,8 +76,8 @@
             ${(job.competencies || ['Technical']).slice(0, 3).map(c => `<span class="tag">${c}</span>`).join('')}
           </div>
           <div style="display:flex; gap:0.35rem;">
-            <button class="btn-sm btn-secondary" onclick="event.stopPropagation(); window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'">
-              <i class="ph-bold ph-file-text"></i>Screening
+            <button class="btn-sm btn-secondary" title="Open parsed candidate resumes and screening results" onclick="event.stopPropagation(); window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'">
+              <i class="ph-bold ph-text-aa"></i>Resume Parser
             </button>
             <button class="btn-sm btn-outline" onclick="event.stopPropagation(); window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'">
               <i class="ph-bold ph-ranking"></i>Leaderboard

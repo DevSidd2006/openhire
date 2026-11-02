@@ -27,6 +27,7 @@ from api.models_recruiter import (
     LeaderboardResponse,
 )
 from core.dependencies import (
+    get_container,
     get_application_service,
     get_job_service,
     get_recruiter_service,
@@ -34,6 +35,8 @@ from core.dependencies import (
 from core.config import get_settings
 from core.errors import ForbiddenError
 from core.security import Principal, PrincipalType, require_authenticated, require_candidate, require_scopes
+from core.llm_context import reset_context_provider, set_context_provider
+from core.container import ServiceContainer
 from services.application_service import ApplicationService
 from services.job_service import JobPatchValidationError, JobService
 from services.recruiter_service import RecruiterService
@@ -53,6 +56,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 async def create_job(
     payload: CreateJobRequest,
     service: JobService = Depends(get_job_service),
+    container: ServiceContainer = Depends(get_container),
     principal: Principal = Depends(require_authenticated),
 ) -> JobResponse:
     """POST /jobs - analyze raw job-description text (via the existing
@@ -71,14 +75,34 @@ async def create_job(
     if settings.auth_enabled and payload.is_practice and principal.principal_type is not PrincipalType.CANDIDATE:
         raise ForbiddenError("Only candidate accounts can create mock interviews.")
 
-    record = await service.create_job(
-        description=payload.description,
-        job_id=payload.job_id,
-        openings=payload.openings,
-        title=payload.title,
-        is_practice=payload.is_practice,
-        created_by_user_id=principal.subject_id or "user_anonymous",
-    )
+    practice_context = None
+    if (
+        settings.auth_enabled and settings.byok_encryption_key and payload.is_practice
+        and principal.principal_type is PrincipalType.CANDIDATE and principal.subject_id
+    ):
+        from services.llm_credential_service import LLMCredentialService
+        # Resolve only the authenticated candidate's own settings. This path
+        # is restricted to candidate-created practice jobs above; real job
+        # creation and recruiter operations cannot use candidate credentials.
+        credential_service = LLMCredentialService(
+            credential_repository=container.llm_credential_repository,
+            encryption_key=settings.byok_encryption_key,
+        )
+        provider = await credential_service.resolve_provider_for_user(principal.subject_id)
+        if provider is not None:
+            practice_context = set_context_provider(provider)
+    try:
+        record = await service.create_job(
+            description=payload.description,
+            job_id=payload.job_id,
+            openings=payload.openings,
+            title=payload.title,
+            is_practice=payload.is_practice,
+            created_by_user_id=principal.subject_id or "user_anonymous",
+        )
+    finally:
+        if practice_context is not None:
+            reset_context_provider(practice_context)
     return JobResponse.from_record(record)
 
 

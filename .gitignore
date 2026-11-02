@@ -11,6 +11,7 @@
 *.cert
 *.dump
 *.sql
+!repositories/postgres/migrations/*.sql
 scripts/restore_rds.sh
 
 # Python Artifacts & Bytecode

@@ -213,6 +213,19 @@
   }
   .call-btn i { font-size: 1rem; }
 
+  .start-error {
+    max-width: min(520px, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--danger-bg);
+    border-radius: var(--radius);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
   .btn-record {
     background: var(--success);
     color: #fff;
@@ -352,6 +365,7 @@
   <div style="color:var(--ink-2); font-family:var(--font-sans); font-size:15px; text-align:center; max-width:400px; padding:0 1rem;">
     Start your 10–15 minute interview. Keep speaking naturally; the interviewer will listen continuously and you can interrupt at any time.
   </div>
+  <p id="startError" class="start-error" role="alert" aria-live="assertive" hidden></p>
   <button id="startBtn" class="btn-primary call-btn"><i class="ph-bold ph-play" aria-hidden="true"></i>Start Interview</button>
 </div>
 
@@ -369,8 +383,9 @@
     console.log('[config] Environment:', hostname, 'API:', window.OPENHIRE_API_URL || 'same-origin');
   })();
 </script>
+<script src="js/auth.js"></script>
 <script src="js/app.js?v=gemini-live-only-v1"></script>
-<script type="module" src="js/live-interview.js?v=gemini-live-only-v1"></script>
+<script type="module" src="js/live-interview.js?v=gemini-live-legacy-upgrade-v2"></script>
 
 </body>
 </html>

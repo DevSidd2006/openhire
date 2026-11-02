@@ -43,6 +43,7 @@ class NvidiaNimProvider(LLMProvider):
         """
         self.api_key = api_key
         self.model = model
+        self.last_usage = {}
         self.base_url = base_url
         self.enable_thinking = enable_thinking
 
@@ -116,6 +117,8 @@ class NvidiaNimProvider(LLMProvider):
                 max_tokens=kwargs.get("max_tokens", 2048),
                 extra_body=self._extra_body(**kwargs),
             )
+            if getattr(response, "usage", None):
+                self.last_usage = {"input_tokens": response.usage.prompt_tokens, "output_tokens": response.usage.completion_tokens}
             return self._content(response)
         except LLMTransientError:
             raise
@@ -140,6 +143,8 @@ class NvidiaNimProvider(LLMProvider):
                 response_format={"type": "json_object"},
                 extra_body=self._extra_body(**kwargs),
             )
+            if getattr(response, "usage", None):
+                self.last_usage = {"input_tokens": response.usage.prompt_tokens, "output_tokens": response.usage.completion_tokens}
             content = self._content(response)
             try:
                 return json.loads(content)

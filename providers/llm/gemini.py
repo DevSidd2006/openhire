@@ -25,6 +25,7 @@ class GeminiProvider(LLMProvider):
                 "GEMINI_API_KEY is required for the Gemini provider"
             )
         self.model = model
+        self.last_usage = {}
         # Import here to avoid a hard dependency when LLM_PROVIDER != "gemini"
         # (same pattern as OpenAIProvider).
         try:
@@ -72,6 +73,9 @@ class GeminiProvider(LLMProvider):
             raise self._classify(e) from e
 
         self._require_completed(response)
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            self.last_usage = {"input_tokens": getattr(usage, "prompt_token_count", 0) or 0, "output_tokens": getattr(usage, "candidates_token_count", 0) or 0}
         text = response.output_text
         if not text:
             raise LLMTransientError("Gemini response had empty content")
@@ -116,6 +120,9 @@ class GeminiProvider(LLMProvider):
             raise self._classify(e) from e
 
         self._require_completed(response)
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            self.last_usage = {"input_tokens": getattr(usage, "prompt_token_count", 0) or 0, "output_tokens": getattr(usage, "candidates_token_count", 0) or 0}
         text = response.output_text
         if not text:
             raise LLMTransientError("Gemini structured response had empty content")

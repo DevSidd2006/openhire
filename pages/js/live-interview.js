@@ -124,23 +124,26 @@ export class LiveInterviewController {
       transcriptPanel: document.getElementById('transcriptPanel'),
       transcriptLog: document.getElementById('transcriptLog'),
       question: document.getElementById('questionBar'),
+      startError: document.getElementById('startError'),
     };
   }
 
   bind() {
     this.elements.captions.hidden = false;
     this.elements.elapsed.hidden = false;
+    this.elements.start.disabled = false;
     this.elements.start.onclick = () => void this.start();
+    this.elements.startError.hidden = true;
+    this.elements.startError.textContent = '';
     this.elements.mic.onclick = () => this.setMuted(!this.muted);
     this.elements.captions.onclick = () => this.setCaptionsVisible(!this.captionsVisible);
     this.elements.end.onclick = () => void this.finish('candidate_ended');
     window.addEventListener('pagehide', () => this.destroy(), { once: true });
 
     const resumable = ['active', 'connecting', 'reconnecting'].includes(this.initialState.status);
-    if (resumable) {
-      this.elements.start.querySelector('span')?.remove();
-      this.elements.start.textContent = 'Resume interview';
-    }
+    this.elements.start.innerHTML = resumable
+      ? '<i class="ph-bold ph-arrow-clockwise" aria-hidden="true"></i><span>Resume interview</span>'
+      : '<i class="ph-bold ph-play" aria-hidden="true"></i><span>Start Interview</span>';
     if (this.initialState.status === 'sealed') {
       this.elements.overlay.style.display = 'none';
       this.setState('Completed');
@@ -155,6 +158,9 @@ export class LiveInterviewController {
     if (this.started || this.finishing || this.destroyed) return;
     this.started = true;
     this.elements.start.disabled = true;
+    this.elements.start.textContent = 'Connecting...';
+    this.elements.startError.hidden = true;
+    this.elements.startError.textContent = '';
     this.setState('Connecting');
     const resume = ['active', 'connecting', 'reconnecting'].includes(this.initialState.status);
     const setupStartedAt = performance.now();
@@ -182,11 +188,13 @@ export class LiveInterviewController {
       this.elements.start.disabled = false;
       this.#setCaptureActive(false);
       this.#releaseAudio();
-      this.#showMessage(
-        error?.name === 'NotAllowedError'
-          ? 'Microphone access is required to start the interview.'
-          : 'The realtime interview could not connect. Please try again.',
-      );
+      const message = error?.name === 'NotAllowedError'
+        ? 'Microphone access is required to start the interview. Allow microphone access, then try again.'
+        : (error?.message || 'The realtime interview could not connect. Check your connection and try again.');
+      this.elements.startError.textContent = message;
+      this.elements.startError.hidden = false;
+      this.elements.start.innerHTML = '<i class="ph-bold ph-arrow-clockwise" aria-hidden="true"></i>Try Again';
+      this.#showMessage(message);
       this.setState('Connecting');
     }
   }
@@ -862,35 +870,56 @@ export class LiveInterviewController {
   }
 }
 
+function showBootstrapError(message, buttonLabel = 'Retry') {
+  const overlay = document.getElementById('startOverlay');
+  const button = document.getElementById('startBtn');
+  const error = document.getElementById('startError');
+  overlay.style.display = 'flex';
+  error.textContent = message;
+  error.hidden = false;
+  button.disabled = false;
+  button.innerHTML = `<i class="ph-bold ph-arrow-clockwise" aria-hidden="true"></i>${buttonLabel}`;
+  button.onclick = () => {
+    button.disabled = true;
+    button.textContent = 'Retrying...';
+    error.hidden = true;
+    void bootstrapInterviewPage();
+  };
+}
+
 async function bootstrapInterviewPage() {
   const params = new URLSearchParams(window.location.search);
   let sessionId = params.get('session_id');
-  const applicationId = params.get('app_id') || '';
-  const localDemoRequested = params.get('demo') === '1' ||
-    ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-  if (!sessionId && localDemoRequested) {
+  let applicationId = params.get('app_id') || '';
+  const startButton = document.getElementById('startBtn');
+  startButton.disabled = true;
+  startButton.textContent = 'Loading interview...';
+  // A real application is the source of truth for recruiter ownership,
+  // candidate identity, approved rubric, and durable foreign keys. Repair
+  // or create its linked Gemini Live session before loading the interview.
+  if (!sessionId && applicationId && typeof globalThis.ensureInterviewSession === 'function') {
     try {
-      const demo = await globalThis.apiRequest('/live-sessions/demo', { method: 'POST' });
-      sessionId = demo.session_id;
+      const envelope = await globalThis.apiRequest(
+        `/applications/${encodeURIComponent(applicationId)}`,
+      );
+      const application = envelope.application || envelope;
+      sessionId = await globalThis.ensureInterviewSession(application);
       const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete('demo');
       nextUrl.searchParams.set('session_id', sessionId);
       window.history.replaceState({}, '', nextUrl);
     } catch (error) {
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('questionBar').textContent =
-        error?.data?.error === 'gemini_live_unconfigured'
-          ? 'Add GEMINI_API_KEY to .env, enable Gemini Live, and restart the server.'
-          : 'The local interview demo could not be created.';
-      document.getElementById('questionBar').style.display = 'block';
+      showBootstrapError(
+        error?.message || 'This application is not ready for a live interview. Reopen it from the shortlisted application after setup is complete.',
+        'Retry Setup',
+      );
       return;
     }
   }
   if (!sessionId) {
-    document.getElementById('startOverlay').style.display = 'none';
-    document.getElementById('questionBar').textContent = 'No session ID specified.';
-    document.getElementById('questionBar').style.display = 'block';
+    const message = params.get('demo') === '1'
+      ? 'The standalone demo has been retired. Create a real job and candidate application, then open its interview link.'
+      : 'No interview session was specified. Reopen this interview from your shortlisted application.';
+    showBootstrapError(message, 'Retry');
     return;
   }
 
@@ -928,17 +957,47 @@ async function bootstrapInterviewPage() {
         } catch (repairError) {
           error = repairError;
         }
+      } else if (!applicationId) {
+        // Older mock interview URLs only carried the adaptive session id.
+        // Ask the authenticated backend to upgrade that persisted session;
+        // it checks candidate ownership and practice-job ownership before
+        // creating a Gemini Live session from the stored job/resume records.
+        try {
+          const upgraded = await globalThis.apiRequest(
+            `/live-sessions/${encodeURIComponent(sessionId)}/upgrade`,
+            { method: 'POST' },
+          );
+          sessionId = upgraded.session_id;
+          applicationId = upgraded.application_id || '';
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set('session_id', sessionId);
+          if (applicationId) nextUrl.searchParams.set('app_id', applicationId);
+          window.history.replaceState({}, '', nextUrl);
+          const liveState = await globalThis.apiRequest(
+            `/live-sessions/${encodeURIComponent(sessionId)}`,
+          );
+          const controller = new LiveInterviewController({
+            sessionId,
+            applicationId,
+            initialState: liveState,
+          });
+          globalThis.liveInterviewController = controller;
+          controller.bind();
+          return;
+        } catch (upgradeError) {
+          error = upgradeError;
+        }
       }
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('questionBar').textContent =
-        'This interview could not be upgraded to Gemini Live. Please reopen it from the application.';
-      document.getElementById('questionBar').style.display = 'block';
+      showBootstrapError(
+        error?.message || 'This interview could not be upgraded to a live session. Reopen it from the application or retry.',
+        'Retry',
+      );
       return;
     }
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('questionBar').textContent =
-      'The interview could not be loaded. Refresh the page to try again.';
-    document.getElementById('questionBar').style.display = 'block';
+    showBootstrapError(
+      error?.message || 'The interview could not be loaded. Check your connection and retry.',
+      'Retry',
+    );
   }
 }
 

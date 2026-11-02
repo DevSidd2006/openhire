@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
-<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<link rel="stylesheet" href="css/style.css?v=byok-ui-polish">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -40,7 +40,7 @@
 </main>
 
 <script src="js/auth.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=byok-ui-polish"></script>
 <script>
   guardAuthenticatedPage();
   renderNavbar();
@@ -48,6 +48,7 @@
   const urlParams = new URLSearchParams(window.location.search);
   const jobId = urlParams.get('job_id');
   const user = getCurrentUser();
+  let rubricLlmSettingsReady = Promise.resolve({save: async () => {}});
 
   (async () => {
     if (!jobId) {
@@ -88,9 +89,11 @@
         <h3 class="card-title" style="font-size:1.05rem; margin-bottom:0.5rem;">Recruiter Panel</h3>
         <p class="card-sub" style="margin-bottom:1rem;">Applicants are automatically screened and shortlisted against this role. Shortlisted candidates can take their voice interview on-demand at any time.</p>
         <div id="rubricPanel" style="margin-bottom:1rem;"></div>
+        <div id="rubricLlmSettings" style="border-top:1px solid var(--line); margin:1rem 0; padding-top:1rem;"></div>
         <button class="btn-secondary" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='screening.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-file-text"></i>All Resumes & Screening</button>
         <button class="btn-outline" style="width:100%; margin-bottom:0.5rem;" onclick="window.location.href='leaderboard.html?job_id=${encodeURIComponent(job.job_id)}'"><i class="ph-bold ph-ranking"></i>Final Leaderboard (post-interview)</button>
       `;
+      rubricLlmSettingsReady = mountLlmWorkflowSettings('rubricLlmSettings');
       loadRubricPanel();
     } else {
       actionsEl.innerHTML = `
@@ -182,6 +185,8 @@
     const el = document.getElementById('rubricPanel');
     el.innerHTML = '<p class="card-sub">Drafting rubric from the job description…</p>';
     try {
+      const llmSettings = await rubricLlmSettingsReady;
+      await llmSettings.save();
       await apiRequest(`/jobs/${encodeURIComponent(jobId)}/rubric/draft`, { method: 'POST' });
       loadRubricPanel();
     } catch (err) {

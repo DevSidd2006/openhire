@@ -46,13 +46,10 @@ from core.errors import (
     NotFoundError,
     UnauthorizedError,
 )
-from core.security import Principal, get_principal, require_authenticated
+from core.security import Principal, get_principal, require_authenticated, require_candidate
 from repositories.interfaces import SessionRecord
 from schemas.application import ApplicationStatus
-from schemas.job import Competency, JobDescription
 from schemas.live_interview import LiveInterviewStatus
-from schemas.resume import ParsedResume
-from schemas.rubric import AnchoredCompetency, JobRubric, RubricStatus
 from services.application_service import ApplicationService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
@@ -75,71 +72,6 @@ async def issue_live_audio_test_token(
         raise GeminiLiveDisabledError()
     issued = await tokens.issue_audio_test()
     return LiveAudioTestTokenResponse(**issued.__dict__)
-
-
-def _demo_competency(name: str, definition: str, weight: float) -> AnchoredCompetency:
-    return AnchoredCompetency(
-        name=name,
-        definition=definition,
-        weight=weight,
-        anchors={
-            1: "No relevant evidence provided.",
-            2: "Limited evidence with substantial gaps.",
-            3: "Adequate evidence for routine situations.",
-            4: "Strong evidence with clear ownership and judgment.",
-            5: "Exceptional evidence with measurable impact and depth.",
-        },
-    )
-
-
-def _demo_context() -> tuple[JobDescription, ParsedResume, JobRubric]:
-    """Small, deterministic context for exercising only the live panel."""
-    job_id = "job_local_live_demo"
-    candidate_id = "candidate_local_live_demo"
-    competencies = [
-        Competency(name="Problem solving", weight=0.34, importance="critical"),
-        Competency(name="Technical communication", weight=0.33, importance="high"),
-        Competency(name="Software design", weight=0.33, importance="high"),
-    ]
-    job = JobDescription(
-        job_id=job_id,
-        title="Software Engineer",
-        description=(
-            "A local realtime interview used to exercise the OpenHire voice "
-            "panel, interruption handling, captions, and session resumption."
-        ),
-        required_skills=["Problem solving", "Software design", "Communication"],
-        competencies=competencies,
-        interview_topics=["problem solving", "system design", "project experience"],
-    )
-    resume = ParsedResume(
-        candidate_id=candidate_id,
-        candidate_name="Local Candidate",
-        summary="Software engineer testing the realtime interview experience.",
-        skills=["Python", "APIs", "Databases", "System design"],
-        raw_text=(
-            "Local Candidate is a software engineer with experience building "
-            "APIs and reliable backend services."
-        ),
-    )
-    rubric = JobRubric(
-        rubric_id="rubric_local_live_demo",
-        job_id=job_id,
-        version=1,
-        status=RubricStatus.APPROVED,
-        competencies=[
-            _demo_competency(
-                "Problem solving", "Breaks down ambiguous technical problems.", 0.34
-            ),
-            _demo_competency(
-                "Technical communication", "Explains decisions clearly.", 0.33
-            ),
-            _demo_competency(
-                "Software design", "Designs maintainable software systems.", 0.33
-            ),
-        ],
-    )
-    return job, resume, rubric
 
 
 def _response(
@@ -315,34 +247,91 @@ async def create_live_session(
     "/live-sessions/demo", response_model=LiveSessionResponse, status_code=201
 )
 async def create_demo_live_session(
+) -> None:
+    """Retired: standalone demo records used fabricated job/candidate IDs.
+
+    Every live session must now be created from a persisted job, candidate,
+    approved rubric, and (for a real application) its application link.
+    ``interview.html`` bootstraps those through the normal authenticated
+    application flow instead of writing orphan demo records.
+    """
+    raise NotFoundError(
+        "Standalone demo sessions are retired. Open an interview from a real shortlisted application."
+    )
+
+
+@router.post("/live-sessions/{session_id}/upgrade", response_model=LiveSessionResponse)
+async def upgrade_legacy_session(
+    session_id: str,
     request: Request,
     live: LiveInterviewService = Depends(get_live_interview_service),
+    applications: ApplicationService = Depends(get_application_service),
+    candidates: CandidateService = Depends(get_candidate_service),
     container: ServiceContainer = Depends(get_container),
     settings: AppSettings = Depends(get_app_settings),
+    principal: Principal = Depends(require_candidate),
 ) -> LiveSessionResponse:
-    """Create an isolated local session without the hiring pipeline.
+    """Upgrade a persisted adaptive session to Gemini Live using its real records.
 
-    This endpoint is intentionally unavailable in staging and production.
-    It persists only in the configured session repository and carries no
-    application link, so completing it seals the transcript without starting
-    the evaluation pipeline.
+    This supports old candidate links that contain only session_id. Recovery
+    is allowed for an owned shortlisted application, or for the candidate's
+    own practice job. Unlinked real interviews cannot be reconstructed safely.
     """
-    if settings.environment not in {"development", "test"}:
-        raise NotFoundError("The live interview session was not found.")
-    await _ensure_configured_before_creation(
+    legacy = await container.session_repository.get(session_id)
+    if legacy is None:
+        raise NotFoundError("The interview session was not found.")
+    if legacy.interview_mode == "gemini_live" and legacy.live_state is not None:
+        return _response(
+            legacy, reconnect_after_seconds=settings.gemini_live_reconnect_seconds
+        )
+
+    user_id = principal.subject_id or "user_anonymous"
+    await candidates.validate_candidate_ownership(legacy.candidate_id, user_id)
+    job_record = await container.job_repository.get(legacy.job_id)
+    if job_record is None:
+        raise NotFoundError("The job for this interview could not be found.")
+
+    application_id = legacy.application_id
+    if application_id:
+        application = await applications.get_application(application_id)
+        if (
+            application.job_id != legacy.job_id
+            or application.candidate_id != legacy.candidate_id
+        ):
+            raise ConflictError("The interview link does not match its application.")
+        if application.status.value not in ("shortlisted", "interview_linked"):
+            raise ConflictError("This application is not ready for an interview.")
+    elif not (
+        job_record.is_practice and job_record.created_by_user_id == user_id
+    ):
+        raise ConflictError(
+            "This interview has no linked application and cannot be safely recovered."
+        )
+
+    job_description = legacy.job_description or job_record.job
+    candidate_record = await container.candidate_repository.get(legacy.candidate_id)
+    parsed_resume = legacy.parsed_resume or (
+        candidate_record.resume if candidate_record is not None else None
+    )
+    if parsed_resume is None:
+        raise NotFoundError("The candidate profile for this interview could not be found.")
+
+    return await create_live_session(
+        payload=CreateSessionRequest(
+            candidate_id=legacy.candidate_id,
+            job_id=legacy.job_id,
+            job_description=job_description,
+            parsed_resume=parsed_resume,
+            application_id=application_id,
+        ),
         request=request,
-        settings=settings,
+        live=live,
+        applications=applications,
+        candidates=candidates,
         container=container,
-        recruiter_user_id=None,
+        settings=settings,
+        principal=principal,
     )
-    job, resume, rubric = _demo_context()
-    record = await live.create_session(
-        job_description=job,
-        parsed_resume=resume,
-        rubric_snapshot=rubric,
-        candidate_id=resume.candidate_id,
-    )
-    return _response(record, reconnect_after_seconds=settings.gemini_live_reconnect_seconds)
 
 
 @router.get("/live-sessions/{session_id}", response_model=LiveSessionResponse)

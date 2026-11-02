@@ -14,6 +14,36 @@ from core.llm_context import reset_context_provider, set_context_provider
 from core.security import Principal, PrincipalType, require_authenticated
 
 
+async def resolve_candidate_practice_llm_provider(
+    *, principal: Principal, job_id: str, candidate_id: str,
+    application_id: str | None, settings: AppSettings, container,
+    jobs, candidate_service,
+):
+    """Resolve candidate BYOK only for the owner's candidate-created mock job."""
+    if not (
+        settings.auth_enabled and settings.byok_encryption_key
+        and principal.principal_type is PrincipalType.CANDIDATE
+        and principal.subject_id and application_id is None
+    ):
+        return None
+    from core.errors import NotFoundError
+
+    try:
+        job = await jobs.get_job(job_id)
+    except NotFoundError:
+        return None
+    if not job.is_practice or job.created_by_user_id != principal.subject_id:
+        return None
+    await candidate_service.validate_candidate_ownership(candidate_id, principal.subject_id)
+    from services.llm_credential_service import LLMCredentialService
+
+    service = LLMCredentialService(
+        credential_repository=container.llm_credential_repository,
+        encryption_key=settings.byok_encryption_key,
+    )
+    return await service.resolve_provider_for_user(principal.subject_id)
+
+
 async def apply_llm_context_for_recruiter(
     principal: Principal = Depends(require_authenticated),
     settings: AppSettings = Depends(get_settings),

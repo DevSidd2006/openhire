@@ -617,24 +617,77 @@ class InMemoryLLMCredentialRepository(LLMCredentialRepository):
 
     def __init__(self) -> None:
         self._credentials: Dict[str, LLMCredentialRecord] = {}
+        self._user_settings: Dict[str, dict] = {}
+        self._usage: Dict[tuple, dict] = {}
+        self._platform_health: Dict[str, dict] = {}
         self._lock = asyncio.Lock()
 
     async def save(self, record: LLMCredentialRecord) -> LLMCredentialRecord:
         async with self._lock:
-            existing = self._credentials.get(record.user_id)
+            existing = self._credentials.get(record.credential_id)
             created_at = existing.created_at if existing else record.created_at
             stored = record.model_copy(
                 deep=True,
                 update={"created_at": created_at, "updated_at": datetime.now(timezone.utc)},
             )
-            self._credentials[record.user_id] = stored
+            self._credentials[record.credential_id] = stored
             return stored.model_copy(deep=True)
 
     async def get(self, user_id: str) -> Optional[LLMCredentialRecord]:
         async with self._lock:
-            stored = self._credentials.get(user_id)
+            rows = [r for r in self._credentials.values() if r.user_id == user_id]
+        settings = self._user_settings.get(user_id, {})
+        default_id = settings.get("default_credential_id")
+        stored = next((r for r in rows if r.credential_id == default_id), rows[0] if rows else None)
         return stored.model_copy(deep=True) if stored is not None else None
 
     async def delete(self, user_id: str) -> None:
         async with self._lock:
-            self._credentials.pop(user_id, None)
+            for credential_id in [k for k, v in self._credentials.items() if v.user_id == user_id]:
+                self._credentials.pop(credential_id, None)
+
+    async def list_for_user(self, user_id: str):
+        async with self._lock:
+            rows = [r.model_copy(deep=True) for r in self._credentials.values() if r.user_id == user_id]
+        return sorted(rows, key=lambda r: (r.created_at, r.credential_id))
+
+    async def get_by_id(self, user_id: str, credential_id: str):
+        async with self._lock:
+            row = self._credentials.get(credential_id)
+            return row.model_copy(deep=True) if row and row.user_id == user_id else None
+
+    async def delete_key(self, user_id: str, credential_id: str):
+        async with self._lock:
+            row = self._credentials.get(credential_id)
+            if row and row.user_id == user_id:
+                self._credentials.pop(credential_id, None)
+
+    async def get_settings(self, user_id: str):
+        async with self._lock:
+            return dict(self._user_settings.get(user_id, {"mode": "platform", "default_credential_id": None, "provider": None, "fallback_to_other_keys": True, "fallback_to_platform": True, "model": None}))
+
+    async def save_settings(self, user_id: str, settings: dict):
+        async with self._lock:
+            self._user_settings[user_id] = dict(settings)
+            return dict(settings)
+
+    async def record_usage(self, user_id: str, credential_id: str, provider: str, outcome: str, input_tokens: int = 0, output_tokens: int = 0):
+        async with self._lock:
+            key = (user_id, credential_id, provider)
+            row = self._usage.setdefault(key, {"user_id": user_id, "credential_id": credential_id, "provider": provider, "requests": 0, "successes": 0, "failures": 0, "input_tokens": 0, "output_tokens": 0})
+            row["requests"] += 1
+            row["successes" if outcome == "success" else "failures"] += 1
+            row["input_tokens"] += input_tokens
+            row["output_tokens"] += output_tokens
+
+    async def get_usage(self, user_id: str):
+        async with self._lock:
+            return [dict(v) for v in self._usage.values() if v["user_id"] == user_id]
+
+    async def save_platform_health(self, provider: str, result: dict):
+        async with self._lock:
+            self._platform_health[provider] = dict(result)
+
+    async def get_platform_health(self):
+        async with self._lock:
+            return [dict(v) for v in self._platform_health.values()]

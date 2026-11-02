@@ -71,6 +71,7 @@ class GroqProvider(LLMProvider):
             # and the factory's existing API-key checks.
             raise LLMPermanentError("GROQ_API_KEY is required for the Groq provider")
         self.model = model
+        self.last_usage = {}
         # Import here to avoid a hard dependency when LLM_PROVIDER != "groq"
         # (same pattern as OpenAIProvider/GeminiProvider).
         try:
@@ -220,6 +221,8 @@ class GroqProvider(LLMProvider):
 
         if not response.choices:
             raise LLMTransientError("Groq response contained no choices")
+        if getattr(response, "usage", None):
+            self.last_usage = {"input_tokens": response.usage.prompt_tokens, "output_tokens": response.usage.completion_tokens}
 
         choice = response.choices[0]
         content = choice.message.content if choice.message else None
@@ -272,6 +275,8 @@ class GroqProvider(LLMProvider):
 
         if not response.choices:
             raise LLMTransientError("Groq structured response contained no choices")
+        if getattr(response, "usage", None):
+            self.last_usage = {"input_tokens": response.usage.prompt_tokens, "output_tokens": response.usage.completion_tokens}
 
         choice = response.choices[0]
         finish_reason = getattr(choice, "finish_reason", None)

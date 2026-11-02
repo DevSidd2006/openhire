@@ -6,6 +6,8 @@ from typing import Optional
 from config.settings import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
     GROQ_API_KEY,
     GROQ_MODEL,
     LLM_PROVIDER,
@@ -13,11 +15,13 @@ from config.settings import (
     NVIDIA_NIM_BASE_URL,
     NVIDIA_NIM_ENABLE_THINKING,
     NVIDIA_NIM_MODEL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_MODEL,
     OPENAI_API_KEY,
     OPENAI_MODEL,
 )
 from core.llm_context import get_context_provider
-from providers.base import LLMProvider
+from providers.base import LLMPermanentError, LLMProvider, LLMTransientError
 from providers.llm.gemini import GeminiProvider
 from providers.llm.groq import GroqProvider
 from providers.llm.mock import MockLLMProvider
@@ -73,6 +77,14 @@ def get_llm_provider() -> LLMProvider:
                 "GEMINI_API_KEY environment variable is required for Gemini provider"
             )
         return GeminiProvider(api_key=GEMINI_API_KEY, model=GEMINI_MODEL)
+    elif LLM_PROVIDER == "anthropic":
+        if not ANTHROPIC_API_KEY:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is required for Anthropic provider")
+        return AnthropicProvider(api_key=ANTHROPIC_API_KEY, model=ANTHROPIC_MODEL)
+    elif LLM_PROVIDER == "openrouter":
+        if not OPENROUTER_API_KEY:
+            raise ValueError("OPENROUTER_API_KEY environment variable is required for OpenRouter provider")
+        return OpenAIProvider(api_key=OPENROUTER_API_KEY, model=OPENROUTER_MODEL, base_url="https://openrouter.ai/api/v1")
     elif LLM_PROVIDER == "mock":
         return MockLLMProvider()
     else:
@@ -102,9 +114,73 @@ def build_provider(name: str, api_key: str, model: Optional[str] = None) -> LLMP
             base_url=NVIDIA_NIM_BASE_URL,
             enable_thinking=NVIDIA_NIM_ENABLE_THINKING,
         )
+    if name == "openrouter":
+        return OpenAIProvider(api_key=api_key, model=model or "openai/gpt-4o-mini", base_url="https://openrouter.ai/api/v1")
+    if name == "anthropic":
+        return AnthropicProvider(api_key=api_key, model=model or "claude-3-5-sonnet-latest")
     raise ValueError(
-        f"Unknown BYOK provider: {name!r}. Supported: openai, gemini, groq, nvidia_nim."
+        f"Unknown BYOK provider: {name!r}. Supported: openai, gemini, anthropic, groq, nvidia_nim, openrouter."
     )
+
+
+class AnthropicProvider(LLMProvider):
+    """Anthropic Messages API adapter; uses the shared async HTTP client library."""
+
+    def __init__(self, api_key: str, model: str):
+        self.api_key = api_key.strip()
+        self.model = model
+        self.last_usage = {}
+
+    async def _call(self, prompt: str, max_tokens: int) -> str:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.post("https://api.anthropic.com/v1/messages", headers={
+                    "x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"
+                }, json={"model": self.model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]})
+            if response.status_code >= 400:
+                detail = response.text
+                try:
+                    err_data = response.json()
+                    if isinstance(err_data, dict) and "error" in err_data and "message" in err_data["error"]:
+                        detail = err_data["error"]["message"]
+                except Exception:
+                    pass
+                error = f"Anthropic request failed ({response.status_code}): {detail}"
+                if response.status_code == 429 or response.status_code >= 500:
+                    raise LLMTransientError(error)
+                raise LLMPermanentError(error)
+            data = response.json()
+            usage = data.get("usage") or {}
+            self.last_usage = {"input_tokens": usage.get("input_tokens", 0), "output_tokens": usage.get("output_tokens", 0)}
+            return "".join(part.get("text", "") for part in data.get("content", []))
+        except (LLMPermanentError, LLMTransientError):
+            raise
+        except Exception as exc:
+            raise LLMTransientError("Anthropic request could not be completed") from exc
+
+    async def generate(self, prompt: str, **kwargs) -> str:
+        return await self._call(prompt, kwargs.get("max_tokens", 2048))
+
+    async def generate_structured(self, prompt: str, schema, **kwargs):
+        import json
+        import re
+        result = await self._call(prompt + "\nReturn only valid JSON conforming to this JSON Schema:\n" + json.dumps(schema), kwargs.get("max_tokens", 2048))
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+        try:
+            return json.loads(cleaned)
+        except (ValueError, TypeError) as exc:
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    return json.loads(cleaned[start:end + 1])
+                except Exception:
+                    pass
+            raise LLMTransientError("Anthropic returned malformed structured JSON") from exc
 
 
 __all__ = [
@@ -116,4 +192,5 @@ __all__ = [
     "GeminiProvider",
     "GroqProvider",
     "NvidiaNimProvider",
+    "AnthropicProvider",
 ]

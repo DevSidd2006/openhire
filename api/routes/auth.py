@@ -212,7 +212,12 @@ async def update_my_profile(
     return UserProfileResponse.from_record(user)
 
 
-@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/me/password",
+    response_class=Response,
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def change_my_password(
     request: ChangePasswordRequest,
     service: AuthService = Depends(get_auth_service),

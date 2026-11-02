@@ -29,8 +29,8 @@ async def test_resolve_llm_provider_for_job_returns_recruiter_credential_when_sa
         credential_repository=credential_repo, encryption_key=_ENCRYPTION_KEY
     )
     with patch(
-        "services.llm_credential_service.build_provider",
-        return_value=AsyncMock(generate=AsyncMock(return_value="ok")),
+        "services.llm_credential_service.check_provider",
+        new=AsyncMock(return_value={"provider":"openai", "model":"gpt-test", "connected":True, "status":"connected", "auth_status":"valid", "last_tested_at":"2026-11-02T00:00:00+00:00", "last_successful_test_at":"2026-11-02T00:00:00+00:00"}),
     ):
         await credential_service.save(
             user_id="user_recruiter_1", provider="openai", api_key="sk-realkey"
@@ -43,7 +43,7 @@ async def test_resolve_llm_provider_for_job_returns_recruiter_credential_when_sa
 
 
 @pytest.mark.asyncio
-async def test_resolve_llm_provider_for_job_returns_none_when_recruiter_has_no_credential():
+async def test_resolve_llm_provider_for_job_preserves_platform_mode_when_recruiter_has_no_credential():
     from services.evaluation_service import _resolve_llm_provider_for_job
 
     job_repo = InMemoryJobRepository()
@@ -58,7 +58,7 @@ async def test_resolve_llm_provider_for_job_returns_none_when_recruiter_has_no_c
     provider = await _resolve_llm_provider_for_job(
         job_id="job_2", job_repository=job_repo, llm_credential_service=credential_service
     )
-    assert provider is None
+    assert provider is not None
 
 
 @pytest.mark.asyncio
