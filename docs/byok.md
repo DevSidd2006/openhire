@@ -1,78 +1,47 @@
 # Bring Your Own Key (BYOK)
 
-A user can save their own LLM provider API key on their profile page
-(`pages/profile.html`, "API Keys" card). The credential storage, encryption,
-and API are provider-agnostic infrastructure, and the supported provider
-is currently narrowed to Gemini (see "Supported providers" below).
+BYOK settings are per account. Recruiters may use their selected credentials
+for their existing AI operations. Candidate credentials are available in the
+same Profile → API Keys section, but are resolved only when the authenticated
+candidate starts a practice interview against a practice job they created.
+Candidate keys are not attached to real interview sessions, resume processing,
+evaluation, scoring, reports, or recruiter actions. Candidate practice
+interview usage is attributed to that candidate's selected credential.
 
-**Pipeline Resolution:**
-- **Recruiter keys:** When an authenticated recruiter saves a key, `apply_llm_context_for_recruiter`
-  (`api/dependencies.py`) resolves that key for synchronous operations like job description analysis
-  (`POST /jobs`) and resume matching (`POST /jobs/{job_id}/match`). During post-interview evaluation
-  (`services/evaluation_service.py`), the job's owning recruiter's key is resolved to run evaluations.
-- **Candidate keys:** Candidate credentials can be saved and managed on their profile page. Connecting
-  a candidate's saved key directly to candidate-facing interview question generation is a documented
-  follow-up.
+The profile API Keys card supports an encrypted, recruiter-owned LLM credential.
+Configure `BYOK_ENCRYPTION_KEY` as a Fernet key to enable the feature; generate
+one with:
 
-## Enabling it
-
-Set `BYOK_ENCRYPTION_KEY` to a Fernet key:
-
-```bash
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```sh
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Unset (the default), BYOK is completely inert: the credential table is
-never read, and the profile page shows an explanatory placeholder instead
-of the form.
+Keep the value stable across restarts and backups. Losing or rotating it without
+re-encrypting stored credential ciphertext makes saved keys unreadable. When the
+setting is empty, the BYOK API stays disabled and provider resolution continues
+to use the existing platform configuration.
 
-## Supported providers
+Recruiters can save multiple credentials, including multiple keys from one
+provider. Each credential has a user-defined name and provider model. Keys are
+encrypted at rest and APIs return only a masked suffix. Each recruiter chooses
+BYOK or platform mode, a default credential and per-key model, and whether
+failed calls may try another saved key or platform credentials. These settings
+are scoped to that recruiter. Usage is tracked per credential and provider;
+provider-reported token totals are used where available, with estimates for
+adapters that do not report usage.
 
-Gemini only, for now. The underlying provider infrastructure
-(`build_provider`, the Postgres schema's CHECK constraint) still supports
-all four native providers (`openai`, `gemini`, `groq`, `nvidia_nim`), but
-API-level request validation and the profile page's UI are deliberately
-narrowed to `gemini` — the other three can be re-enabled later without a
-schema migration. No `litellm`-style universal routing regardless.
+Supported key providers are OpenAI, Gemini, Anthropic, Groq, NVIDIA NIM, and
+OpenRouter. Credential save/test performs a live provider request; the test
+suite mocks provider responses and never reports a mock as a live key check.
 
-## API
+For existing PostgreSQL deployments, apply
+`repositories/postgres/migrations/20261102_byok_multi_credentials.sql` once
+after the previous BYOK schema has been created. It assigns an ID and default
+name to each existing row, preserving its encrypted key and user association,
+then creates the per-user settings and usage tables. New databases can use
+`repositories/postgres/schema.sql` directly.
 
-- `GET /auth/me/llm-credential` → `{provider, model, key_hint, status,
-  last_error, last_error_at}`, or `204` when none is saved.
-- `PUT /auth/me/llm-credential` → body `{provider, api_key, model?}`. Makes
-  one live validation call before saving; a bad key returns `400` and
-  writes nothing.
-- `POST /auth/me/llm-credential/test` → body `{provider?, api_key?, model?}`.
-  Tests an entered key (or the saved credential if `api_key` is omitted)
-  in place against the provider without saving, returning
-  `{success, provider, model, latency_ms, message}`.
-- `DELETE /auth/me/llm-credential` → removes the credential; the account
-  reverts to OpenHire's system key.
-
-All four require an authenticated principal (`require_authenticated`)
-— unauthenticated requests get `401`. None of them ever returns the key itself.
-
-## Key handling
-
-The key is encrypted at rest (`cryptography.Fernet`) and decrypted only in
-memory, for the duration of one provider construction. It is never logged,
-never included in any API response, never written to an `AuditLog` entry,
-and the profile page never writes it to `localStorage`, `sessionStorage`,
-or a cookie.
-
-## Failure behaviour
-
-If a saved key stops working (revoked, rate-limited), that one call falls
-back to OpenHire's system key automatically and the credential is marked
-`status: "failed"` with `last_error` — surfaced on the profile page. (This
-fallback mechanism is exercised today only by the still-recruiter-wired
-call sites described above, since those never actually resolve a
-candidate's credential under the current access model.)
-
-## Supersedes
-
-This replaces the August design in `docs/superpowers/specs/2026-08-25-byok-design.md`
-and `docs/superpowers/plans/2026-08-25-byok.md`, written when OpenAI was
-the only provider and before a real accounts system existed. See
-`docs/superpowers/specs/2026-09-06-byok-design.md` for the full design
-this implementation follows.
+Use the profile page's **API Keys** section to create/test credentials, edit a
+credential name or model, set its default, configure fallback behavior, or
+switch that recruiter to platform keys. Deleting a credential removes only
+that credential; its aggregate usage history remains available to its owner.

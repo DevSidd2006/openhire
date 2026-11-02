@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Request
 from api.errors import InvalidRequestError
 from api.exceptions import SessionNotFoundError
 from core.errors import ConflictError, NotFoundError
+from api.dependencies import resolve_candidate_practice_llm_provider
 from api.models import (
     CreateSessionRequest,
     CreateSessionResponse,
@@ -41,7 +42,11 @@ from core.dependencies import (
     get_candidate_service,
     get_evaluation_service,
     get_interview_service,
+    get_job_service,
 )
+from core.config import get_settings
+from core.dependencies import get_container
+from core.llm_context import reset_context_provider, set_context_provider
 from core.security import Principal, get_principal, require_authenticated
 from repositories.interfaces import EvaluationJob, EvaluationStatus
 from schemas.application import ApplicationStatus
@@ -49,6 +54,7 @@ from services.application_service import ApplicationService
 from services.candidate_service import CandidateService
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
+from services.job_service import JobService
 from utils.interview_session import SessionStatus
 
 router = APIRouter(prefix="/sessions", tags=["interview"])
@@ -132,6 +138,9 @@ async def create_session(
     service: InterviewService = Depends(get_interview_service),
     applications: ApplicationService = Depends(get_application_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
+    jobs: JobService = Depends(get_job_service),
+    container=Depends(get_container),
+    settings=Depends(get_settings),
     principal: Principal = Depends(require_authenticated),
 ) -> CreateSessionResponse:
     """POST /sessions - create an interview session and ask the first
@@ -200,13 +209,28 @@ async def create_session(
                     application_id=payload.application_id,
                 )
 
-    session_id, runner = await service.create_session(
-        job_description=payload.job_description,
-        parsed_resume=payload.parsed_resume,
-        candidate_id=payload.candidate_id,
-        max_questions=payload.max_questions,
-        application_id=payload.application_id,
+    # Candidate-owned credentials are intentionally resolved only for a
+    # candidate's own practice job. Real interview sessions and evaluations
+    # retain the existing platform/recruiter resolution paths.
+    practice_provider = await resolve_candidate_practice_llm_provider(
+        principal=principal, job_id=payload.job_id,
+        candidate_id=payload.candidate_id, application_id=payload.application_id,
+        settings=settings, container=container, jobs=jobs,
+        candidate_service=candidate_service,
     )
+
+    context_token = set_context_provider(practice_provider) if practice_provider is not None else None
+    try:
+        session_id, runner = await service.create_session(
+            job_description=payload.job_description,
+            parsed_resume=payload.parsed_resume,
+            candidate_id=payload.candidate_id,
+            max_questions=payload.max_questions,
+            application_id=payload.application_id,
+        )
+    finally:
+        if context_token is not None:
+            reset_context_provider(context_token)
     # Available to the InterviewSessionError handler, which needs the
     # runner's status to choose between 409 and 500 (api/errors.py).
     request.state.runner = runner
@@ -231,6 +255,9 @@ async def get_session_state(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
+    jobs: JobService = Depends(get_job_service),
+    container=Depends(get_container),
+    settings=Depends(get_settings),
     principal: Principal = Depends(get_principal),
 ) -> SessionStateResponse:
     """GET /sessions/{id} - a controlled snapshot of session state. Never
@@ -283,6 +310,9 @@ async def submit_answer(
     service: InterviewService = Depends(get_interview_service),
     evaluations: EvaluationService = Depends(get_evaluation_service),
     candidate_service: CandidateService = Depends(get_candidate_service),
+    jobs: JobService = Depends(get_job_service),
+    container=Depends(get_container),
+    settings=Depends(get_settings),
     principal: Principal = Depends(get_principal),
 ) -> SubmitAnswerResponse:
     """POST /sessions/{id}/answers - the candidate's answer is untrusted
@@ -302,6 +332,7 @@ async def submit_answer(
     # Resolved before submitting so the error handler has the runner even if
     # submit_answer() is what fails.
     runner = await service.get_runner(session_id)
+    session_record = await service.get_record(session_id)
     request.state.runner = runner
     await _enforce_session_ownership(
         session_id, runner.candidate_id, principal,
@@ -309,7 +340,22 @@ async def submit_answer(
         allow_public_capability=True,
     )
 
-    result = await service.submit_answer(session_id, payload.answer_text)
+    practice_provider = await resolve_candidate_practice_llm_provider(
+        principal=principal,
+        job_id=runner.job_description.job_id,
+        candidate_id=runner.candidate_id,
+        application_id=session_record.application_id,
+        settings=settings,
+        container=container,
+        jobs=jobs,
+        candidate_service=candidate_service,
+    )
+    context_token = set_context_provider(practice_provider) if practice_provider is not None else None
+    try:
+        result = await service.submit_answer(session_id, payload.answer_text)
+    finally:
+        if context_token is not None:
+            reset_context_provider(context_token)
 
     response = SubmitAnswerResponse.from_domain(result)
     # `runner` is the same object submit_answer() just advanced, so this

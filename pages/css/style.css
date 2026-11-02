@@ -1071,6 +1071,52 @@ tr:hover td {
   display: none;
 }
 
+/* Shared BYOK controls use the existing OpenHire modal and theme tokens. */
+.byok-modal-overlay:not([hidden]) { display: flex; }
+.byok-modal { max-width: 520px; max-height: min(88vh, 760px); }
+.byok-modal .modal-header { align-items: flex-start; }
+.byok-modal .modal-header .card-sub { margin: .25rem 0 0; }
+.byok-modal-actions { display: flex; justify-content: flex-end; gap: .6rem; padding: 0 1.35rem 1.25rem; }
+.byok-workflow-control { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; align-items: center; gap: .55rem 1rem; }
+.byok-workflow-control > .form-label { margin: 0; }
+.byok-workflow-summary { grid-column: 2; display: flex; align-items: center; gap: .75rem; min-width: 0; color: var(--ink-2); font-size: .84rem; }
+.byok-workflow-summary button[hidden] { display: none; }
+.byok-workflow-summary span { overflow-wrap: anywhere; }
+.byok-workflow-control > .form-status { grid-column: 2; margin: 0; }
+.byok-profile-intro { margin-bottom: 1rem; }
+.byok-preferences, .byok-credentials, .byok-usage { border-top: 1px solid var(--surface-border); padding-top: 1.2rem; margin-top: 1.2rem; }
+.byok-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
+.byok-section-heading h4, .byok-usage h4 { margin: 0; font-size: .96rem; font-weight: 600; }
+.byok-section-heading .card-sub { margin: .25rem 0 0; }
+.byok-preference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .9rem; }
+#byokPreferenceFields[hidden] { display: none; }
+.byok-advanced { color: var(--ink-2); font-size: .83rem; }
+.byok-advanced summary { cursor: pointer; margin: .25rem 0 .65rem; }
+.byok-advanced .form-label { display: block; margin: .5rem 0; }
+.byok-settings-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .8rem; }
+.byok-credential-list { display: grid; gap: .65rem; }
+.byok-credential-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .65rem 1rem; align-items: center; background: var(--surface-elevated); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: .85rem 1rem; }
+.byok-credential-title { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.byok-credential-meta { display: flex; flex-wrap: wrap; gap: .45rem .85rem; color: var(--ink-3); font-size: .78rem; margin-top: .38rem; }
+.byok-credential-meta code { color: var(--ink-2); font-family: var(--font-mono); }
+.byok-status { border-radius: var(--radius-pill); padding: .12rem .48rem; font-size: .68rem; font-weight: 600; background: var(--danger-bg); color: var(--danger-text); }
+.byok-status.is-active { background: var(--success-bg); color: var(--success-text); }
+.byok-credential-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.byok-delete { color: var(--danger-text); }
+.byok-empty { text-align: center; padding: 1.6rem 1rem; border: 1px dashed var(--surface-border-light); border-radius: var(--radius); }
+.byok-empty strong { font-size: .9rem; }
+.byok-empty p { margin: .35rem auto .8rem; }
+.byok-usage-row { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; color: var(--ink-2); font-size: .82rem; border-bottom: 1px solid var(--surface-border); padding: .6rem 0; }
+.byok-usage-row span { color: var(--ink-3); }
+@media (max-width: 680px) {
+  .byok-workflow-control { grid-template-columns: 1fr; }
+  .byok-workflow-summary, .byok-workflow-control > .form-status { grid-column: 1; }
+  .byok-preference-grid { grid-template-columns: 1fr; }
+  .byok-credential-row { grid-template-columns: 1fr; }
+  .byok-credential-actions { justify-content: flex-start; }
+  .byok-section-heading { align-items: center; }
+}
+
 .modal {
   background: var(--surface);
   border: 1px solid var(--surface-border);

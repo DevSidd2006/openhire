@@ -25,10 +25,7 @@ def _service(repo=None):
 async def test_save_encrypts_the_key_and_round_trips():
     repo = InMemoryLLMCredentialRepository()
     service = _service(repo)
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         saved = await service.save(user_id="user_1", provider="openai", api_key="sk-real-key")
 
     assert saved.encrypted_key != b"sk-real-key"
@@ -42,10 +39,7 @@ async def test_encrypting_the_same_key_twice_produces_different_ciphertext():
     """Fernet includes a random nonce and timestamp per encryption - two
     saves of the identical plaintext must not be comparable by ciphertext."""
     service = _service()
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         first = await service.save(user_id="user_1", provider="openai", api_key="sk-same-key")
         second = await service.save(user_id="user_2", provider="openai", api_key="sk-same-key")
 
@@ -55,10 +49,7 @@ async def test_encrypting_the_same_key_twice_produces_different_ciphertext():
 @pytest.mark.asyncio
 async def test_save_computes_a_key_hint_from_the_last_four_chars():
     service = _service()
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         saved = await service.save(user_id="user_1", provider="openai", api_key="sk-abcd1234")
 
     assert saved.key_hint == "...1234"
@@ -67,10 +58,7 @@ async def test_save_computes_a_key_hint_from_the_last_four_chars():
 @pytest.mark.asyncio
 async def test_save_validates_with_a_live_call_and_rejects_a_bad_key():
     service = _service()
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(side_effect=LLMPermanentError("invalid api key"))
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": False, "status": "invalid_api_key", "auth_status": "invalid", "error_code": "invalid_api_key", "message": "invalid api key"})):
         with pytest.raises(BadRequestError):
             await service.save(user_id="user_1", provider="openai", api_key="sk-bad-key")
 
@@ -79,10 +67,7 @@ async def test_save_validates_with_a_live_call_and_rejects_a_bad_key():
 async def test_a_rejected_save_writes_nothing():
     repo = InMemoryLLMCredentialRepository()
     service = _service(repo)
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(side_effect=LLMPermanentError("invalid api key"))
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": False, "status": "invalid_api_key", "auth_status": "invalid", "error_code": "invalid_api_key", "message": "invalid api key"})):
         with pytest.raises(BadRequestError):
             await service.save(user_id="user_1", provider="openai", api_key="sk-bad-key")
 
@@ -93,11 +78,9 @@ async def test_a_rejected_save_writes_nothing():
 async def test_decryption_under_a_wrong_master_key_fails_loudly():
     repo = InMemoryLLMCredentialRepository()
     service_a = _service(repo)
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         await service_a.save(user_id="user_1", provider="openai", api_key="sk-real-key")
+        await service_a.save_settings("user_1", {"mode": "byok", "default_credential_id": None, "provider": "openai", "fallback_to_other_keys": True, "fallback_to_platform": True, "model": None})
 
     other_key = Fernet.generate_key().decode()
     service_b = LLMCredentialService(credential_repository=repo, encryption_key=other_key)
@@ -106,9 +89,9 @@ async def test_decryption_under_a_wrong_master_key_fails_loudly():
 
 
 @pytest.mark.asyncio
-async def test_resolve_provider_for_user_returns_none_when_no_credential_saved():
+async def test_resolve_provider_for_user_uses_tracked_platform_when_no_credential_saved():
     service = _service()
-    assert await service.resolve_provider_for_user("nobody") is None
+    assert await service.resolve_provider_for_user("nobody") is not None
 
 
 @pytest.mark.asyncio
@@ -117,11 +100,9 @@ async def test_resolve_provider_for_user_returns_a_fallback_wrapped_provider():
 
     repo = InMemoryLLMCredentialRepository()
     service = _service(repo)
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         await service.save(user_id="user_1", provider="openai", api_key="sk-real-key")
+        await service.save_settings("user_1", {"mode": "byok", "default_credential_id": None, "provider": "openai", "fallback_to_other_keys": True, "fallback_to_platform": True, "model": None})
 
     resolved = await service.resolve_provider_for_user("user_1")
     assert isinstance(resolved, FallbackLLMProvider)
@@ -131,11 +112,9 @@ async def test_resolve_provider_for_user_returns_a_fallback_wrapped_provider():
 async def test_a_primary_failure_marks_the_credential_status_failed():
     repo = InMemoryLLMCredentialRepository()
     service = _service(repo)
-    with patch("services.llm_credential_service.build_provider") as mock_build:
-        mock_provider = AsyncMock()
-        mock_provider.generate = AsyncMock(return_value="ok")
-        mock_build.return_value = mock_provider
+    with patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"})):
         await service.save(user_id="user_1", provider="openai", api_key="sk-real-key")
+        await service.save_settings("user_1", {"mode": "byok", "default_credential_id": None, "provider": "openai", "fallback_to_other_keys": True, "fallback_to_platform": True, "model": None})
 
     resolved = await service.resolve_provider_for_user("user_1")
     # Simulate a subsequent call failing (the mock_build provider set above

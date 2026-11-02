@@ -1,8 +1,7 @@
 /**
  * Minimal & fast navigation and state handler
  */
-// Prefer an explicit per-page override. Local pages use the same FastAPI origin
-// so development-only routes such as /live-sessions/demo stay local.
+// Prefer an explicit per-page override. Local pages use the same FastAPI origin.
 const DEFAULT_RENDER_BACKEND = 'https://openhire.devsidd.tech';
 const API_BASE = typeof window.OPENHIRE_API_URL === 'string'
   ? window.OPENHIRE_API_URL.replace(/\/+$/, '')
@@ -197,6 +196,81 @@ async function changeMyPassword(currentPassword, newPassword) {
     method: 'POST',
     body: { current_password: currentPassword, new_password: newPassword },
   });
+}
+
+const OPENHIRE_LLM_PROVIDERS = [
+  ['openai', 'OpenAI'], ['gemini', 'Gemini'], ['anthropic', 'Anthropic'],
+  ['groq', 'Groq'], ['nvidia_nim', 'NVIDIA NIM'], ['openrouter', 'OpenRouter'],
+];
+const OPENHIRE_LLM_MODELS = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+  gemini: ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite'],
+  anthropic: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest'],
+  groq: ['openai/gpt-oss-20b', 'llama-3.3-70b-versatile'],
+  nvidia_nim: ['nvidia/nemotron-3-super-120b-a12b'],
+  openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'],
+};
+
+/** Mount the existing account-level BYOK preferences in an AI workflow.
+ * The save button persists selection before the caller starts the operation,
+ * so backend request dependencies resolve the exact same account settings. */
+async function mountLlmWorkflowSettings(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return { save: async () => {} };
+  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  try {
+    const [credentials, settings] = await Promise.all([apiRequest('/auth/me/llm-credentials'), apiRequest('/auth/me/llm-settings')]);
+    let provider = settings.provider || (credentials.find(c => c.credential_id === settings.default_credential_id) || {}).provider || OPENHIRE_LLM_PROVIDERS[0][0];
+    let credentialId = settings.default_credential_id || '';
+    let model = settings.model || '';
+    let modeValue = settings.mode || 'platform';
+    const key = () => credentials.find(c => c.credential_id === credentialId);
+    const label = () => modeValue === 'platform' ? 'OpenHire Platform' : `${OPENHIRE_LLM_PROVIDERS.find(p => p[0] === provider)?.[1] || provider} - ${model || 'default model'}${key() ? ` - ${key().name}` : ''}`;
+    container.innerHTML = `<div class="byok-workflow-control"><label class="form-label" for="${containerId}Mode">AI provider mode</label><select class="form-control" id="${containerId}Mode"><option value="platform">Platform</option><option value="byok">BYOK</option></select><div class="byok-workflow-summary"><span id="${containerId}Summary"></span><button type="button" class="btn-outline btn-sm" id="${containerId}Change" hidden>Change</button></div><span class="form-status" id="${containerId}Status" aria-live="polite"></span></div>`;
+    const mode = container.querySelector(`#${containerId}Mode`), summary = container.querySelector(`#${containerId}Summary`), change = container.querySelector(`#${containerId}Change`), status = container.querySelector(`#${containerId}Status`);
+    mode.value = modeValue;
+    const sync = () => { summary.textContent = label(); change.hidden = modeValue !== 'byok'; };
+    sync();
+    let overlay = document.getElementById(`${containerId}Modal`);
+    if (!overlay) { overlay = document.createElement('div'); overlay.id = `${containerId}Modal`; overlay.className = 'modal-overlay byok-modal-overlay'; overlay.hidden = true; document.body.appendChild(overlay); }
+    const openModal = () => {
+      const opts = OPENHIRE_LLM_PROVIDERS.map(([v,l]) => `<option value="${v}" ${v === provider ? 'selected' : ''}>${l}</option>`).join('');
+      overlay.innerHTML = `<div class="modal byok-modal" role="dialog" aria-modal="true" aria-labelledby="${containerId}ModalTitle"><div class="modal-header"><div><h2 class="modal-title" id="${containerId}ModalTitle">Choose AI provider</h2><p class="card-sub">Select a provider, saved API key and model for this operation.</p></div><button type="button" class="btn-ghost modal-close" data-close aria-label="Close">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">Provider</label><select class="form-control" data-provider>${opts}</select></div><div class="form-group"><label class="form-label">Saved API key</label><select class="form-control" data-key></select></div><div class="form-group"><label class="form-label">Model</label><select class="form-control" data-model></select></div><p class="card-sub">Need another key? <a href="profile.html#api-keys">Manage API Keys</a></p><div class="form-status" data-status aria-live="polite"></div></div><div class="byok-modal-actions"><button type="button" class="btn-outline" data-close>Cancel</button><button type="button" class="btn-primary" data-apply>Use selection</button></div></div>`;
+      const p = overlay.querySelector('[data-provider]'), c = overlay.querySelector('[data-key]'), m = overlay.querySelector('[data-model]');
+      const refresh = reset => {
+        const available = credentials.filter(x => x.provider === p.value && x.status === 'active');
+        c.innerHTML = available.length ? available.map(x => `<option value="${esc(x.credential_id)}">${esc(x.name)} - ${esc(x.key_hint)}</option>`).join('') : '<option value="">No active keys saved</option>';
+        c.value = !reset && available.some(x => x.credential_id === credentialId) ? credentialId : (available[0]?.credential_id || '');
+        const selected = available.find(x => x.credential_id === c.value), models = OPENHIRE_LLM_MODELS[p.value] || [];
+        const chosenModel = !reset && model ? model : (selected?.model || models[0] || '');
+        m.innerHTML = models.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+        if (chosenModel && !models.includes(chosenModel)) m.insertAdjacentHTML('afterbegin', `<option value="${esc(chosenModel)}">${esc(chosenModel)}</option>`);
+        m.value = chosenModel; c.disabled = !available.length;
+      };
+      refresh(false); p.onchange = () => refresh(true);
+      c.onchange = () => { model = (credentials.find(x => x.credential_id === c.value) || {}).model || model; refresh(false); };
+      overlay.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { overlay.hidden = true; });
+      overlay.onclick = e => { if (e.target === overlay) overlay.hidden = true; };
+      overlay.querySelector('[data-apply]').onclick = () => {
+        const selected = credentials.find(x => x.credential_id === c.value);
+        if (!selected) { overlay.querySelector('[data-status]').textContent = 'Add an active key from Profile - API Keys to use BYOK.'; return; }
+        provider = p.value; credentialId = selected.credential_id; model = m.value; modeValue = 'byok'; mode.value = 'byok'; sync(); overlay.hidden = true;
+      };
+      overlay.hidden = false;
+    };
+    mode.onchange = () => { modeValue = mode.value; sync(); if (modeValue === 'byok') openModal(); else overlay.hidden = true; };
+    change.onclick = openModal;
+    const save = async () => {
+      if (modeValue === 'byok' && !key()) throw new Error('Select an active API key in the BYOK settings dialog.');
+      status.textContent = 'Saving AI settings...'; status.className = 'form-status';
+      await apiRequest('/auth/me/llm-settings', {method:'PUT', body:{mode:modeValue, provider, default_credential_id:modeValue === 'byok' ? credentialId : null, fallback_to_other_keys:settings.fallback_to_other_keys !== false, fallback_to_platform:settings.fallback_to_platform !== false, model:modeValue === 'byok' ? model : null}});
+      status.textContent = 'AI settings saved.'; status.className = 'form-status success';
+    };
+    return { save };
+  } catch (err) {
+    container.innerHTML = `<p class="card-sub">AI provider settings could not load: ${esc(err.message)}</p>`;
+    return { save: async () => { throw new Error('AI provider settings could not be loaded.'); } };
+  }
 }
 
 /** GET /admin/users with optional {query, user_type, is_active} filters -

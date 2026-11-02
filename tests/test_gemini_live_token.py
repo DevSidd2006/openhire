@@ -178,6 +178,8 @@ async def test_non_gemini_byok_is_not_used_for_gemini_token_minting():
             status=CredentialStatus.ACTIVE,
         )
     )
+    await repo.save_settings("recruiter_1", {"mode":"byok", "default_credential_id":None,
+        "provider":"gemini", "fallback_to_other_keys":True, "fallback_to_platform":True, "model":None})
     credentials = LLMCredentialService(
         credential_repository=repo,
         encryption_key=encryption_key.decode(),
@@ -211,6 +213,8 @@ async def test_active_gemini_byok_is_preferred_over_system_key():
             status=CredentialStatus.ACTIVE,
         )
     )
+    await repo.save_settings("recruiter_1", {"mode":"byok", "default_credential_id":None,
+        "provider":"gemini", "fallback_to_other_keys":True, "fallback_to_platform":True, "model":None})
     credentials = LLMCredentialService(
         credential_repository=repo,
         encryption_key=encryption_key.decode(),

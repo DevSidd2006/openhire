@@ -287,6 +287,16 @@ class TestGetMe:
         response = client.get("/auth/me")
         assert response.status_code == 401
 
+    def test_recruiter_token_resolves_the_same_persisted_account(self, authenticated_client):
+        client, _ = authenticated_client
+        user_id, token = _signup_and_get_token(
+            client, email="profile-recruiter@example.com", user_type="recruiter"
+        )
+        response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["user_id"] == user_id
+        assert response.json()["user_type"] == "recruiter"
+
 
 class TestPatchMe:
     def test_updates_supplied_fields_only(self, authenticated_client):

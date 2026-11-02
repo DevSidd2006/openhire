@@ -197,11 +197,78 @@ def test_create_live_session_unconfigured(test_app, monkeypatch: pytest.MonkeyPa
 
 def test_create_demo_live_session(client: TestClient) -> None:
     response = client.post("/live-sessions/demo")
-    assert response.status_code == 201
-    data = response.json()
+    assert response.status_code == 404
+    assert "retired" in response.json()["detail"]
+
+
+def test_upgrade_owned_practice_session_from_legacy_link(client: TestClient) -> None:
+    job_response = client.post(
+        "/jobs",
+        json={
+            "title": "Practice Interview",
+            "description": "Practice Python APIs, PostgreSQL, WebSockets, and testing.",
+            "is_practice": True,
+        },
+    )
+    assert job_response.status_code == 201
+    candidate_response = client.post(
+        "/candidates",
+        json={
+            "candidate_name": "Practice Candidate",
+            "resume_text": "Software engineer experienced with Python, PostgreSQL, WebSockets, and testing.",
+        },
+    )
+    assert candidate_response.status_code == 201
+
+    legacy_response = client.post(
+        "/sessions",
+        json={
+            "job_id": job_response.json()["job_id"],
+            "candidate_id": candidate_response.json()["candidate_id"],
+            "job_description": job_response.json()["job"],
+            "parsed_resume": candidate_response.json()["resume"],
+        },
+    )
+    assert legacy_response.status_code == 201
+    old_session_id = legacy_response.json()["session_id"]
+
+    upgraded = client.post(f"/live-sessions/{old_session_id}/upgrade")
+    assert upgraded.status_code == 200
+    data = upgraded.json()
+    assert data["session_id"].startswith("sess_")
     assert data["interview_mode"] == "gemini_live"
-    assert data["reconnect_after_seconds"] == 540
-    assert "session_id" in data
+    assert data["application_id"] is None
+
+
+def test_upgrade_rejects_unlinked_real_interview(client: TestClient) -> None:
+    job_response = client.post(
+        "/jobs",
+        json={
+            "title": "Real Interview",
+            "description": "Build Python APIs, PostgreSQL services, and realtime WebSocket applications.",
+        },
+    )
+    candidate_response = client.post(
+        "/candidates",
+        json={
+            "candidate_name": "Practice Candidate",
+            "resume_text": "Software engineer experienced with Python, PostgreSQL, WebSockets, and testing.",
+        },
+    )
+    legacy_response = client.post(
+        "/sessions",
+        json={
+            "job_id": job_response.json()["job_id"],
+            "candidate_id": candidate_response.json()["candidate_id"],
+            "job_description": job_response.json()["job"],
+            "parsed_resume": candidate_response.json()["resume"],
+        },
+    )
+
+    upgraded = client.post(
+        f"/live-sessions/{legacy_response.json()['session_id']}/upgrade"
+    )
+    assert upgraded.status_code == 409
 
 
 def test_get_live_session(client: TestClient) -> None:

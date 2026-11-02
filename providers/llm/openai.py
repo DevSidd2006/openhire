@@ -10,13 +10,14 @@ from providers.base import LLMProvider, LLMTransientError, LLMPermanentError
 class OpenAIProvider(LLMProvider):
     """OpenAI LLM provider."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo"):
+    def __init__(self, api_key: str, model: str = "gpt-4-turbo", base_url: str | None = None):
         self.api_key = api_key
         self.model = model
+        self.last_usage = {}
         # Import here to avoid hard dependency
         try:
             from openai import AsyncOpenAI
-            self.client = AsyncOpenAI(api_key=api_key)
+            self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         except ImportError:
             raise ImportError("openai package required for OpenAIProvider. Install with: pip install openai")
 
@@ -50,6 +51,9 @@ class OpenAIProvider(LLMProvider):
                 temperature=kwargs.get("temperature", 0.7),
                 max_tokens=kwargs.get("max_tokens", 2048),
             )
+            usage = getattr(response, "usage", None)
+            if usage:
+                self.last_usage = {"input_tokens": usage.prompt_tokens, "output_tokens": usage.completion_tokens}
             return response.choices[0].message.content
         except Exception as e:
             raise self._classify(e) from e
@@ -104,6 +108,9 @@ class OpenAIProvider(LLMProvider):
             raise LLMTransientError("OpenAI structured response contained no choices")
 
         choice = response.choices[0]
+        usage = getattr(response, "usage", None)
+        if usage:
+            self.last_usage = {"input_tokens": usage.prompt_tokens, "output_tokens": usage.completion_tokens}
         finish_reason = getattr(choice, "finish_reason", None)
         content = choice.message.content if choice.message else None
 

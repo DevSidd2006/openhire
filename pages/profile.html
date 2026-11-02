@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css">
-<link rel="stylesheet" href="css/style.css?v=theme-toggle">
+<link rel="stylesheet" href="css/style.css?v=byok-ui-polish">
 <script src="js/theme.js"></script>
 </head>
 <body>
@@ -98,7 +98,7 @@
 </main>
 
 <script src="js/auth.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=byok-ui-polish"></script>
 <script>
 let currentProfile = null;
 
@@ -347,10 +347,13 @@ document.getElementById('passwordForm').addEventListener('submit', async (event)
 })();
 </script>
 <script>
-// Gemini-only for now - the other three native providers remain fully
-// supported server-side (build_provider) and can be re-added here later.
 const BYOK_PROVIDERS = [
+  { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'nvidia_nim', label: 'NVIDIA NIM' },
+  { value: 'openrouter', label: 'OpenRouter' },
 ];
 
 // Known Gemini model names with real free-tier quota (checked against
@@ -364,209 +367,72 @@ const BYOK_GEMINI_MODELS = [
   'gemini-3.1-flash-lite',
 ];
 
-async function fetchMyLlmCredential() {
-  return apiRequest('/auth/me/llm-credential');
-}
-
-function renderApiKeysEditableForm(container, credential) {
-  const options = BYOK_PROVIDERS.map(
-    (p) => `<option value="${p.value}" ${credential && credential.provider === p.value ? 'selected' : ''}>${p.label}</option>`
-  ).join('');
-  const modelOptions = BYOK_GEMINI_MODELS.map(
-    (m) => `<option value="${m}" ${credential && credential.model === m ? 'selected' : ''}>${m}</option>`
-  ).join('');
-  container.innerHTML = `
-    <p class="card-sub">
-      Bring your own API key to run OpenHire's pipeline against the provider
-      of your choice, spending your own quota instead of OpenHire's.
-    </p>
-    ${credential ? `
-      <p class="card-sub" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-        <span>Current: <strong>${credential.provider}</strong>${credential.model ? ` (${credential.model})` : ''},
-        key <code>${credential.key_hint}</code></span>
-        <span style="font-size:11px; padding:2px 8px; border-radius:12px; font-weight:600; text-transform:uppercase; background:${credential.status === 'active' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}; color:${credential.status === 'active' ? 'var(--success, #16a34a)' : 'var(--danger-text, #ef4444)'};">${credential.status}</span>
-      </p>
-      ${credential.status === 'failed' ? `<p class="form-status error" style="margin-bottom:0.75rem;">This key stopped working: ${credential.last_error || 'unknown error'}. OpenHire is using its own key until you save a new one.</p>` : ''}
-      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
-        <button class="btn-outline btn-sm" id="testSavedApiKeyBtn" type="button">Test saved key</button>
-        <button class="btn-outline btn-sm" id="removeApiKeyBtn" type="button" style="color:var(--danger-text, #ef4444);">Remove key</button>
-        <span class="form-status" id="savedKeyTestStatus" style="margin:0; font-size:12px;"></span>
-      </div>
-    ` : ''}
-    <form id="apiKeyForm" style="margin-top:1rem;">
-      <div class="form-group">
-        <label class="form-label" for="apiKeyProvider">Provider</label>
-        <select class="form-control" id="apiKeyProvider">${options}</select>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="apiKeyModel">Model</label>
-        <select class="form-control" id="apiKeyModel">${modelOptions}</select>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="apiKeyValue">API key</label>
-        <div style="display:flex; gap:0.5rem; align-items:center;">
-          <input class="form-control" id="apiKeyValue" type="password" autocomplete="off" placeholder="Paste your API key here..." required style="flex:1;">
-          <button type="button" class="btn-secondary btn-sm" id="testApiKeyBtn" style="white-space:nowrap; padding:0.45rem 0.9rem;">Test key</button>
-        </div>
-        <div class="form-status" id="apiKeyTestStatus" style="display:none; margin-top:0.4rem;"></div>
-      </div>
-      <div style="display:flex; gap:0.5rem; align-items:center;">
-        <button type="submit" class="btn-primary" id="saveApiKeyBtn">${credential ? 'Replace key' : 'Save key'}</button>
-      </div>
-      <div class="form-status" id="apiKeyFormStatus"></div>
-    </form>
-  `;
-
-  const keyInput = document.getElementById('apiKeyValue');
-  const testBtn = document.getElementById('testApiKeyBtn');
-  const testStatus = document.getElementById('apiKeyTestStatus');
-  let lastTestedKey = '';
-  let lastTestedModel = '';
-
-  async function runInPlaceTest(explicitClick = false) {
-    const key = keyInput.value.trim();
-    const provider = document.getElementById('apiKeyProvider').value;
-    const model = document.getElementById('apiKeyModel').value || null;
-
-    if (!key) {
-      if (explicitClick) {
-        testStatus.style.display = 'block';
-        testStatus.textContent = 'Please enter an API key first.';
-        testStatus.className = 'form-status error';
-      }
-      return;
-    }
-
-    if (!explicitClick && key === lastTestedKey && model === lastTestedModel) {
-      return;
-    }
-    lastTestedKey = key;
-    lastTestedModel = model;
-
-    testStatus.style.display = 'block';
-    testStatus.textContent = `Testing API key in place with ${provider}${model ? ` (${model})` : ''}...`;
-    testStatus.className = 'form-status';
-    testBtn.disabled = true;
-    const originalBtnText = testBtn.textContent;
-    testBtn.textContent = 'Testing...';
-
-    try {
-      const res = await apiRequest('/auth/me/llm-credential/test', {
-        method: 'POST',
-        body: {
-          provider,
-          model,
-          api_key: key,
-        },
-      });
-
-      if (res && res.success) {
-        testStatus.textContent = `✓ ${res.message || 'API key is valid and working!'}`;
-        testStatus.className = 'form-status success';
-      } else {
-        testStatus.textContent = `✗ ${res && res.message ? res.message : 'Validation failed. Check your API key.'}`;
-        testStatus.className = 'form-status error';
-      }
-    } catch (err) {
-      testStatus.textContent = `✗ ${err.message || 'Validation request failed.'}`;
-      testStatus.className = 'form-status error';
-    } finally {
-      testBtn.disabled = false;
-      testBtn.textContent = originalBtnText;
-    }
-  }
-
-  testBtn.addEventListener('click', () => runInPlaceTest(true));
-  keyInput.addEventListener('change', () => runInPlaceTest(false));
-
-  const testSavedBtn = document.getElementById('testSavedApiKeyBtn');
-  const savedKeyStatus = document.getElementById('savedKeyTestStatus');
-  if (testSavedBtn && savedKeyStatus) {
-    testSavedBtn.addEventListener('click', async () => {
-      testSavedBtn.disabled = true;
-      const originalText = testSavedBtn.textContent;
-      testSavedBtn.textContent = 'Testing...';
-      savedKeyStatus.textContent = 'Testing saved key...';
-      savedKeyStatus.className = 'form-status';
-
-      try {
-        const res = await apiRequest('/auth/me/llm-credential/test', {
-          method: 'POST',
-          body: {},
-        });
-
-        if (res && res.success) {
-          savedKeyStatus.textContent = `✓ ${res.message || 'Saved key is working!'}`;
-          savedKeyStatus.className = 'form-status success';
-          if (credential && credential.status === 'failed') {
-            const refreshed = await fetchMyLlmCredential();
-            renderApiKeysEditableForm(container, refreshed);
-          }
-        } else {
-          savedKeyStatus.textContent = `✗ ${res && res.message ? res.message : 'Saved key test failed.'}`;
-          savedKeyStatus.className = 'form-status error';
-        }
-      } catch (err) {
-        savedKeyStatus.textContent = `✗ ${err.message || 'Test failed.'}`;
-        savedKeyStatus.className = 'form-status error';
-      } finally {
-        testSavedBtn.disabled = false;
-        testSavedBtn.textContent = originalText;
-      }
-    });
-  }
-
-  document.getElementById('apiKeyForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const saveStatus = document.getElementById('apiKeyFormStatus');
-    saveStatus.textContent = 'Validating and saving API key...';
-    saveStatus.className = 'form-status';
-    const saveBtn = document.getElementById('saveApiKeyBtn');
-    if (saveBtn) saveBtn.disabled = true;
-
-    try {
-      const saved = await apiRequest('/auth/me/llm-credential', {
-        method: 'PUT',
-        body: {
-          provider: document.getElementById('apiKeyProvider').value,
-          model: document.getElementById('apiKeyModel').value || null,
-          api_key: document.getElementById('apiKeyValue').value.trim(),
-        },
-      });
-      saveStatus.textContent = '✓ Saved.';
-      saveStatus.className = 'form-status success';
-      renderApiKeysEditableForm(container, saved);
-    } catch (err) {
-      saveStatus.textContent = err.message || 'Could not save this key.';
-      saveStatus.className = 'form-status error';
-      if (saveBtn) saveBtn.disabled = false;
-    }
-  });
-
-  const removeBtn = document.getElementById('removeApiKeyBtn');
-  if (removeBtn) {
-    removeBtn.addEventListener('click', async () => {
-      try {
-        await apiRequest('/auth/me/llm-credential', { method: 'DELETE' });
-        renderApiKeysEditableForm(container, null);
-      } catch (err) {
-        alert(err.message || 'Could not remove this key.');
-      }
-    });
-  }
-}
+const BYOK_MODELS = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+  gemini: BYOK_GEMINI_MODELS,
+  anthropic: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest'],
+  groq: ['openai/gpt-oss-20b', 'llama-3.3-70b-versatile'],
+  nvidia_nim: ['nvidia/nemotron-3-super-120b-a12b'],
+  openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'],
+};
 
 async function renderApiKeysCard(profile) {
   const container = document.getElementById('apiKeysBody');
+  if (!profile || !['recruiter', 'candidate', 'admin'].includes(profile.user_type)) {
+    container.innerHTML = '<p class="card-sub">Sign in to manage your AI provider settings.</p>'; return;
+  }
+  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   try {
-    const credential = await fetchMyLlmCredential();
-    renderApiKeysEditableForm(container, credential);
+    const [credentials, settings, usage, health] = await Promise.all([apiRequest('/auth/me/llm-credentials'), apiRequest('/auth/me/llm-settings'), apiRequest('/auth/me/llm-usage'), apiRequest('/auth/me/llm-provider-health')]);
+    const providers = BYOK_PROVIDERS.map(p => `<option value="${p.value}">${p.label}</option>`).join('');
+    container.innerHTML = `<div class="byok-profile-intro"><p class="card-sub">Choose the AI credentials used by this account. ${profile.user_type === 'candidate' ? '<strong>Candidate BYOK is exclusively for mock interviews.</strong> Your keys are never used for real job applications, real job interviews, scoring or recruiter workflows.' : ''}</p></div>
+      <section class="byok-preferences"><div class="byok-section-heading"><div><h4>AI provider mode</h4><p class="card-sub">Platform keeps using OpenHire credentials. BYOK uses your saved provider key.</p></div></div>
+      <div class="form-group byok-mode-field"><label class="form-label" for="llmMode">Mode</label><select class="form-control" id="llmMode"><option value="platform">Platform</option><option value="byok">BYOK</option></select></div><div class="byok-preference-grid" id="byokPreferenceFields"><div class="form-group"><label class="form-label" for="llmProvider">Default provider</label><select class="form-control" id="llmProvider">${providers}</select></div><div class="form-group"><label class="form-label" for="llmDefault">Default credential</label><select class="form-control" id="llmDefault"></select></div><div class="form-group"><label class="form-label" for="llmModel">Default model</label><select class="form-control" id="llmModel"></select></div></div>
+      <details class="byok-advanced" id="byokFallbackSettings"><summary>Fallback options</summary><label class="form-label"><input id="llmFallbackKeys" type="checkbox"> Try other saved keys if the default fails</label><label class="form-label"><input id="llmFallbackPlatform" type="checkbox"> Fall back to OpenHire platform credentials</label></details><div class="byok-settings-actions"><button class="btn-primary" id="saveLlmSettings" type="button">Save preferences</button><span id="llmSettingsStatus" class="form-status" aria-live="polite"></span></div></section>
+      <section class="byok-credentials"><div class="byok-section-heading"><div><h4>Provider health</h4><p class="card-sub">Authentication and model access status for platform and saved credentials.</p></div></div><div class="byok-credential-list" id="byokProviderHealth"></div></section>
+      <section class="byok-credentials"><div class="byok-section-heading"><div><h4>Saved API keys</h4><p class="card-sub">Credentials are encrypted and isolated to your account.</p></div><button class="btn-primary btn-sm" id="openAddLlm"><i class="ph-bold ph-plus"></i> Add API key</button></div><div id="savedLlmCredentials" class="byok-credential-list"></div></section>
+      <section class="byok-usage"><h4>Usage</h4><div id="llmUsage"></div></section>
+      <div class="modal-overlay byok-modal-overlay" id="credentialModal" hidden><div class="modal byok-modal" role="dialog" aria-modal="true" aria-labelledby="credentialModalTitle"><div class="modal-header"><div><h2 class="modal-title" id="credentialModalTitle">Add API key</h2><p class="card-sub">Add a provider credential to your account.</p></div><button type="button" class="btn-ghost modal-close" data-close aria-label="Close">&times;</button></div><form id="credentialForm"><div class="modal-body"><div class="form-group"><label class="form-label" for="credentialName">Key name</label><input class="form-control" id="credentialName" maxlength="80" placeholder="e.g. Hiring team key" required></div><div class="form-group"><label class="form-label" for="credentialProvider">Provider</label><select class="form-control" id="credentialProvider">${providers}</select></div><div class="form-group"><label class="form-label" for="credentialModel">Model</label><select class="form-control" id="credentialModel"></select></div><div class="form-group"><label class="form-label" for="credentialKey">API key</label><input class="form-control" id="credentialKey" type="password" autocomplete="new-password" placeholder="Paste your API key" required></div><div id="credentialFormStatus" class="form-status" aria-live="polite"></div></div><div class="byok-modal-actions"><button type="button" class="btn-outline" data-close>Cancel</button><button type="submit" class="btn-primary" id="credentialSubmit">Test and save key</button></div></form></div></div>`;
+    const mode = document.getElementById('llmMode'), provider = document.getElementById('llmProvider'), defaultSelect = document.getElementById('llmDefault'), model = document.getElementById('llmModel');
+    mode.value = settings.mode || 'platform'; provider.value = settings.provider || (credentials.find(c => c.credential_id === settings.default_credential_id) || {}).provider || 'openai';
+    const refreshPreferences = (keep = true) => {
+      const providerKeys = credentials.filter(c => c.provider === provider.value);
+      defaultSelect.innerHTML = '<option value="">First active key</option>' + providerKeys.map(c => `<option value="${esc(c.credential_id)}">${esc(c.name)} - ${esc(c.key_hint)} - ${esc(c.status)}</option>`).join('');
+      const savedId = settings.default_credential_id;
+      defaultSelect.value = keep && providerKeys.some(c => c.credential_id === savedId) ? savedId : (providerKeys.find(c => c.status === 'active') || {}).credential_id || '';
+      const selected = providerKeys.find(c => c.credential_id === defaultSelect.value), models = BYOK_MODELS[provider.value] || [];
+      const selectedModel = keep ? (settings.model || selected?.model || '') : (selected?.model || '');
+      model.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+      if (selectedModel && !models.includes(selectedModel)) model.insertAdjacentHTML('afterbegin', `<option value="${esc(selectedModel)}">${esc(selectedModel)}</option>`);
+      model.value = selectedModel || models[0] || '';
+    };
+    refreshPreferences();
+    const syncModeFields = () => { const enabled = mode.value === 'byok'; document.getElementById('byokPreferenceFields').hidden = !enabled; document.getElementById('byokFallbackSettings').hidden = !enabled; };
+    syncModeFields(); mode.onchange = syncModeFields; provider.onchange = () => refreshPreferences(false);
+    const healthList = document.getElementById('byokProviderHealth');
+    healthList.innerHTML = health.providers.map(item => `<article class="byok-credential-row"><div class="byok-credential-main"><div class="byok-credential-title"><strong>${esc(BYOK_PROVIDERS.find(p => p.value === item.provider)?.label || item.provider)} · ${esc(item.name)}</strong><span class="byok-status ${item.status === 'connected' ? 'is-active' : 'is-failed'}">${esc(item.status.replaceAll('_',' '))}</span></div><div class="byok-credential-meta"><span>Model: ${esc(item.model || 'Default')}</span><span>Auth: ${esc(item.auth_status)}</span><span>Last success: ${esc(item.last_successful_test_at || 'Never')}</span>${item.message ? `<span>${esc(item.message)}</span>` : ''}</div></div><div class="byok-credential-actions"><button type="button" class="btn-outline btn-sm" data-health-provider="${esc(item.provider)}" data-health-credential="${esc(item.credential_id || '')}">Test connection</button></div><span class="form-status" data-health-status="${esc(item.provider)}-${esc(item.credential_id || 'platform')}" aria-live="polite"></span></article>`).join('');
+    healthList.querySelectorAll('[data-health-provider]').forEach(button => button.onclick = async () => { const providerName = button.dataset.healthProvider; const credentialId = button.dataset.healthCredential || 'platform'; const statusEl = button.parentElement.nextElementSibling; button.disabled = true; statusEl.textContent = 'Checking provider…'; try { const result = await apiRequest('/auth/me/llm-provider-health/test', {method:'POST', body:{provider:providerName, credential_id:credentialId}}); statusEl.textContent = result.message || result.status; statusEl.className = result.connected ? 'form-status success' : 'form-status error'; await renderApiKeysCard(profile); } catch (error) { statusEl.textContent = error.message; statusEl.className = 'form-status error'; button.disabled = false; } });
+    defaultSelect.onchange = () => { const c = credentials.find(x => x.credential_id === defaultSelect.value); if (c?.model) model.value = c.model; };
+    document.getElementById('llmFallbackKeys').checked = settings.fallback_to_other_keys !== false; document.getElementById('llmFallbackPlatform').checked = settings.fallback_to_platform !== false;
+    const list = document.getElementById('savedLlmCredentials');
+    list.innerHTML = credentials.length ? credentials.map(c => `<article class="byok-credential-row"><div class="byok-credential-main"><div class="byok-credential-title"><strong>${esc(c.name)}</strong><span class="byok-status ${c.health_status === 'connected' ? 'is-active' : 'is-failed'}">${esc(c.health_status.replaceAll('_',' '))}</span></div><div class="byok-credential-meta"><span>${esc(BYOK_PROVIDERS.find(p => p.value === c.provider)?.label || c.provider)}</span><code>${esc(c.key_hint)}</code><span>${esc(c.model || 'Provider default')}</span><span>Last success: ${esc(c.last_successful_test_at || 'Never')}</span></div></div><div class="byok-credential-actions"><button class="btn-outline btn-sm" data-default="${esc(c.credential_id)}">${settings.default_credential_id === c.credential_id ? 'Default' : 'Set default'}</button><button class="btn-outline btn-sm" data-test="${esc(c.credential_id)}">Test</button><button class="btn-outline btn-sm" data-edit="${esc(c.credential_id)}">Edit</button><button class="btn-outline btn-sm byok-delete" data-delete="${esc(c.credential_id)}">Delete</button></div><span class="form-status" id="keyStatus-${esc(c.credential_id)}" aria-live="polite"></span></article>`).join('') : `<div class="byok-empty"><strong>No API keys saved</strong><p class="card-sub">You can keep using Platform mode, or add a provider key to enable BYOK.</p><button type="button" class="btn-outline btn-sm" id="emptyAddLlm">Add API key</button></div>`;
+    const modal = document.getElementById('credentialModal'), form = document.getElementById('credentialForm'), formStatus = document.getElementById('credentialFormStatus');
+    const closeModal = () => { modal.hidden = true; form.reset(); form.dataset.editId = ''; document.getElementById('credentialKey').required = true; document.getElementById('credentialKey').placeholder = 'Paste your API key'; document.getElementById('credentialSubmit').textContent = 'Test and save key'; document.getElementById('credentialModalTitle').textContent = 'Add API key'; refreshCredentialModels(); };
+    modal.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal); modal.onclick = e => { if (e.target === modal) closeModal(); };
+    const refreshCredentialModels = () => { const p = document.getElementById('credentialProvider').value; document.getElementById('credentialModel').innerHTML = (BYOK_MODELS[p] || []).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join(''); };
+    document.getElementById('credentialProvider').onchange = refreshCredentialModels; refreshCredentialModels();
+    const openAdd = () => { form.reset(); form.dataset.editId = ''; document.getElementById('credentialKey').required = true; document.getElementById('credentialModalTitle').textContent = 'Add API key'; document.getElementById('credentialSubmit').textContent = 'Test and save key'; refreshCredentialModels(); modal.hidden = false; };
+    document.getElementById('openAddLlm').onclick = openAdd; document.getElementById('emptyAddLlm')?.addEventListener('click', openAdd);
+    document.querySelectorAll('[data-default]').forEach(b => b.onclick = async () => { const c = credentials.find(x => x.credential_id === b.dataset.default); if (!c) return; provider.value = c.provider; refreshPreferences(false); defaultSelect.value = c.credential_id; model.value = c.model || model.value; settings.provider = c.provider; settings.default_credential_id = c.credential_id; settings.model = c.model; await savePreferences(); });
+    document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const c = credentials.find(x => x.credential_id === b.dataset.edit); if (!c) return; form.dataset.editId = c.credential_id; document.getElementById('credentialName').value = c.name; document.getElementById('credentialProvider').value = c.provider; refreshCredentialModels(); document.getElementById('credentialModel').value = c.model || ''; document.getElementById('credentialKey').value = ''; document.getElementById('credentialKey').required = false; document.getElementById('credentialKey').placeholder = 'Leave blank to keep saved key'; document.getElementById('credentialModalTitle').textContent = 'Edit API key'; document.getElementById('credentialSubmit').textContent = 'Save changes'; modal.hidden = false; });
+    document.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => { b.disabled = true; try { await apiRequest('/auth/me/llm-credentials/' + encodeURIComponent(b.dataset.delete), {method:'DELETE'}); await renderApiKeysCard(profile); } catch(e) { b.disabled = false; alert(e.message); } });
+    document.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => { const statusEl = document.getElementById('keyStatus-' + b.dataset.test); b.disabled = true; statusEl.textContent = 'Testing connection...'; statusEl.className = 'form-status'; try { const r = await apiRequest('/auth/me/llm-credential/test', {method:'POST', body:{credential_id:b.dataset.test}}); statusEl.textContent = r.success ? `Connected (${r.latency_ms}ms)` : (r.message || 'Connection failed'); statusEl.className = r.success ? 'form-status success' : 'form-status error'; await renderApiKeysCard(profile); } catch(e) { statusEl.textContent = e.message; statusEl.className = 'form-status error'; b.disabled = false; } });
+    async function savePreferences() { const status = document.getElementById('llmSettingsStatus'); status.textContent = 'Saving...'; status.className = 'form-status'; try { const saved = await apiRequest('/auth/me/llm-settings', {method:'PUT', body:{mode:mode.value, provider:provider.value, default_credential_id:defaultSelect.value || null, fallback_to_other_keys:document.getElementById('llmFallbackKeys').checked, fallback_to_platform:document.getElementById('llmFallbackPlatform').checked, model:model.value || null}}); Object.assign(settings, saved); status.textContent = 'Preferences saved.'; status.className = 'form-status success'; list.querySelectorAll('[data-default]').forEach(x => { x.textContent = x.dataset.default === settings.default_credential_id ? 'Default' : 'Set default'; }); } catch(e) { status.textContent = e.message; status.className = 'form-status error'; } }
+    document.getElementById('saveLlmSettings').onclick = savePreferences;
+    form.onsubmit = async event => { event.preventDefault(); const submit = document.getElementById('credentialSubmit'); submit.disabled = true; formStatus.textContent = form.dataset.editId ? 'Saving credential...' : 'Testing and saving credential...'; formStatus.className = 'form-status'; const payload = {name:document.getElementById('credentialName').value.trim(), provider:document.getElementById('credentialProvider').value, model:document.getElementById('credentialModel').value || null}; const apiKey = document.getElementById('credentialKey').value.trim(); if (apiKey) payload.api_key = apiKey; try { if (form.dataset.editId) await apiRequest('/auth/me/llm-credentials/' + encodeURIComponent(form.dataset.editId), {method:'PATCH', body:payload}); else { payload.api_key = apiKey; await apiRequest('/auth/me/llm-credentials', {method:'POST', body:payload}); } await renderApiKeysCard(profile); } catch(e) { formStatus.textContent = e.message; formStatus.className = 'form-status error'; submit.disabled = false; } };
+    document.getElementById('llmUsage').innerHTML = usage.length ? usage.map(u => `<p class="byok-usage-row">${esc(BYOK_PROVIDERS.find(p => p.value === u.provider)?.label || u.provider)} - ${esc((credentials.find(c => c.credential_id === u.credential_id) || {}).name || 'Deleted credential')} <span>${u.requests} requests - ${u.successes} successful - ${u.failures} failed - ${u.input_tokens}+${u.output_tokens} tokens</span></p>`).join('') : '<p class="card-sub">No usage recorded yet.</p>';
   } catch (err) {
-    if (err.status === 404) {
-      container.innerHTML = `<p class="card-sub">API keys are not enabled on this deployment yet.</p>`;
-      return;
-    }
-    container.innerHTML = `<p class="card-sub">Could not load your API key settings: ${err.message}</p>`;
+    container.innerHTML = `<p class="card-sub">Could not load your API key settings: ${esc(err.message)}</p>`;
   }
 }
 </script>

@@ -52,10 +52,10 @@ GEMINI_API_KEY=your_gemini_api_key
 Start the API and open:
 
 ```text
-http://localhost:8000/app/interview.html?demo=1
+Open an interview from a shortlisted application to exercise the live interview flow.
 ```
 
-The demo endpoint is unavailable in staging and production.
+The standalone demo endpoint is retired; live interviews require a persisted job and shortlisted application.
 
 ---
 

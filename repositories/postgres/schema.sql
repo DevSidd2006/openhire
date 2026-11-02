@@ -127,6 +127,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company_website text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company_role text;
 
+-- Keep the documented anonymous development mode compatible with the
+-- users foreign key used by candidates. This account has an unusable
+-- password and is never used when AUTH_ENABLED=true.
+INSERT INTO users (user_id, email, password_hash, user_type)
+VALUES ('user_anonymous', 'anonymous@openhire.local', '!', 'candidate')
+ON CONFLICT (user_id) DO NOTHING;
+
 -- ---------------------------------------------------------------------
 -- refresh_tokens — Refresh token storage for JWT-based authentication.
 -- Tracks token validity and expiration for session management.
@@ -498,16 +505,17 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id_created_at
 
 -- ---------------------------------------------------------------------
 -- user_llm_credentials — LLMCredentialRecord (repositories/interfaces.py):
--- BYOK. One row per user (user_id is the primary key, enforcing "one
--- credential per user" in the schema, not in application code).
+-- BYOK. Multiple encrypted credentials per recruiter, owned by user_id.
 -- ON DELETE CASCADE means deleting a user disposes of their key with no
 -- extra cleanup path. The whole table is only ever read/written when
 -- BYOK_ENCRYPTION_KEY is set (core/config.py) - see
 -- services/llm_credential_service.py.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS user_llm_credentials (
-    user_id       text PRIMARY KEY REFERENCES users (user_id) ON DELETE CASCADE,
-    provider      text NOT NULL CHECK (provider IN ('openai','gemini','groq','nvidia_nim')),
+    credential_id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id       text NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+    name          text NOT NULL DEFAULT 'My API key',
+    provider      text NOT NULL CHECK (provider IN ('openai','gemini','anthropic','groq','nvidia_nim','openrouter')),
     model         text,
     encrypted_key bytea NOT NULL,
     -- Display-only fragment (e.g. "...ab12"), derived once at save time -
@@ -517,6 +525,55 @@ CREATE TABLE IF NOT EXISTS user_llm_credentials (
     status        text NOT NULL DEFAULT 'active' CHECK (status IN ('active','failed')),
     last_error    text,
     last_error_at timestamptz,
+    health_status text NOT NULL DEFAULT 'not_tested',
+    auth_status text NOT NULL DEFAULT 'unknown',
+    last_tested_at timestamptz,
+    last_successful_test_at timestamptz,
+    health_error_code text,
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_user_llm_credentials_user ON user_llm_credentials(user_id);
+ALTER TABLE user_llm_credentials ADD COLUMN IF NOT EXISTS health_status text NOT NULL DEFAULT 'not_tested';
+ALTER TABLE user_llm_credentials ADD COLUMN IF NOT EXISTS auth_status text NOT NULL DEFAULT 'unknown';
+ALTER TABLE user_llm_credentials ADD COLUMN IF NOT EXISTS last_tested_at timestamptz;
+ALTER TABLE user_llm_credentials ADD COLUMN IF NOT EXISTS last_successful_test_at timestamptz;
+ALTER TABLE user_llm_credentials ADD COLUMN IF NOT EXISTS health_error_code text;
+
+CREATE TABLE IF NOT EXISTS user_llm_settings (
+    user_id text PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    mode text NOT NULL DEFAULT 'platform' CHECK (mode IN ('byok','platform')),
+    default_credential_id text,
+    provider text CHECK (provider IS NULL OR provider IN ('openai','gemini','anthropic','groq','nvidia_nim','openrouter')),
+    fallback_to_other_keys boolean NOT NULL DEFAULT true,
+    fallback_to_platform boolean NOT NULL DEFAULT true,
+    model text,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS platform_llm_provider_health (
+    provider text PRIMARY KEY CHECK (provider IN ('openai','gemini','anthropic','groq','nvidia_nim','openrouter')),
+    model text,
+    status text NOT NULL,
+    auth_status text NOT NULL,
+    last_tested_at timestamptz,
+    last_successful_test_at timestamptz,
+    error_code text,
+    message text,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE user_llm_settings ADD COLUMN IF NOT EXISTS provider text;
+ALTER TABLE user_llm_settings ALTER COLUMN mode SET DEFAULT 'platform';
+
+CREATE TABLE IF NOT EXISTS user_llm_usage (
+    user_id text NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    credential_id text NOT NULL,
+    provider text NOT NULL,
+    requests bigint NOT NULL DEFAULT 0,
+    successes bigint NOT NULL DEFAULT 0,
+    failures bigint NOT NULL DEFAULT 0,
+    input_tokens bigint NOT NULL DEFAULT 0,
+    output_tokens bigint NOT NULL DEFAULT 0,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, credential_id, provider)
 );

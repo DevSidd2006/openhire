@@ -63,7 +63,8 @@ def _app():
     @app.get("/probe", dependencies=[Depends(apply_llm_context_for_recruiter)])
     async def probe(principal=Depends(require_authenticated)):
         provider = get_llm_provider()
-        return {"provider_is_context_provider": get_context_provider() is provider}
+        result = await provider.generate("probe the configured provider")
+        return {"provider_is_context_provider": get_context_provider() is provider, "result": result}
 
     return app, auth_service
 
@@ -82,15 +83,27 @@ async def test_recruiter_with_saved_credential_sees_it_in_get_llm_provider():
         encryption_key=_ENCRYPTION_KEY,
     )
     with patch(
+        "services.llm_credential_service.check_provider",
+        new=AsyncMock(return_value={"provider":"openai", "model":"gpt-test", "connected":True, "status":"connected", "auth_status":"valid", "last_tested_at":"2026-11-02T00:00:00+00:00", "last_successful_test_at":"2026-11-02T00:00:00+00:00"}),
+    ):
+        credential = await service.save(user_id=user.user_id, provider="openai", api_key="sk-realkey")
+        await service.save_settings(user.user_id, {
+            "mode": "byok", "provider": "openai", "default_credential_id": credential.credential_id,
+            "fallback_to_other_keys": False, "fallback_to_platform": False, "model": "gpt-4o-mini",
+        })
+
+    client = TestClient(app)
+    with patch(
         "services.llm_credential_service.build_provider",
         return_value=AsyncMock(generate=AsyncMock(return_value="ok")),
     ):
-        await service.save(user_id=user.user_id, provider="openai", api_key="sk-realkey")
-
-    client = TestClient(app)
-    response = client.get("/probe", headers={"Authorization": f"Bearer {token}"})
+        response = client.get("/probe", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["provider_is_context_provider"] is True
+    assert response.json()["result"] == "ok"
+    usage = await service.get_usage(user.user_id)
+    assert len(usage) == 1 and usage[0]["credential_id"] == credential.credential_id
+    assert usage[0]["successes"] == 1
 
 
 @pytest.mark.asyncio
@@ -105,14 +118,14 @@ async def test_context_is_cleared_after_the_request():
 
 
 @pytest.mark.asyncio
-async def test_recruiter_with_no_saved_credential_leaves_context_unset():
+async def test_recruiter_with_no_saved_credential_keeps_platform_provider_and_tracks_usage():
     app, auth_service = _app()
     _user, token, _r = await auth_service.signup(
         email="recruiter3@example.com", password="password123", user_type="recruiter"
     )
     client = TestClient(app)
     response = client.get("/probe", headers={"Authorization": f"Bearer {token}"})
-    assert response.json()["provider_is_context_provider"] is False
+    assert response.json()["provider_is_context_provider"] is True
 
 
 @pytest.mark.asyncio

@@ -72,6 +72,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from uuid import uuid4
 from enum import Enum
 from typing import TYPE_CHECKING, Literal, Optional, Protocol, runtime_checkable
 
@@ -947,6 +948,8 @@ class LLMCredentialRecord(BaseModel):
     model_config = ConfigDict(frozen=False)
 
     user_id: str
+    credential_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = "My API key"
     provider: str
     model: Optional[str] = None
     encrypted_key: bytes
@@ -954,6 +957,11 @@ class LLMCredentialRecord(BaseModel):
     status: CredentialStatus = CredentialStatus.ACTIVE
     last_error: Optional[str] = None
     last_error_at: Optional[datetime] = None
+    health_status: str = "not_tested"
+    auth_status: str = "unknown"
+    last_tested_at: Optional[datetime] = None
+    last_successful_test_at: Optional[datetime] = None
+    health_error_code: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
 
@@ -974,3 +982,33 @@ class LLMCredentialRepository(ABC):
     async def delete(self, user_id: str) -> None:
         """Remove the row. Idempotent - deleting an absent row is a no-op
         success, not an error."""
+
+    async def list_for_user(self, user_id: str) -> list[LLMCredentialRecord]:
+        record = await self.get(user_id)
+        return [record] if record else []
+
+    async def get_by_id(self, user_id: str, credential_id: str) -> Optional[LLMCredentialRecord]:
+        return next((r for r in await self.list_for_user(user_id) if r.credential_id == credential_id), None)
+
+    async def delete_key(self, user_id: str, credential_id: str) -> None:
+        record = await self.get_by_id(user_id, credential_id)
+        if record:
+            await self.delete(user_id)
+
+    async def get_settings(self, user_id: str) -> dict:
+        return {"mode": "byok", "default_credential_id": None, "fallback_to_other_keys": True, "fallback_to_platform": True, "model": None}
+
+    async def save_settings(self, user_id: str, settings: dict) -> dict:
+        return settings
+
+    async def record_usage(self, user_id: str, credential_id: str, provider: str, outcome: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        return None
+
+    async def get_usage(self, user_id: str) -> list[dict]:
+        return []
+
+    async def save_platform_health(self, provider: str, result: dict) -> None:
+        return None
+
+    async def get_platform_health(self) -> list[dict]:
+        return []

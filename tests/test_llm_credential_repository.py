@@ -50,13 +50,17 @@ class TestInMemoryLLMCredentialRepository:
         assert await repo.get("nobody") is None
 
     @pytest.mark.asyncio
-    async def test_save_again_replaces_and_preserves_created_at(self):
+    async def test_multiple_credentials_per_user_are_preserved(self):
         repo = InMemoryLLMCredentialRepository()
         first = await repo.save(_record(provider="openai"))
         second = await repo.save(_record(provider="groq", created_at=datetime.now(timezone.utc)))
         fetched = await repo.get("user_1")
-        assert fetched.provider == "groq"
-        assert fetched.created_at == first.created_at
+        rows = await repo.list_for_user("user_1")
+        assert len(rows) == 2
+        assert {r.provider for r in rows} == {"openai", "groq"}
+        assert fetched.credential_id == first.credential_id
+        updated = await repo.save(second.model_copy(update={"name": "renamed"}))
+        assert updated.created_at == second.created_at
 
     @pytest.mark.asyncio
     async def test_delete_is_idempotent(self):
@@ -91,12 +95,13 @@ class TestPostgresLLMCredentialRepository:
         assert saved.user_id == "user_pg_1"
 
     @pytest.mark.asyncio
-    async def test_save_again_replaces_row_one_per_user(self, pool):
+    async def test_multiple_credentials_per_user_are_preserved(self, pool):
         repo = PostgresLLMCredentialRepository(pool)
         await repo.save(_record(user_id="user_pg_2", provider="openai"))
         await repo.save(_record(user_id="user_pg_2", provider="groq"))
-        fetched = await repo.get("user_pg_2")
-        assert fetched.provider == "groq"
+        fetched = await repo.list_for_user("user_pg_2")
+        assert len(fetched) == 2
+        assert {r.provider for r in fetched} == {"openai", "groq"}
 
     @pytest.mark.asyncio
     async def test_delete_is_idempotent(self, pool):
