@@ -65,18 +65,40 @@ def client_and_auth():
     return TestClient(app), auth_service
 
 
+class _MockCheckProvider:
+    def __init__(self, return_value):
+        self.return_value = return_value
+        self._p1 = patch("services.llm_credential_service.check_provider", new=AsyncMock(return_value=return_value))
+        self._p2 = patch("api.routes.llm_credentials.check_provider", new=AsyncMock(return_value=return_value))
+
+    def __enter__(self):
+        self._p1.__enter__()
+        self._p2.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self._p2.__exit__(*args)
+        self._p1.__exit__(*args)
+
+
 def _mock_validation_ok():
-    return patch(
-        "services.llm_credential_service.check_provider",
-        new=AsyncMock(return_value={"connected": True, "status": "connected", "auth_status": "valid", "last_tested_at": "2026-11-02T00:00:00+00:00", "last_successful_test_at": "2026-11-02T00:00:00+00:00"}),
-    )
+    return _MockCheckProvider({
+        "connected": True,
+        "status": "connected",
+        "auth_status": "valid",
+        "last_tested_at": "2026-11-02T00:00:00+00:00",
+        "last_successful_test_at": "2026-11-02T00:00:00+00:00",
+    })
 
 
 def _mock_validation_fails():
-    return patch(
-        "services.llm_credential_service.check_provider",
-        new=AsyncMock(return_value={"connected": False, "status": "invalid_api_key", "auth_status": "invalid", "error_code": "invalid_api_key", "message": "bad key"}),
-    )
+    return _MockCheckProvider({
+        "connected": False,
+        "status": "invalid_api_key",
+        "auth_status": "invalid",
+        "error_code": "invalid_api_key",
+        "message": "bad key",
+    })
 
 
 @pytest.mark.asyncio
@@ -345,10 +367,11 @@ async def test_provider_health_endpoints(client_and_auth):
 async def test_auth_disabled_allows_credential_endpoints(client_and_auth):
     client, _auth_service = client_and_auth
     from core.config import get_settings
-    settings = get_settings().model_copy(update={"auth_enabled": False})
-    client.app.dependency_overrides[get_settings] = lambda: settings
+    current_settings = client.app.dependency_overrides[get_settings]()
+    disabled_auth = current_settings.model_copy(update={"auth_enabled": False})
+    client.app.dependency_overrides[get_settings] = lambda: disabled_auth
     try:
         response = client.get("/auth/me/llm-credentials")
         assert response.status_code == 200
     finally:
-        client.app.dependency_overrides.pop(get_settings, None)
+        client.app.dependency_overrides[get_settings] = lambda: current_settings
