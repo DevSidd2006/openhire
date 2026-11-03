@@ -86,7 +86,14 @@
         }
         const job = existingPracticeJob || await apiRequest('/jobs', { method: 'POST', body: { description, is_practice: true } });
         const session = await apiRequest('/sessions', {method:'POST', body:{job_id:job.job_id,candidate_id:practiceCandidate.candidate_id,job_description:job.job,parsed_resume:practiceCandidate.resume}});
-        window.location.href = `interview.html?session_id=${encodeURIComponent(session.session_id)}`;
+        let mode = '';
+        try {
+          const llmSettings = await apiRequest('/auth/me/llm-settings');
+          if (llmSettings.mode === 'byok') mode = '&mode=adaptive';
+        } catch (error) {
+          if (error.status !== 404) throw error;
+        }
+        window.location.href = `interview.html?session_id=${encodeURIComponent(session.session_id)}${mode}`;
       } catch (err) { status.textContent = err.message || 'Could not create the mock interview.'; status.className = 'form-status error'; }
     });
     try {

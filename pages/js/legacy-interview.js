@@ -164,6 +164,9 @@ export function initializeLegacyInterview() {
     ws.onopen = async () => {
       console.log('[voice] Connected');
       updateAIStatus('Listening');
+      if (new URLSearchParams(window.location.search).get('mode') === 'adaptive') {
+        ws.send(JSON.stringify({ type: 'authenticate', token: getAccessToken() }));
+      }
       ws.send(JSON.stringify({ type: "speak_question" }));
     };
 

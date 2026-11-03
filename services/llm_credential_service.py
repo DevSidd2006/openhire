@@ -329,7 +329,9 @@ class LLMCredentialService:
             if record.status == CredentialStatus.ACTIVE
         ]
         if not records:
-            return _tracked_platform(self._credentials, user_id)
+            if user_settings.get("fallback_to_platform", True):
+                return _tracked_platform(self._credentials, user_id)
+            raise BadRequestError("No active API key is available and platform fallback is disabled.")
         default_id = user_settings.get("default_credential_id")
         preferred_provider = user_settings.get("provider")
         selected = next((r for r in records if r.credential_id == default_id), None)

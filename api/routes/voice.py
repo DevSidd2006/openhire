@@ -30,16 +30,22 @@ from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.errors import InvalidRequestError
+from api.dependencies import resolve_candidate_practice_llm_provider
 from api.models import QuestionView
 from api.registry import SessionNotFoundError
 from core.dependencies import (
     build_evaluation_service,
     build_interview_service,
+    get_auth_service,
+    get_candidate_service,
     get_evaluation_service,
     get_interview_service,
+    get_job_service,
 )
+from core.errors import BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError
+from core.llm_context import reset_context_provider, set_context_provider
 from core.logging import get_logger
-from core.security import Principal, require_authenticated
+from core.security import Principal, PrincipalType, require_authenticated
 from repositories.interfaces import EvaluationJob
 from services.evaluation_service import EvaluationService
 from services.interview_service import InterviewService
@@ -288,17 +294,66 @@ async def voice_socket(websocket: WebSocket, session_id: str) -> None:
     await websocket.accept()
 
     try:
-        runner = await service.get_runner(session_id)
+        session_record = await service.get_record(session_id)
+    except NotFoundError:
+        await websocket.send_json({"type": "error", "error": "session_not_found"})
+        await websocket.close(code=4404)
+        return
+
+    try:
+        first_message = await websocket.receive_json()
+    except WebSocketDisconnect:
+        return
+
+    candidate_provider = None
+    if first_message.get("type") == "authenticate":
+        container = websocket.app.state.container
+        try:
+            token = first_message.get("token")
+            principal = (
+                await get_auth_service(websocket).verify_access_token(token)
+                if token else await container.auth_provider.authenticate(websocket)
+            )
+            if principal.principal_type is not PrincipalType.CANDIDATE:
+                raise UnauthorizedError()
+            candidate_provider = await resolve_candidate_practice_llm_provider(
+                principal=principal,
+                job_id=session_record.job_id,
+                candidate_id=session_record.candidate_id,
+                application_id=session_record.application_id,
+                settings=container.settings,
+                container=container,
+                jobs=get_job_service(websocket),
+                candidate_service=get_candidate_service(websocket),
+            )
+            if candidate_provider is None:
+                raise UnauthorizedError()
+        except (BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError, ValueError):
+            await websocket.send_json({"type": "error", "error": "unauthorized"})
+            await websocket.close(code=4401)
+            return
+        first_message = None
+
+    try:
+        context_token = set_context_provider(candidate_provider) if candidate_provider else None
+        try:
+            runner = await service.get_runner(session_id)
+        finally:
+            if context_token is not None:
+                reset_context_provider(context_token)
     except SessionNotFoundError:
         await websocket.send_json({"type": "error", "error": "session_not_found"})
         await websocket.close(code=4404)
         return
 
     voice = build_voice_service(websocket.app)
+    if candidate_provider is not None:
+        await websocket.send_json({"type": "authenticated"})
 
     try:
         while True:
-            message = await websocket.receive_json()
+            message = first_message if first_message is not None else await websocket.receive_json()
+            first_message = None
             kind = message.get("type")
 
             if kind == "speak_question":
@@ -322,11 +377,16 @@ async def voice_socket(websocket: WebSocket, session_id: str) -> None:
                     continue
 
                 try:
-                    result = await voice.submit_text_answer(
-                        runner,
-                        transcript_text,
-                        utterance_id=message.get("utterance_id"),
-                    )
+                    context_token = set_context_provider(candidate_provider) if candidate_provider else None
+                    try:
+                        result = await voice.submit_text_answer(
+                            runner,
+                            transcript_text,
+                            utterance_id=message.get("utterance_id"),
+                        )
+                    finally:
+                        if context_token is not None:
+                            reset_context_provider(context_token)
                 except VoiceTurnError as exc:
                     await websocket.send_json(
                         {"type": "error", "error": "voice_error", "detail": str(exc)}
@@ -370,12 +430,17 @@ async def voice_socket(websocket: WebSocket, session_id: str) -> None:
                     continue
 
                 try:
-                    result = await voice.submit_audio_answer(
-                        runner,
-                        audio,
-                        audio_format=message.get("audio_format", "wav"),
-                        utterance_id=message.get("utterance_id"),
-                    )
+                    context_token = set_context_provider(candidate_provider) if candidate_provider else None
+                    try:
+                        result = await voice.submit_audio_answer(
+                            runner,
+                            audio,
+                            audio_format=message.get("audio_format", "wav"),
+                            utterance_id=message.get("utterance_id"),
+                        )
+                    finally:
+                        if context_token is not None:
+                            reset_context_provider(context_token)
                 except VoiceTurnError as exc:
                     # STT failed - the pending question is untouched, so the
                     # candidate can simply speak again.

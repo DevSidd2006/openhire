@@ -385,7 +385,14 @@
 </script>
 <script src="js/auth.js"></script>
 <script src="js/app.js?v=gemini-live-only-v1"></script>
-<script type="module" src="js/live-interview.js?v=gemini-live-legacy-upgrade-v2"></script>
+<script type="module">
+  if (new URLSearchParams(window.location.search).get('mode') === 'adaptive') {
+    const { initializeLegacyInterview } = await import('./js/legacy-interview.js?v=candidate-byok');
+    initializeLegacyInterview();
+  } else {
+    await import('./js/live-interview.js?v=gemini-live-legacy-upgrade-v2');
+  }
+</script>
 
 </body>
 </html>

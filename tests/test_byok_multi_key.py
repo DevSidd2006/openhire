@@ -2,6 +2,7 @@ from cryptography.fernet import Fernet
 import pytest
 
 from providers.base import LLMPermanentError
+from core.errors import BadRequestError
 from repositories.memory import InMemoryLLMCredentialRepository
 from services.llm_credential_service import LLMCredentialService
 
@@ -118,6 +119,17 @@ async def test_failure_can_fall_back_to_platform_provider(monkeypatch):
     assert await provider.generate("prompt") == "accepted"
     usage = await service.get_usage("r1")
     assert usage[0]["failures"] == 1
+
+
+@pytest.mark.asyncio
+async def test_byok_without_active_key_does_not_ignore_disabled_platform_fallback():
+    _repo, service = make_service()
+    await service.save_settings("candidate", {
+        "mode": "byok", "default_credential_id": None,
+        "fallback_to_other_keys": False, "fallback_to_platform": False, "model": None,
+    })
+    with pytest.raises(BadRequestError, match="No active API key"):
+        await service.resolve_provider_for_user("candidate")
 
 
 @pytest.mark.asyncio
