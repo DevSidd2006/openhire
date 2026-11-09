@@ -7,6 +7,7 @@ one focused table with no relations to the six repositories already there.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 import asyncpg
@@ -83,3 +84,62 @@ class PostgresLLMCredentialRepository(LLMCredentialRepository):
             await conn.execute(
                 "DELETE FROM user_llm_credentials WHERE user_id = $1", user_id
             )
+
+    async def save_platform_health(self, provider: str, result: dict) -> None:
+        """Persist the latest platform-provider health check.
+
+        Health probes serialize timestamps for API responses, while asyncpg
+        expects real ``datetime`` values for timestamptz parameters. Convert
+        local copies here so callers retain their original result payload.
+        """
+
+        def as_datetime(value: object) -> object:
+            if not isinstance(value, str):
+                return value
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+        last_tested_at = as_datetime(result.get("last_tested_at"))
+        last_successful_test_at = as_datetime(result.get("last_successful_test_at"))
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO platform_llm_provider_health
+                    (provider, model, status, auth_status, last_tested_at,
+                     last_successful_test_at, error_code, message, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                ON CONFLICT (provider) DO UPDATE
+                    SET model = EXCLUDED.model,
+                        status = EXCLUDED.status,
+                        auth_status = EXCLUDED.auth_status,
+                        last_tested_at = EXCLUDED.last_tested_at,
+                        last_successful_test_at = COALESCE(
+                            EXCLUDED.last_successful_test_at,
+                            platform_llm_provider_health.last_successful_test_at
+                        ),
+                        error_code = EXCLUDED.error_code,
+                        message = EXCLUDED.message,
+                        updated_at = now()
+                """,
+                provider,
+                result.get("model"),
+                result.get("status"),
+                result.get("auth_status"),
+                last_tested_at,
+                last_successful_test_at,
+                result.get("error_code"),
+                result.get("message"),
+            )
+
+    async def get_platform_health(self) -> list[dict]:
+        pool = await self._pool.get()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT provider, model, status, auth_status, last_tested_at,
+                       last_successful_test_at, error_code, message
+                FROM platform_llm_provider_health
+                ORDER BY provider
+                """
+            )
+        return [dict(row) for row in rows]

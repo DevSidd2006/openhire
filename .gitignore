@@ -19,6 +19,7 @@ graphify-out/
 *.py[cod]
 *$py.class
 *.so
+.codex/
 .Python
 build/
 dist/
