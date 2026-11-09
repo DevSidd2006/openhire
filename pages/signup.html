@@ -156,6 +156,7 @@
 
     <div class="auth-social">
       <button type="button" class="auth-social-btn" onclick="handleLinkedInSignup()"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn <span style="font-size:0.75em; opacity:0.75;">(Candidates)</span></button>
+      <p class="text-muted" style="font-size:0.75rem; margin:0; text-align:center;">LinkedIn signup is for candidates. Recruiters can sign up with email.</p>
     </div>
     <div class="auth-divider">or with email</div>
 
@@ -214,7 +215,7 @@
       return;
     }
     errorDiv.style.display = 'none';
-    window.location.href = `/auth/linkedin/authorize?role=${encodeURIComponent(selectedRole)}`;
+    window.location.href = linkedinAuthorizeUrl(selectedRole);
   }
 
   async function handleSignupSubmit() {

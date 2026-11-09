@@ -116,7 +116,8 @@
     <div id="errorMessage" class="alert alert-danger auth-error" style="display:none; margin-bottom:1rem;"></div>
 
     <div class="auth-social">
-      <button type="button" class="auth-social-btn" onclick="window.location.href='/auth/linkedin/authorize'"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn</button>
+      <button type="button" class="auth-social-btn" onclick="window.location.href=linkedinAuthorizeUrl()"><i class="ph-bold ph-linkedin-logo" aria-hidden="true"></i>Continue with LinkedIn <span style="font-size:0.75em; opacity:0.75;">(Candidates)</span></button>
+      <p class="text-muted" style="font-size:0.75rem; margin:0; text-align:center;">LinkedIn sign-in is for candidate accounts. Recruiters can log in with email and password.</p>
     </div>
     <div class="auth-divider">or</div>
 
@@ -143,6 +144,23 @@
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
 <script>
+  // Surface errors the LinkedIn callback redirects back with, instead of
+  // leaving the user on a login page that silently ignores ?error=.
+  (function showOAuthError() {
+    const errorCode = new URLSearchParams(window.location.search).get('error');
+    if (!errorCode) return;
+    const messages = {
+      linkedin_cancelled: 'LinkedIn sign-in was cancelled. Try again or log in with email and password.',
+      csrf_validation_failed: 'Your LinkedIn sign-in session expired. Please try again.',
+      missing_email: 'LinkedIn did not share an email address. Please log in with email and password instead.',
+    };
+    const errorDiv = document.getElementById('errorMessage');
+    if (!errorDiv) return;
+    errorDiv.textContent = messages[errorCode] || 'LinkedIn sign-in failed. Please try again.';
+    errorDiv.style.display = 'block';
+    window.history.replaceState({}, document.title, window.location.pathname);
+  })();
+
   async function handleLoginSubmit() {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;

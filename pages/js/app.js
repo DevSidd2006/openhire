@@ -10,6 +10,19 @@ const API_BASE = typeof window.OPENHIRE_API_URL === 'string'
       ? ''
       : DEFAULT_RENDER_BACKEND);
 
+/**
+ * Absolute URL that starts the LinkedIn OAuth flow.
+ *
+ * The API sets its `oauth_state` cookie on its own host and LinkedIn sends the
+ * browser back to the API's registered callback, so this must never resolve
+ * against a separately hosted static frontend (e.g. the Vercel deployment).
+ * A relative link there 404s before OAuth even starts. Locally the pages are
+ * served by the API itself, so API_BASE is empty and a path is enough.
+ */
+function linkedinAuthorizeUrl(role = 'candidate') {
+  return `${API_BASE}/auth/linkedin/authorize?role=${encodeURIComponent(role)}`;
+}
+
 /** Helper to construct WebSocket URL for the session, resolving against API_BASE or location.host */
 function getWebSocketUrl(path) {
   if (API_BASE && API_BASE.startsWith('http')) {
