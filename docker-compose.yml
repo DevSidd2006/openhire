@@ -1,0 +1,109 @@
+# OpenHire — Local Development Stack
+#
+# One-command local deployment of the online version:
+#
+#   docker compose up --build
+#
+# Services:
+#   - postgres:  PostgreSQL 16 (bound to 127.0.0.1:5432)
+#   - openhire:  FastAPI app serving the same /app frontend + API
+#
+# After startup:
+#   API:        http://localhost:8000
+#   Frontend:   http://localhost:8000/app
+#   API Docs:   http://localhost:8000/docs
+#   Health:     http://localhost:8000/api/v1/health
+#
+# Configure via .env (copy .env.example to .env and edit).
+#
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openhire-postgres
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: openhire
+      POSTGRES_PASSWORD: openhire
+      POSTGRES_DB: openhire
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./repositories/postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openhire"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  openhire:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: openhire-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      HOST: 0.0.0.0
+      PORT: "8000"
+      API_PREFIX: ""
+      SERVE_STATIC_PAGES: "true"
+      LLM_PROVIDER: gemini
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your_gemini_api_key_here}
+      GEMINI_MODEL: gemini-3.5-flash-lite
+      GEMINI_BASE_URL: https://generativelanguage.googleapis.com/v1beta
+      GEMINI_LIVE_ENABLED: "true"
+      GEMINI_LIVE_MODEL: gemini-3.8-live
+      GEMINI_LIVE_VOICE: Aoede
+      GEMINI_LIVE_WRAP_UP_SECONDS: "720"
+      GEMINI_LIVE_HARD_STOP_SECONDS: "900"
+      GEMINI_LIVE_RECONNECT_SECONDS: "540"
+      GEMINI_LIVE_CONTROL_TOKEN_MINUTES: "20"
+      EMBEDDING_PROVIDER: mock
+      EMBEDDING_MODEL: gemini-embedding-001
+      VECTOR_STORE_TYPE: mock
+      VECTOR_STORE_PATH: faiss_index
+      AUDIO_PROVIDER: mock
+      TTS_PROVIDER: edge
+      EDGE_TTS_VOICE: en-IN-NeerjaNeural
+      EDGE_TTS_RATE: "+0%"
+      EDGE_TTS_PITCH: "+0Hz"
+      DATABASE_URL: postgresql://openhire:openhire@postgres:5432/openhire
+      AUTH_ENABLED: "false"
+      AUTH_REQUIRED_BY_DEFAULT: "false"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      CORS_ALLOW_ORIGINS: http://localhost:8000
+      CORS_ALLOW_CREDENTIALS: "false"
+      CORS_ALLOW_METHODS: "*"
+      CORS_ALLOW_HEADERS: "*"
+      CORS_MAX_AGE: "600"
+      BYOK_ENCRYPTION_KEY: ${BYOK_ENCRYPTION_KEY:-}
+      LOG_LEVEL: INFO
+      LOG_FILE: logs/openhire.log
+      LOG_JSON: "true"
+      LOG_ACCESS: "true"
+      LOG_QUERY_STRING: "false"
+      MAX_REQUEST_BODY_BYTES: "12582912"
+      MAX_UTTERANCE_BYTES: "10485760"
+      MIN_TRANSCRIPT_CHARS: "2"
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
+      LINKEDIN_REDIRECT_URI: http://localhost:8000/auth/linkedin/callback
+      LINKEDIN_MOCK_ENABLED: "false"
+    volumes:
+      - ./pages:/app/openhire/pages:ro
+      - ./data:/app/openhire/data:ro
+      - ./prompts:/app/openhire/prompts:ro
+      - ./outputs:/app/openhire/outputs
+      - ./logs:/app/openhire/logs
+      - ./faiss_index:/app/openhire/faiss_index
+    restart: unless-stopped
+
+volumes:
+  pgdata:

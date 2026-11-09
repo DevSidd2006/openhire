@@ -1,0 +1,99 @@
+# OpenHire — Docker Build Context Exclusions
+# Keep the image lean: don't ship caches, venvs, secrets, or local outputs.
+
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.dump
+*.sql
+scripts/restore_rds.sh
+
+# Python Artifacts & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv
+.venv/
+.venv*/
+venv/
+ENV/
+env/
+
+# Testing, Quality & Coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# IDE, Editors & OS Files
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# AI Assistant Caches & Workspace Scratch
+.claude/
+.superpowers/
+.agent/
+.gemini/
+.codex/
+
+# Output Data & Logs
+outputs/
+logs/
+*.log
+
+# Vector Stores & Databases
+faiss_index/
+chroma_db/
+*.sqlite
+*.sqlite3
+*.db
+
+# Internal Setup & Scratch Docs
+RENDER_DEPLOYMENT.md
+PRODUCTION_SETUP.md
+todo.md
+
+# Git Worktrees
+.worktrees/
+
+# Pip ephemeral/build directories (cleaned from host)
+pip-*
+
+# Graph knowledge output
+graphify-out/

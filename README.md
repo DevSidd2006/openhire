@@ -32,12 +32,73 @@ python -m uvicorn api.app:app --reload
 - **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Check:** `curl http://localhost:8000/api/v1/health`
 
+---
+
+## Local Deployment (Docker Compose — One Command)
+
+Replicate the online version on your own system with a single command. This starts PostgreSQL and the FastAPI app together, serving the same `/app` frontend as the cloud deployment.
+
+```bash
+# Using Docker Compose directly
+docker compose up --build
+
+# Or using the setup script (installs deps, initializes schema, starts everything)
+# Windows PowerShell:
+.\scripts\setup-local.ps1
+
+# Git Bash / WSL / Linux:
+./scripts/setup-local.sh
+```
+
+After startup:
+- **API:** `http://localhost:8000`
+- **Frontend:** `http://localhost:8000/app`
+- **API Docs:** `http://localhost:8000/docs`
+- **Health:** `http://localhost:8000/api/v1/health`
+
+Configure via `.env` — copy `.env.example` to `.env` and set at minimum:
+- `GEMINI_API_KEY` (required for LLM agents and Gemini Live interviews)
+- `DATABASE_URL=postgresql://openhire:openhire@localhost:5432/openhire` (or leave empty for in-memory fallback)
+
+---
+
+## Replicating the Online Version Locally
+
+The same codebase runs both online and locally. To match the cloud deployment on your system:
+
+| Step | What to do |
+|------|-----------|
+| 1 | `cp .env.example .env` |
+| 2 | Start Docker Postgres: `docker compose -f docker-compose.postgres.yml up -d` |
+| 3 | Set `DATABASE_URL=postgresql://openhire:openhire@localhost:5432/openhire` in `.env` |
+| 4 | Set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY=<your key>` in `.env` |
+| 5 | Keep `TTS_PROVIDER=edge` (free neural TTS, no key needed) |
+| 6 | `python -m uvicorn api.app:app --reload` |
+| 7 | Open `http://localhost:8000/app` |
+
+### Production-equivalent local config
+
+To make local behave like the deployed production version:
+
+```env
+ENVIRONMENT=production
+DEBUG=false
+AUTH_ENABLED=true
+JWT_SECRET_KEY=<run: python -c "import secrets; print(secrets.token_urlsafe(32))">
+CORS_ALLOW_ORIGINS=http://localhost:8000
+```
+
+`core/lifespan.py` enforces these at startup — `ENVIRONMENT=production` with a placeholder JWT secret or wildcard CORS will refuse to boot.
+
+### Optional cloud services you do NOT need locally
+
+NVIDIA NIM, Groq, OpenAI, Azure Speech, LinkedIn OIDC, and BYOK encryption are all optional. Only one LLM provider (Gemini) and the Docker Postgres link are required for feature parity. Everything else degrades gracefully to mock/in-memory.
+
+---
+
 ### Test the realtime interview panel locally
 
-The local demo bypasses sign-in, applications, matching, recruiter setup, and
-post-interview evaluation. It creates an in-memory sample interview so the
-Gemini Live conversation, microphone, captions, interruption, and reconnect UI
-can be exercised directly.
+The local demo bypasses sign-in, applications, matching, recruiter setup, and post-interview evaluation. It creates an in-memory sample interview so the Gemini Live conversation, microphone, captions, interruption, and reconnect UI can be exercised directly.
 
 Set these values in `.env`:
 
@@ -59,20 +120,29 @@ The demo endpoint is unavailable in staging and production.
 
 ---
 
+## Configuration Architecture
+
+Settings are split across two modules (see `.env.example`):
+
+- **`core/config.py`** (`AppSettings`) — service-level config: environment, CORS, auth, JWT, database URL, BYOK, LinkedIn OIDC
+- **`config/settings.py`** — provider/domain config: LLM, embeddings, audio, vector store, interview limits
+
+---
+
 ## How It Works
 
 ```
 Recruiter Creates Job ──> Candidate Applies & Submits Resume
-                               │
-                               ▼
-                   Adaptive Voice Interview (STT/TTS)
-                               │
-                               ▼
-                   Multi-Agent Evaluation Pipeline
-         (Technical · Behavioral · Resume Audit · Integrity · Bias)
-                               │
-                               ▼
-                   Explainable Candidate Leaderboard
+                                   │
+                                   ▼
+                    Adaptive Voice Interview (STT/TTS)
+                                   │
+                                   ▼
+                    Multi-Agent Evaluation Pipeline
+          (Technical · Behavioral · Resume Audit · Integrity · Bias)
+                                   │
+                                   ▼
+                    Explainable Candidate Leaderboard
 ```
 
 1. **Job & Rubric Setup:** Recruiters define job requirements and competencies. The system drafts an evidence-bound evaluation rubric.
@@ -136,6 +206,18 @@ Contributions are welcome! Please check:
 - **[OpenBox Bug Board](pages/openbox.html)** — Platform-wide issue tracker.
 
 > **Note:** AI tools are welcome for contributing — just review and verify the output before submitting. Unreviewed AI-generated PR/issue spam will be closed. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=devsidd2006%2Fopenhire&type=date&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=devsidd2006/openhire&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=devsidd2006/openhire&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=devsidd2006/openhire&type=date&legend=bottom-right" />
+ </picture>
+</a>
+
+---
 
 ## License
 
