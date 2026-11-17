@@ -898,7 +898,53 @@
 
     </style>
 </head>
-<body>
+<body class="maintenance-page">
+
+    <style>
+        .maintenance-page > :not(.site-nav):not(.maintenance-shell):not(.maintenance-footnote):not(script) { display: none !important; }
+        .maintenance-shell { min-height: calc(100vh - 60px); margin-top: 60px; display: grid; place-items: center; position: relative; overflow: hidden; padding: 4rem 1.25rem 5rem; isolation: isolate; }
+        .maintenance-grid { position: absolute; inset: 0; z-index: -2; opacity: .5; background-image: linear-gradient(var(--surface-border) 1px, transparent 1px), linear-gradient(90deg, var(--surface-border) 1px, transparent 1px); background-size: 64px 64px; mask-image: radial-gradient(ellipse at center, black 25%, transparent 78%); }
+        .maintenance-orbit { position: absolute; width: min(62vw, 680px); aspect-ratio: 1; border: 1px solid var(--surface-border); border-radius: 50%; opacity: .7; z-index: -1; animation: orbit-drift 18s linear infinite; }
+        .maintenance-orbit::before, .maintenance-orbit::after { content: ''; position: absolute; inset: 12%; border: 1px dashed var(--surface-border); border-radius: 50%; }
+        .maintenance-orbit::after { inset: 25%; border-style: solid; opacity: .55; }
+        .maintenance-orbit span { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 0 5px var(--warning-bg); }
+        .maintenance-orbit span:nth-child(1) { top: 11%; left: 50%; } .maintenance-orbit span:nth-child(2) { right: 15%; bottom: 29%; background: var(--success); box-shadow: 0 0 0 5px var(--success-subtle); } .maintenance-orbit span:nth-child(3) { left: 14%; bottom: 22%; width: 5px; height: 5px; }
+        .maintenance-card { width: min(100%, 580px); text-align: center; padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 5vw, 3.5rem); background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--surface-border); border-radius: 2px; box-shadow: 0 28px 80px -50px var(--ink); backdrop-filter: blur(12px); }
+        .maintenance-kicker, .maintenance-status, .maintenance-footer, .maintenance-footnote { font-family: var(--font-mono); letter-spacing: .08em; font-size: .65rem; }
+        .maintenance-kicker { display: flex; align-items: center; justify-content: center; gap: .55rem; color: var(--ink-3); }
+        .status-dot, .status-pulse { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: var(--warning); animation: pulse-dot 1.8s ease-in-out infinite; }
+        .kicker-rule, .footer-line { width: 38px; height: 1px; background: var(--surface-border); }
+        .maintenance-icon { width: 58px; height: 58px; margin: 2.5rem auto 1.4rem; display: grid; place-items: center; border: 1px solid var(--surface-border); color: var(--warning); background: var(--warning-bg); font-size: 1.35rem; transform: rotate(-8deg); }
+        .maintenance-label { margin: 0 0 .8rem; color: var(--warning-text); font: 500 .72rem var(--font-mono); text-transform: uppercase; letter-spacing: .1em; }
+        .maintenance-card h1 { margin: 0; font: 400 clamp(2.7rem, 7vw, 4.6rem)/.98 var(--font-serif); letter-spacing: -.035em; }
+        .maintenance-card h1 em { color: var(--ink-3); }
+        .maintenance-copy { max-width: 410px; margin: 1.5rem auto 2rem; color: var(--ink-3); font-size: .96rem; line-height: 1.7; }
+        .maintenance-status { display: inline-flex; align-items: center; gap: .7rem; padding: .55rem .8rem; color: var(--ink-3); border-top: 1px solid var(--surface-border); border-bottom: 1px solid var(--surface-border); }
+        .maintenance-status strong { color: var(--ink); font-weight: 500; }
+        .maintenance-actions { display: flex; justify-content: center; gap: .65rem; flex-wrap: wrap; margin-top: 2rem; }
+        .maintenance-footer { display: flex; align-items: center; justify-content: center; gap: .7rem; margin-top: 2.6rem; color: var(--ink-4); }
+        .maintenance-footer strong { color: var(--ink-2); font-weight: 500; } .blink { color: var(--warning); animation: blink 1s steps(2) infinite; }
+        .maintenance-footnote { position: fixed; bottom: 1.25rem; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 clamp(1rem, 4vw, 2.5rem); color: var(--ink-4); z-index: 2; }
+        @keyframes orbit-drift { to { transform: rotate(360deg); } } @keyframes blink { 50% { opacity: 0; } }
+        @media (max-width: 600px) { .maintenance-shell { padding-top: 2rem; } .maintenance-orbit { width: 115vw; } .maintenance-footnote { font-size: .55rem; } .maintenance-footnote span:nth-child(2) { display: none; } }
+        @media (prefers-reduced-motion: reduce) { .maintenance-orbit, .status-dot, .status-pulse, .blink { animation: none; } }
+    </style>
+
+    <main class="maintenance-shell">
+        <div class="maintenance-grid" aria-hidden="true"></div>
+        <div class="maintenance-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+        <section class="maintenance-card" aria-labelledby="maintenance-title">
+            <div class="maintenance-kicker"><span class="status-dot"></span> SYSTEM PAUSED <span class="kicker-rule"></span> OPENHIRE / 01</div>
+            <div class="maintenance-icon" aria-hidden="true"><i class="ph-bold ph-wrench"></i></div>
+            <p class="maintenance-label">A short pause for a better launch</p>
+            <h1 id="maintenance-title">We’re tuning the<br><em>interview room.</em></h1>
+            <p class="maintenance-copy">OpenHire is temporarily offline while we make a few infrastructure improvements. Your next great hire is still on the other side of this pause.</p>
+            <div class="maintenance-status"><span>STATUS</span><strong>MAINTENANCE MODE</strong><span class="status-pulse"></span></div>
+            <div class="maintenance-actions"><a class="btn btn-primary" href="https://github.com/DevSidd2006/openhire"><i class="ph-bold ph-github-logo" aria-hidden="true"></i>Follow the build</a><a class="btn btn-outline" href="mailto:hello@openhire.dev"><i class="ph-bold ph-envelope-simple" aria-hidden="true"></i>Say hello</a></div>
+            <div class="maintenance-footer"><span>EST. RETURN</span><span class="footer-line"></span><strong>SOON<span class="blink">_</span></strong></div>
+        </section>
+    </main>
+    <footer class="maintenance-footnote"><span>OPENHIRE</span><span>AI-POWERED INTERVIEWS</span><span>© 2026</span></footer>
 
     <nav class="site-nav">
         <a href="#" class="brand">
